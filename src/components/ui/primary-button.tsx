@@ -10,18 +10,20 @@ import {
 import { Brand } from '@/constants/theme';
 
 export type PrimaryButtonProps = Omit<PressableProps, 'style'> & {
-  label: string;
+  label?: string;
+  title?: string;
   style?: StyleProp<ViewStyle>;
 };
 
-export function PrimaryButton({ label, style, ...rest }: PrimaryButtonProps) {
+export function PrimaryButton({ label, title, style, ...rest }: PrimaryButtonProps) {
+  const text = label ?? title ?? '';
   return (
     <Pressable
       accessibilityRole="button"
       style={({ pressed }) => [styles.button, pressed && styles.pressed, style]}
       {...rest}
     >
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label}>{text}</Text>
     </Pressable>
   );
 }

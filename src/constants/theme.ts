@@ -59,6 +59,11 @@ export const Spacing = {
   four: 24,
   five: 32,
   six: 64,
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
@@ -79,4 +84,24 @@ export const Brand = {
   divider: '#E3E9F0',
   inputBackground: '#F3F6FA',
   white: '#FFFFFF',
+  error: '#DC2626',
+  /**
+   * Teal accent palette used for the Tap & Pay registration flow.
+   * Derived from the app icon secondary gradient (#00B8A9 -> #00796B).
+   */
+  teal: {
+    primary: '#00B8A9',
+    primaryDark: '#00796B',
+    light: '#E0F2F1',
+    soft: '#B2DFDB',
+    text: '#004D40',
+  },
+  /**
+   * User-type card selection states.
+   */
+  selection: {
+    selectedBorder: '#208AEF',
+    selectedBackground: '#E8F1FF',
+    unselectedBackground: '#FFFFFF',
+  },
 } as const;

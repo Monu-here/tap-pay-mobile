@@ -12,7 +12,7 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
       <Stack
-        initialRouteName="onboarding/screen-1"
+        initialRouteName="index"
         screenOptions={{ headerShown: false }}
       />
     </ThemeProvider>
