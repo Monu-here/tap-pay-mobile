@@ -1,3 +1,4 @@
+import { AppText } from '@/components/typography/app-text';
 /**
  * AD (Gregorian) date picker.
  *
@@ -21,7 +22,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -106,7 +106,7 @@ export function AdDatePickerModal({
         <View style={styles.grabber} />
 
         <View style={styles.header}>
-          <Text style={styles.title}>Select Date</Text>
+          <AppText style={styles.title}>Select Date</AppText>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close"
@@ -151,14 +151,14 @@ export function AdDatePickerModal({
             onPress={onCancel}
             style={[styles.actionButton, styles.cancelButton]}
           >
-            <Text style={styles.cancelText}>Cancel</Text>
+            <AppText style={styles.cancelText}>Cancel</AppText>
           </Pressable>
           <Pressable
             accessibilityRole="button"
             onPress={() => onConfirm(dateToAdIso(draft))}
             style={[styles.actionButton, styles.confirmButton]}
           >
-            <Text style={styles.confirmText}>Confirm</Text>
+            <AppText style={styles.confirmText}>Confirm</AppText>
           </Pressable>
         </View>
       </View>

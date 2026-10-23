@@ -1,3 +1,4 @@
+import { AppTextInput } from '@/components/typography/app-text';
 /**
  * Six-box OTP input.
  *
@@ -97,7 +98,7 @@ export const OtpInput = forwardRef<OtpInputRef, OtpInputProps>(function OtpInput
         const isActive = index === value.length;
 
         return (
-          <TextInput
+          <AppTextInput
             key={index}
             ref={(input) => {
               inputs.current[index] = input;

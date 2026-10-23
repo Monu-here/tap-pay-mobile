@@ -1,11 +1,13 @@
+import { AppText } from '@/components/typography/app-text';
 import { SymbolView } from 'expo-symbols';
 import { StatusBar } from 'expo-status-bar';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { PaginationDots } from '@/components/ui/pagination-dots';
 import { Brand, Spacing } from '@/constants/theme';
+import { Typography } from '@/constants/typography';
 
 import {
   OnboardingIllustration,
@@ -81,7 +83,7 @@ export function OnboardingScreen({
               hitSlop={12}
               style={styles.skipButton}
             >
-              <Text style={styles.skipText}>Skip</Text>
+              <AppText style={styles.skipText}>Skip</AppText>
             </Pressable>
           )}
         </View>
@@ -89,8 +91,8 @@ export function OnboardingScreen({
 
       <View style={styles.content}>
         <OnboardingIllustration name={illustration} />
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.description}>{description}</Text>
+        <AppText style={[styles.title, Typography.decorativeCursive]}>{title}</AppText>
+        <AppText style={[Typography.italicDescription, styles.description]}>{description}</AppText>
       </View>
 
       <View style={styles.footer}>

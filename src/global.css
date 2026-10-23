@@ -1,6 +1,21 @@
 :root {
+  color-scheme: light;
+  --color-primary: #0f766e;
+  --color-primary-deep: #115e59;
+  --color-secondary: #10b981;
+  --color-background: #f5f7f5;
+  --color-surface: #ffffff;
+  --color-text: #172b3a;
+  --color-text-secondary: #687782;
+  --color-border: #e5ebe8;
+  --color-teal-soft: #e3f4ef;
+  --color-success: #16845b;
+  --color-warning: #b7791f;
+  --color-error: #c2414b;
+  --color-information: #3478b8;
+  --color-accent: #e9b96e;
   --font-display:
-    Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,
+    'NunitoSans_400Regular', 'NotoSansDevanagari_400Regular', ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,
     Segoe UI Symbol, Noto Color Emoji;
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;

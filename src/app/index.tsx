@@ -1,3 +1,4 @@
+import { AppText } from '@/components/typography/app-text';
 /**
  * App entry / session restore.
  *
@@ -8,7 +9,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 
 import { Brand, Spacing } from '@/constants/theme';
@@ -97,7 +98,7 @@ export default function Index() {
   return (
     <View style={styles.container}>
       <ActivityIndicator size="large" color={Brand.teal.primary} />
-      <Text style={styles.brand}>Tap &amp; Pay</Text>
+      <AppText style={styles.brand}>Tap &amp; Pay</AppText>
     </View>
   );
 }

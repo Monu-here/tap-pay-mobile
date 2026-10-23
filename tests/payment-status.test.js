@@ -8,7 +8,7 @@ const {
 
 describe('payment status confirmation', () => {
   test('recognizes only server-confirmed successful states', () => {
-    for (const status of ['completed', 'paid', 'success', 'succeeded']) {
+    for (const status of ['completed', 'paid', 'success', 'succeeded', 'successful']) {
       assert.equal(isSuccessfulPaymentStatus(status), true);
     }
     for (const status of ['created', 'initiated', 'pending', 'processing', 'failed']) {

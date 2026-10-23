@@ -1,36 +1,49 @@
+import {AppText, AppTextInput } from '@/components/typography/app-text';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import * as Location from 'expo-location';
 
-import { Brand, Spacing } from '@/constants/theme';
+import { Monochrome, Spacing } from '@/constants/theme';
 import {
   getFareRules,
+  getJourneyOptions,
+  saveRecentJourneySearch,
+  getPassengerFavorites,
+  getRecentJourneySearches,
+  getRouteDepartures,
   getRouteStops,
   getRoutes,
+  setRouteFavorite,
+  setStopFavorite,
+  type FavoriteStopInfo,
+  type RouteDeparture,
   type RouteInfo,
+  type RecentJourneySearch,
   type StopInfo,
 } from '@/features/passenger/services/passengerApi';
 import {
   getNearbyBuses,
   getNearbyStops,
   getPublicCompanies,
+  getServiceNotices,
   searchStops,
   type PublicNearbyBus,
   type PublicStop,
+  type ServiceNoticeItem,
   type TransportCompanyItem,
 } from '@/features/transit/services/transitApi';
 
@@ -49,11 +62,31 @@ export default function TransitScreen() {
   const [nearbyLocationAvailable, setNearbyLocationAvailable] = useState(false);
   const [companies, setCompanies] = useState<TransportCompanyItem[]>([]);
   const [fareRules, setFareRules] = useState<Record<string, unknown>[]>([]);
+  const [serviceNotices, setServiceNotices] = useState<ServiceNoticeItem[]>([]);
+  const [serviceNoticesError, setServiceNoticesError] = useState<string | null>(null);
+  const [favoriteRouteIds, setFavoriteRouteIds] = useState<number[]>([]);
+  const [favoriteStopIds, setFavoriteStopIds] = useState<number[]>([]);
+  const [favoriteStops, setFavoriteStops] = useState<FavoriteStopInfo[]>([]);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [fromStopQuery, setFromStopQuery] = useState('');
+  const [toStopQuery, setToStopQuery] = useState('');
+  const [fromStopResults, setFromStopResults] = useState<PublicStop[]>([]);
+  const [toStopResults, setToStopResults] = useState<PublicStop[]>([]);
+  const [fromStop, setFromStop] = useState<PublicStop | null>(null);
+  const [toStop, setToStop] = useState<PublicStop | null>(null);
+  const [journeyOptions, setJourneyOptions] = useState<RouteInfo[]>([]);
+  const [recentSearches, setRecentSearches] = useState<RecentJourneySearch[]>([]);
+  const [recentSearchError, setRecentSearchError] = useState<string | null>(null);
+  const [plannerError, setPlannerError] = useState<string | null>(null);
+  const [plannerLoading, setPlannerLoading] = useState(false);
 
   // Route Detail Modal
   const [selectedRoute, setSelectedRoute] = useState<RouteInfo | null>(null);
   const [routeStops, setRouteStops] = useState<StopInfo[]>([]);
   const [loadingStops, setLoadingStops] = useState(false);
+  const [routeDepartures, setRouteDepartures] = useState<RouteDeparture[]>([]);
+  const [loadingDepartures, setLoadingDepartures] = useState(false);
+  const [departureError, setDepartureError] = useState<string | null>(null);
 
   const loadTransitData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -72,10 +105,13 @@ export default function TransitScreen() {
         location = null;
       }
 
-      const [routesRes, compsRes, faresRes] = await Promise.all([
+      const [routesRes, compsRes, faresRes, favoritesRes, noticesRes, recentSearchesRes] = await Promise.all([
         getRoutes(),
         getPublicCompanies(),
         getFareRules(),
+        getPassengerFavorites(),
+        getServiceNotices(),
+        getRecentJourneySearches(),
       ]);
       const [stopsRes, busesRes] = location
         ? await Promise.all([
@@ -85,6 +121,11 @@ export default function TransitScreen() {
         : [null, null];
 
       if (routesRes.ok && routesRes.data) setRoutes(routesRes.data.routes || []);
+      if (favoritesRes.ok && favoritesRes.data) {
+        setFavoriteRouteIds(favoritesRes.data.route_ids);
+        setFavoriteStopIds(favoritesRes.data.stop_ids);
+        setFavoriteStops(favoritesRes.data.favorite_stops);
+      }
       if (stopsRes?.ok && stopsRes.data) setNearbyStops(stopsRes.data.stops || []);
       if (busesRes?.ok && busesRes.data) setNearbyBuses(busesRes.data.buses || []);
       if (!location) {
@@ -94,6 +135,18 @@ export default function TransitScreen() {
       setNearbyLocationAvailable(location !== null);
       if (compsRes.ok && compsRes.data) setCompanies(compsRes.data.companies || []);
       if (faresRes.ok && faresRes.data) setFareRules(faresRes.data.fare_rules || []);
+      if (noticesRes.ok && noticesRes.data) {
+        setServiceNotices(noticesRes.data.notices);
+        setServiceNoticesError(null);
+      } else if (!noticesRes.ok) {
+        setServiceNoticesError(noticesRes.message || 'Could not load current service notices.');
+      }
+      if (recentSearchesRes.ok && recentSearchesRes.data) {
+        setRecentSearches(recentSearchesRes.data.searches);
+        setRecentSearchError(null);
+      } else if (!recentSearchesRes.ok) {
+        setRecentSearchError(recentSearchesRes.message || 'Could not load recent journey searches.');
+      }
     } catch {
       // Ignored
     } finally {
@@ -103,41 +156,177 @@ export default function TransitScreen() {
   }, []);
 
   useEffect(() => {
-    loadTransitData();
+    const frame = requestAnimationFrame(() => {
+      void loadTransitData();
+    });
+    return () => cancelAnimationFrame(frame);
   }, [loadTransitData]);
 
-  const handleSearch = async (text: string) => {
-    setSearchQuery(text);
-    if (!text.trim()) {
-      loadTransitData(false);
-      return;
-    }
-
-    try {
-      const res = await searchStops(text.trim());
-      if (res.ok && res.data) {
-        setNearbyStops(res.data.stops || []);
-        setActiveSegment('nearby');
-      }
-    } catch {
-      // Ignored
-    }
-  };
-
-  const openRouteModal = async (route: RouteInfo) => {
+  const handleOpenRouteDetails = async (route: RouteInfo) => {
     setSelectedRoute(route);
+    setRouteStops([]);
+    setRouteDepartures([]);
+    setDepartureError(null);
     setLoadingStops(true);
+    setLoadingDepartures(true);
     try {
-      const res = await getRouteStops(route.id);
-      if (res.ok && res.data) {
-        setRouteStops(res.data.stops || []);
+      const [stopsResult, departuresResult] = await Promise.all([
+        getRouteStops(route.id),
+        getRouteDepartures(route.id),
+      ]);
+      setRouteStops(stopsResult.ok && stopsResult.data ? stopsResult.data.stops : []);
+      if (departuresResult.ok && departuresResult.data) {
+        setRouteDepartures(departuresResult.data.departures);
+      } else {
+        setDepartureError(departuresResult.message || 'Unable to load scheduled departures.');
       }
     } catch {
-      // Ignored
+      setRouteStops([]);
+      setDepartureError('Unable to load route details. Please try again.');
     } finally {
       setLoadingStops(false);
+      setLoadingDepartures(false);
     }
   };
+
+  const reopenRecentSearch = async (search: RecentJourneySearch) => {
+    if (!search.from_stop || !search.to_stop) return;
+    setPlannerError(null);
+    try {
+      const [fromResult, toResult] = await Promise.all([
+        searchStops(search.from_stop.name),
+        searchStops(search.to_stop.name),
+      ]);
+      if (!fromResult.ok || !fromResult.data || !toResult.ok || !toResult.data) {
+        setPlannerError((!fromResult.ok && fromResult.message) || (!toResult.ok && toResult.message) || 'Could not reload the selected stops.');
+        return;
+      }
+      const from = fromResult.data.stops.find((stop) => stop.id === search.from_stop?.id);
+      const to = toResult.data.stops.find((stop) => stop.id === search.to_stop?.id);
+      if (!from || !to) {
+        setPlannerError('One of these stops is no longer available. Search again to choose active stops.');
+        return;
+      }
+      setFromStop(from);
+      setFromStopQuery(from.name);
+      setToStop(to);
+      setToStopQuery(to.name);
+      setJourneyOptions([]);
+      setPlannerLoading(true);
+      const result = await getJourneyOptions(from.id, to.id);
+      if (!result.ok || !result.data) {
+        setPlannerError(result.message || 'Could not find routes for these stops.');
+        return;
+      }
+      setJourneyOptions(result.data.routes);
+    } catch (error) {
+      setPlannerError(error instanceof Error ? error.message : 'Network error reopening this search.');
+    } finally {
+      setPlannerLoading(false);
+    }
+  };
+
+  const filteredRoutes = routes.filter((r) => {
+    if (showFavoritesOnly && !favoriteRouteIds.includes(r.id)) return false;
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      r.name.toLowerCase().includes(q) ||
+      r.code.toLowerCase().includes(q) ||
+      (r.company_name && r.company_name.toLowerCase().includes(q)) ||
+      (r.origin_stop && r.origin_stop.toLowerCase().includes(q)) ||
+      (r.destination_stop && r.destination_stop.toLowerCase().includes(q))
+    );
+  });
+
+  const searchPlannerStops = async (direction: 'from' | 'to') => {
+    const query = direction === 'from' ? fromStopQuery : toStopQuery;
+    if (query.trim().length < 2) {
+      setPlannerError('Enter at least two characters to search for a stop.');
+      return;
+    }
+    setPlannerError(null);
+    const result = await searchStops(query.trim());
+    if (!result.ok || !result.data) {
+      setPlannerError(result.message || 'Could not search stops.');
+      return;
+    }
+    if (direction === 'from') setFromStopResults(result.data.stops);
+    else setToStopResults(result.data.stops);
+  };
+
+  const planJourney = async () => {
+    if (!fromStop || !toStop) {
+      setPlannerError('Choose both a starting stop and a destination.');
+      return;
+    }
+    setPlannerError(null);
+    setPlannerLoading(true);
+    try {
+      const result = await getJourneyOptions(fromStop.id, toStop.id);
+      if (!result.ok || !result.data) {
+        setPlannerError(result.message || 'Could not find routes for these stops.');
+        setJourneyOptions([]);
+        return;
+      }
+      setJourneyOptions(result.data.routes);
+      const saved = await saveRecentJourneySearch(fromStop.id, toStop.id);
+      if (saved.ok) {
+        const recent = await getRecentJourneySearches();
+        if (recent.ok && recent.data) setRecentSearches(recent.data.searches);
+      } else {
+        setRecentSearchError(saved.message || 'Journey found, but could not save it to recent searches.');
+      }
+    } catch (error) {
+      setPlannerError(error instanceof Error ? error.message : 'Network error planning this journey.');
+    } finally {
+      setPlannerLoading(false);
+    }
+  };
+
+  const toggleRouteFavorite = async (routeId: number) => {
+    const nextFavorite = !favoriteRouteIds.includes(routeId);
+    const result = await setRouteFavorite(routeId, nextFavorite);
+    if (!result.ok) {
+      Alert.alert('Could not update favorite', result.message || 'Please try again.');
+      return;
+    }
+    setFavoriteRouteIds((current) => nextFavorite
+      ? [...current, routeId]
+      : current.filter((id) => id !== routeId));
+  };
+
+  const toggleStopFavorite = async (stopId: number) => {
+    const nextFavorite = !favoriteStopIds.includes(stopId);
+    const result = await setStopFavorite(stopId, nextFavorite);
+    if (!result.ok) {
+      Alert.alert('Could not update favorite', result.message || 'Please try again.');
+      return;
+    }
+    setFavoriteStopIds((current) => nextFavorite
+      ? [...current, stopId]
+      : current.filter((id) => id !== stopId));
+    setFavoriteStops((current) => {
+      if (!nextFavorite) return current.filter((stop) => stop.id !== stopId);
+      if (current.some((stop) => stop.id === stopId)) return current;
+      const stop = nearbyStops.find((item) => item.id === stopId);
+      return stop
+        ? [...current, {
+            id: stop.id,
+            name: stop.name,
+            code: stop.code,
+            latitude: stop.latitude,
+            longitude: stop.longitude,
+          }]
+        : current;
+    });
+  };
+
+  const filteredCompanies = companies.filter((c) => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    return c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q);
+  });
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -145,70 +334,67 @@ export default function TransitScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Public Transit</Text>
+        <AppText style={styles.headerTitle}>Transit &amp; Routes</AppText>
       </View>
 
-      {/* Search Input */}
+      {/* Search Bar */}
       <View style={styles.searchBarWrap}>
         <SymbolView
           name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
-          size={18}
-          tintColor={Brand.textSecondary}
+          size={16}
+          tintColor={Monochrome.textMuted}
         />
-        <TextInput
+        <AppTextInput
           style={styles.searchInput}
+          placeholder="Search routes, bus stops, companies..."
+          placeholderTextColor={Monochrome.textMuted}
           value={searchQuery}
-          onChangeText={handleSearch}
-          placeholder="Search bus stops or routes..."
-          placeholderTextColor={Brand.textSecondary}
+          onChangeText={setSearchQuery}
         />
         {searchQuery.length > 0 && (
-          <Pressable onPress={() => handleSearch('')} hitSlop={8}>
+          <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
             <SymbolView
               name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
               size={16}
-              tintColor={Brand.textSecondary}
+              tintColor={Monochrome.textMuted}
             />
           </Pressable>
         )}
       </View>
 
-      {/* Segment Tabs */}
+      {/* Segment Navigation */}
       <View style={styles.segmentBar}>
         <Pressable
           onPress={() => setActiveSegment('routes')}
           style={[styles.segmentBtn, activeSegment === 'routes' && styles.segmentBtnActive]}
         >
-          <Text style={[styles.segmentText, activeSegment === 'routes' && styles.segmentTextActive]}>
-            Bus Routes
-          </Text>
+          <AppText style={[styles.segmentText, activeSegment === 'routes' && styles.segmentTextActive]}>
+            Routes
+          </AppText>
         </Pressable>
-
         <Pressable
           onPress={() => setActiveSegment('nearby')}
           style={[styles.segmentBtn, activeSegment === 'nearby' && styles.segmentBtnActive]}
         >
-          <Text style={[styles.segmentText, activeSegment === 'nearby' && styles.segmentTextActive]}>
-            Nearby Transit
-          </Text>
+          <AppText style={[styles.segmentText, activeSegment === 'nearby' && styles.segmentTextActive]}>
+            Nearby
+          </AppText>
         </Pressable>
-
         <Pressable
           onPress={() => setActiveSegment('companies')}
           style={[styles.segmentBtn, activeSegment === 'companies' && styles.segmentBtnActive]}
         >
-          <Text style={[styles.segmentText, activeSegment === 'companies' && styles.segmentTextActive]}>
-            Operators
-          </Text>
+          <AppText style={[styles.segmentText, activeSegment === 'companies' && styles.segmentTextActive]}>
+            Fleets
+          </AppText>
         </Pressable>
-
         <Pressable
           onPress={() => setActiveSegment('fares')}
           style={[styles.segmentBtn, activeSegment === 'fares' && styles.segmentBtnActive]}
         >
-          <Text style={[styles.segmentText, activeSegment === 'fares' && styles.segmentTextActive]}>
+          <AppText style={[styles.segmentText, activeSegment === 'fares' && styles.segmentTextActive]}>
             Fare Rules
-          </Text>
+          </AppText>
         </Pressable>
       </View>
 
@@ -216,287 +402,566 @@ export default function TransitScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => loadTransitData(true)} tintColor={Brand.teal.primary} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadTransitData(true)}
+            tintColor={Monochrome.textPrimary}
+          />
         }
       >
-        {loading && !refreshing ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={Brand.teal.primary} />
-            <Text style={styles.loadingText}>Fetching transit network...</Text>
-          </View>
-        ) : null}
-
-        {/* --- Segment: Bus Routes --- */}
+        {/* ROUTES TAB */}
         {activeSegment === 'routes' && (
           <View style={styles.sectionContainer}>
-            {routes.length > 0 ? (
-              routes.map((rt) => (
-                <Pressable
-                  key={rt.id}
-                  onPress={() => openRouteModal(rt)}
-                  style={styles.routeCard}
-                >
-                  <View style={styles.routeCardTop}>
-                    <View style={styles.routeCodeBadge}>
-                      <Text style={styles.routeCodeText}>{rt.code}</Text>
+            {(serviceNotices.length > 0 || serviceNoticesError) && (
+              <View style={styles.serviceNoticesCard}>
+                <AppText style={styles.serviceNoticesHeading}>Current service notices</AppText>
+                {serviceNoticesError ? <AppText style={styles.serviceNoticeError}>{serviceNoticesError}</AppText> : null}
+                {serviceNotices.map((notice) => (
+                  <View key={notice.id} style={styles.serviceNoticeItem}>
+                    <View style={styles.serviceNoticeTitleRow}>
+                      <AppText style={styles.serviceNoticeTitle}>{notice.title}</AppText>
+                      <AppText style={styles.serviceNoticeSeverity}>{notice.severity.toUpperCase()}</AppText>
                     </View>
-                    <View style={styles.routeTitleGroup}>
-                      <Text style={styles.routeName}>{rt.name}</Text>
-                      {rt.company_name && (
-                        <Text style={styles.routeCompany}>{rt.company_name}</Text>
-                      )}
-                    </View>
-                    <SymbolView
-                      name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                      size={18}
-                      tintColor={Brand.textSecondary}
-                    />
+                    <AppText style={styles.serviceNoticeText}>{notice.message}</AppText>
+                    <AppText style={styles.serviceNoticeMeta}>
+                      {notice.company?.name || 'Transport operator'}
+                      {notice.route?.name ? ` · ${notice.route.name}` : ''}
+                      {notice.stop?.name ? ` · ${notice.stop.name}` : ''}
+                    </AppText>
                   </View>
-
-                  <View style={styles.routeMetricsRow}>
-                    <View style={styles.metricItem}>
-                      <SymbolView
-                        name={{ ios: 'location.north.circle', android: 'near_me', web: 'near_me' }}
-                        size={14}
-                        tintColor={Brand.textSecondary}
-                      />
-                      <Text style={styles.metricText}>
-                        {rt.origin_stop || 'Start'} → {rt.destination_stop || 'End'}
-                      </Text>
-                    </View>
-
-                    <View style={styles.metricPills}>
-                      {rt.distance_km && (
-                        <Text style={styles.pillDistance}>{rt.distance_km} km</Text>
-                      )}
-                      {rt.estimated_minutes && (
-                        <Text style={styles.pillDuration}>~{rt.estimated_minutes} mins</Text>
-                      )}
-                    </View>
-                  </View>
-                </Pressable>
-              ))
-            ) : (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>No bus routes available</Text>
+                ))}
               </View>
             )}
-          </View>
-        )}
-
-        {/* --- Segment: Nearby Buses & Stops --- */}
-        {activeSegment === 'nearby' && (
-          <View style={styles.sectionContainer}>
-            <Text style={styles.subHeading}>Live Buses Near You (10 km radius)</Text>
             <Pressable
-              accessibilityRole="button"
               onPress={() => router.push('/passenger/tracking' as any)}
               style={styles.trackingButton}
             >
-              <Text style={styles.trackingButtonText}>Open Live Bus Map</Text>
+              <SymbolView
+                name={{ ios: 'map.fill', android: 'map', web: 'map' }}
+                size={16}
+                tintColor={Monochrome.actionPrimaryText}
+              />
+              <AppText style={styles.trackingButtonText}>Open Live Bus GPS Tracking</AppText>
             </Pressable>
-            {!nearbyLocationAvailable ? (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>Live bus locations are unavailable without your current location.</Text>
+
+            <View style={styles.plannerCard}>
+              <AppText style={styles.plannerTitle}>Plan a journey</AppText>
+              <View style={styles.plannerSearchRow}>
+                <AppTextInput
+                  style={styles.plannerInput}
+                  placeholder="Starting stop"
+                  placeholderTextColor={Monochrome.textMuted}
+                  value={fromStopQuery}
+                  onChangeText={(value) => {
+                    setFromStopQuery(value);
+                    setFromStop(null);
+                    setFromStopResults([]);
+                  }}
+                  accessibilityLabel="Starting stop"
+                  returnKeyType="search"
+                  onSubmitEditing={() => void searchPlannerStops('from')}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Search starting stops"
+                  onPress={() => void searchPlannerStops('from')}
+                  style={styles.plannerSearchButton}
+                >
+                  <AppText style={styles.plannerSearchButtonText}>Search</AppText>
+                </Pressable>
               </View>
-            ) : nearbyBuses.length > 0 ? (
-              <View style={styles.cardList}>
-                {nearbyBuses.map((bus, idx) => (
-                  <View key={bus.bus_id} style={[styles.busRow, idx > 0 && styles.rowDivider]}>
-                    <View style={styles.busIconBox}>
+              {fromStopResults.map((stop) => (
+                <Pressable
+                  key={stop.id}
+                  onPress={() => {
+                    setFromStop(stop);
+                    setFromStopQuery(stop.name);
+                    setFromStopResults([]);
+                  }}
+                  style={styles.plannerStopOption}
+                >
+                  <AppText style={styles.plannerStopText}>{stop.name}</AppText>
+                </Pressable>
+              ))}
+              <View style={styles.plannerSearchRow}>
+                <AppTextInput
+                  style={styles.plannerInput}
+                  placeholder="Destination stop"
+                  placeholderTextColor={Monochrome.textMuted}
+                  value={toStopQuery}
+                  onChangeText={(value) => {
+                    setToStopQuery(value);
+                    setToStop(null);
+                    setToStopResults([]);
+                  }}
+                  accessibilityLabel="Destination stop"
+                  returnKeyType="search"
+                  onSubmitEditing={() => void searchPlannerStops('to')}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Search destination stops"
+                  onPress={() => void searchPlannerStops('to')}
+                  style={styles.plannerSearchButton}
+                >
+                  <AppText style={styles.plannerSearchButtonText}>Search</AppText>
+                </Pressable>
+              </View>
+              {toStopResults.map((stop) => (
+                <Pressable
+                  key={stop.id}
+                  onPress={() => {
+                    setToStop(stop);
+                    setToStopQuery(stop.name);
+                    setToStopResults([]);
+                  }}
+                  style={styles.plannerStopOption}
+                >
+                  <AppText style={styles.plannerStopText}>{stop.name}</AppText>
+                </Pressable>
+              ))}
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void planJourney()}
+                disabled={plannerLoading}
+                style={styles.planButton}
+              >
+                {plannerLoading
+                  ? <ActivityIndicator size="small" color={Monochrome.actionPrimaryText} />
+                  : <AppText style={styles.planButtonText}>Find direct routes</AppText>}
+              </Pressable>
+              {recentSearches.length > 0 ? (
+                <View style={styles.recentSearches}>
+                  <AppText style={styles.recentSearchesHeading}>Recent searches</AppText>
+                  {recentSearches.slice(0, 5).map((search) => (
+                    <Pressable
+                      key={search.id}
+                      accessibilityRole="button"
+                      onPress={() => void reopenRecentSearch(search)}
+                      style={styles.recentSearchRow}
+                    >
+                      <AppText style={styles.recentSearchText}>
+                        {search.from_stop?.name || 'Unavailable stop'} → {search.to_stop?.name || 'Unavailable stop'}
+                      </AppText>
+                      <AppText style={styles.recentSearchDate}>{new Date(search.searched_at).toLocaleDateString()}</AppText>
+                    </Pressable>
+                  ))}
+                  {recentSearchError ? <AppText style={styles.plannerHint}>{recentSearchError}</AppText> : null}
+                </View>
+              ) : recentSearchError ? (
+                <AppText style={styles.plannerHint}>{recentSearchError}</AppText>
+              ) : null}
+              {plannerError && <AppText style={styles.plannerError}>{plannerError}</AppText>}
+              {journeyOptions.map((route) => (
+                <Pressable
+                  key={route.id}
+                  onPress={() => handleOpenRouteDetails(route)}
+                  style={styles.journeyOption}
+                >
+                  <AppText style={styles.journeyOptionName}>{route.name} · {route.code}</AppText>
+                  <AppText style={styles.journeyOptionMeta}>
+                    {route.company_name || 'Public Transit'}
+                    {route.estimated_minutes ? ` · about ${route.estimated_minutes} min` : ''}
+                  </AppText>
+                </Pressable>
+              ))}
+              {journeyOptions.length === 0 && fromStop && toStop && !plannerLoading && !plannerError && (
+                <AppText style={styles.plannerHint}>No direct route was found for the selected stops.</AppText>
+              )}
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={showFavoritesOnly ? 'Show all routes' : `Show saved routes, ${favoriteRouteIds.length} saved`}
+              onPress={() => setShowFavoritesOnly((current) => !current)}
+              style={styles.favoriteFilter}
+            >
+              <AppText style={styles.favoriteFilterText}>
+                {showFavoritesOnly ? 'Show all routes' : `Saved routes (${favoriteRouteIds.length})`}
+              </AppText>
+            </Pressable>
+
+            {loading && !refreshing ? (
+              <View style={styles.loadingBox}>
+                <ActivityIndicator size="small" color={Monochrome.textPrimary} />
+                <AppText style={styles.loadingText}>Loading transit routes...</AppText>
+              </View>
+            ) : filteredRoutes.length > 0 ? (
+              filteredRoutes.map((route) => (
+                <View key={route.id} style={styles.routeCard}>
+                  <View style={styles.routeCardTop}>
+                    <Pressable
+                      onPress={() => handleOpenRouteDetails(route)}
+                      style={styles.routeOpenButton}
+                      accessibilityRole="button"
+                      accessibilityLabel={`View ${route.name} route details`}
+                    >
+                      <View style={styles.routeCodeBadge}>
+                        <AppText style={styles.routeCodeText}>{route.code}</AppText>
+                      </View>
+                      <View style={styles.routeTitleGroup}>
+                        <AppText style={styles.routeName}>{route.name}</AppText>
+                        <AppText style={styles.routeCompany}>{route.company_name || 'Public Transit'}</AppText>
+                      </View>
                       <SymbolView
-                        name={{ ios: 'bus.fill', android: 'directions_bus', web: 'directions_bus' }}
-                        size={20}
-                        tintColor="#0284C7"
+                        name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                        size={14}
+                        tintColor={Monochrome.textMuted}
                       />
-                    </View>
-                    <View style={styles.busInfo}>
-                      <Text style={styles.busNumber}>{bus.bus_number}</Text>
-                      <Text style={styles.busRouteName}>{bus.route.name || 'Active Service'}</Text>
-                      {bus.company.name && <Text style={styles.busCompany}>{bus.company.name}</Text>}
-                    </View>
-                    <View style={styles.busLiveRight}>
-                      {bus.speed !== null && (
-                        <Text style={styles.speedText}>{bus.speed.toFixed(1)} km/h</Text>
-                      )}
-                      <View style={styles.liveIndicator}>
-                        <View style={[
-                          styles.liveDot,
-                          isLocationStale(bus.last_seen_at) && styles.staleDot,
-                        ]} />
-                        <Text style={[
-                          styles.liveText,
-                          isLocationStale(bus.last_seen_at) && styles.staleText,
-                        ]}>
-                          {isLocationStale(bus.last_seen_at) ? 'Location Stale' : 'GPS Active'}
-                        </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => void toggleRouteFavorite(route.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${favoriteRouteIds.includes(route.id) ? 'Remove' : 'Save'} ${route.name} favorite`}
+                      hitSlop={8}
+                      style={styles.favoriteButton}
+                    >
+                      <SymbolView
+                        name={{ ios: favoriteRouteIds.includes(route.id) ? 'star.fill' : 'star', android: favoriteRouteIds.includes(route.id) ? 'star' : 'star_outline', web: favoriteRouteIds.includes(route.id) ? 'star' : 'star_outline' }}
+                        size={18}
+                        tintColor={Monochrome.textPrimary}
+                      />
+                    </Pressable>
+                  </View>
+
+                  <Pressable onPress={() => handleOpenRouteDetails(route)}>
+                    <View style={styles.routeMetricsRow}>
+                      <View style={styles.metricItem}>
+                        <SymbolView
+                          name={{ ios: 'mappin.and.ellipse', android: 'place', web: 'place' }}
+                          size={14}
+                          tintColor={Monochrome.textSecondary}
+                        />
+                        <AppText style={styles.metricText} numberOfLines={1}>
+                          {route.origin_stop && route.destination_stop
+                            ? `${route.origin_stop} → ${route.destination_stop}`
+                            : 'Public Bus Route'}
+                        </AppText>
+                      </View>
+                      <View style={styles.metricPills}>
+                        {route.distance_km ? (
+                          <AppText style={styles.pillDistance}>{route.distance_km} km</AppText>
+                        ) : null}
+                        {route.estimated_minutes ? (
+                          <AppText style={styles.pillDuration}>{route.estimated_minutes} min</AppText>
+                        ) : null}
                       </View>
                     </View>
-                  </View>
-                ))}
-              </View>
+                  </Pressable>
+                </View>
+              ))
             ) : (
               <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>No live buses reporting in this vicinity</Text>
-              </View>
-            )}
-
-            <Text style={[styles.subHeading, { marginTop: Spacing.four }]}>Nearby Bus Stops</Text>
-            {!nearbyLocationAvailable && nearbyStops.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>Nearby stops are unavailable without your current location.</Text>
-              </View>
-            ) : nearbyStops.length > 0 ? (
-              <View style={styles.cardList}>
-                {nearbyStops.map((stop, idx) => (
-                  <View key={stop.id} style={[styles.stopRow, idx > 0 && styles.rowDivider]}>
-                    <View style={styles.stopIconBox}>
-                      <SymbolView
-                        name={{ ios: 'mappin.circle.fill', android: 'pin_drop', web: 'pin_drop' }}
-                        size={20}
-                        tintColor={Brand.teal.primary}
-                      />
-                    </View>
-                    <View style={styles.stopInfo}>
-                      <Text style={styles.stopName}>{stop.name}</Text>
-                      <Text style={styles.stopCode}>Code: {stop.code}</Text>
-                    </View>
-                    {stop.distance_km !== undefined && (
-                      <Text style={styles.stopDistance}>{stop.distance_km.toFixed(1)} km away</Text>
-                    )}
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>No bus stops located</Text>
+                <AppText style={styles.emptyText}>No matching routes found</AppText>
               </View>
             )}
           </View>
         )}
 
-        {/* --- Segment: Transport Companies --- */}
+        {/* NEARBY TAB */}
+        {activeSegment === 'nearby' && (
+          <View style={styles.sectionContainer}>
+            {favoriteStops.length > 0 && (
+              <View style={styles.nearbyGroup}>
+                <AppText style={styles.subHeading}>Saved Stops</AppText>
+                <View style={styles.cardList}>
+                  {favoriteStops.map((stop, index) => (
+                    <View key={stop.id} style={[styles.stopRow, index > 0 && styles.rowDivider]}>
+                      <View style={styles.stopIconBox}>
+                        <SymbolView
+                          name={{ ios: 'star.fill', android: 'star', web: 'star' }}
+                          size={18}
+                          tintColor={Monochrome.textPrimary}
+                        />
+                      </View>
+                      <View style={styles.stopInfo}>
+                        <AppText style={styles.stopName}>{stop.name}</AppText>
+                        <AppText style={styles.stopCode}>{stop.code || 'Transit Stop'}</AppText>
+                      </View>
+                      <Pressable
+                        onPress={() => void toggleStopFavorite(stop.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${stop.name} from saved stops`}
+                        hitSlop={8}
+                      >
+                        <SymbolView
+                          name={{ ios: 'star.slash', android: 'star', web: 'star' }}
+                          size={18}
+                          tintColor={Monochrome.textSecondary}
+                        />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {!nearbyLocationAvailable && (
+              <View style={styles.emptyCard}>
+                <SymbolView
+                  name={{ ios: 'location.slash', android: 'location_off', web: 'location_off' }}
+                  size={32}
+                  tintColor={Monochrome.textMuted}
+                />
+                <AppText style={styles.emptyTitle}>Location Access Needed</AppText>
+                <AppText style={styles.emptyText}>
+                  Enable device GPS permissions to see live buses and stops closest to your position.
+                </AppText>
+              </View>
+            )}
+
+            {nearbyBuses.length > 0 && (
+              <View style={styles.nearbyGroup}>
+                <AppText style={styles.subHeading}>Nearby Active Buses</AppText>
+                <View style={styles.cardList}>
+                  {nearbyBuses.map((bus, idx) => (
+                    <View key={bus.bus_id} style={[styles.busRow, idx > 0 && styles.rowDivider]}>
+                      <View style={styles.busIconBox}>
+                        <SymbolView
+                          name={{ ios: 'bus.fill', android: 'directions_bus', web: 'directions_bus' }}
+                          size={18}
+                          tintColor={Monochrome.textPrimary}
+                        />
+                      </View>
+                      <View style={styles.busInfo}>
+                        <AppText style={styles.busNumber}>{bus.bus_number}</AppText>
+                        <AppText style={styles.busRouteName}>{bus.route.name || 'Active Line'}</AppText>
+                        <AppText style={styles.busCompany}>{bus.company.name || 'Fleet'}</AppText>
+                      </View>
+                      <View style={styles.busLiveRight}>
+                        <View style={styles.liveIndicator}>
+                          <View style={[styles.liveDot, bus.status !== 'active' && styles.staleDot]} />
+                          <AppText style={[styles.liveText, bus.status !== 'active' && styles.staleText]}>
+                            {bus.status === 'active' ? 'Live' : 'Offline'}
+                          </AppText>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {nearbyStops.length > 0 && (
+              <View style={styles.nearbyGroup}>
+                <AppText style={styles.subHeading}>Nearby Bus Stops</AppText>
+                <View style={styles.cardList}>
+                  {nearbyStops.map((stop, idx) => (
+                    <View key={stop.id} style={[styles.stopRow, idx > 0 && styles.rowDivider]}>
+                      <View style={styles.stopIconBox}>
+                        <SymbolView
+                          name={{ ios: 'mappin.circle.fill', android: 'place', web: 'place' }}
+                          size={18}
+                          tintColor={Monochrome.textPrimary}
+                        />
+                      </View>
+                      <View style={styles.stopInfo}>
+                        <AppText style={styles.stopName}>{stop.name}</AppText>
+                        <AppText style={styles.stopCode}>{stop.code || 'Transit Stop'}</AppText>
+                      </View>
+                      {typeof stop.distance_km === 'number' && (
+                        <AppText style={styles.stopDistance}>{Math.round(stop.distance_km * 1000)}m away</AppText>
+                      )}
+                      <Pressable
+                        onPress={() => void toggleStopFavorite(stop.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${favoriteStopIds.includes(stop.id) ? 'Remove' : 'Save'} ${stop.name} favorite`}
+                        hitSlop={8}
+                      >
+                        <SymbolView
+                          name={{ ios: favoriteStopIds.includes(stop.id) ? 'star.fill' : 'star', android: favoriteStopIds.includes(stop.id) ? 'star' : 'star_outline', web: favoriteStopIds.includes(stop.id) ? 'star' : 'star_outline' }}
+                          size={18}
+                          tintColor={Monochrome.textPrimary}
+                        />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {nearbyLocationAvailable && nearbyBuses.length === 0 && nearbyStops.length === 0 && (
+              <View style={styles.emptyCard}>
+                <AppText style={styles.emptyText}>No active buses or stops within 3km of your location</AppText>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* FLEETS / COMPANIES TAB */}
         {activeSegment === 'companies' && (
           <View style={styles.sectionContainer}>
-            {companies.length > 0 ? (
-              companies.map((comp) => (
+            {loading && !refreshing ? (
+              <View style={styles.loadingBox}>
+                <ActivityIndicator size="small" color={Monochrome.textPrimary} />
+                <AppText style={styles.loadingText}>Loading fleet operators...</AppText>
+              </View>
+            ) : filteredCompanies.length > 0 ? (
+              filteredCompanies.map((comp) => (
                 <View key={comp.id} style={styles.companyCard}>
                   <View style={styles.compHeader}>
                     <View style={styles.compIcon}>
                       <SymbolView
-                        name={{ ios: 'building.2.crop.circle.fill', android: 'business', web: 'business' }}
-                        size={26}
-                        tintColor={Brand.primary}
+                        name={{ ios: 'building.2.fill', android: 'business', web: 'business' }}
+                        size={18}
+                        tintColor={Monochrome.textPrimary}
                       />
                     </View>
                     <View style={styles.compInfo}>
-                      <Text style={styles.compName}>{comp.name}</Text>
-                      <Text style={styles.compCode}>ID: {comp.code}</Text>
+                      <AppText style={styles.compName}>{comp.name}</AppText>
+                      <AppText style={styles.compCode}>Code: {comp.code}</AppText>
                     </View>
-                    <View style={[styles.statusTag, comp.status === 'active' ? styles.statusActive : styles.statusInactive]}>
-                      <Text style={styles.statusTagText}>{comp.status.toUpperCase()}</Text>
+                    <View
+                      style={[
+                        styles.statusTag,
+                        comp.status === 'active' ? styles.statusActive : styles.statusInactive,
+                      ]}
+                    >
+                      <AppText style={styles.statusTagText}>
+                        {comp.status === 'active' ? 'Active' : comp.status}
+                      </AppText>
                     </View>
                   </View>
 
                   <View style={styles.compDetails}>
-                    {comp.phone && (
+                    {comp.phone ? (
                       <View style={styles.compRow}>
-                        <SymbolView name={{ ios: 'phone.fill', android: 'call', web: 'call' }} size={14} tintColor={Brand.textSecondary} />
-                        <Text style={styles.compDetailText}>{comp.phone}</Text>
+                        <SymbolView
+                          name={{ ios: 'phone.fill', android: 'call', web: 'call' }}
+                          size={12}
+                          tintColor={Monochrome.textMuted}
+                        />
+                        <AppText style={styles.compDetailText}>{comp.phone}</AppText>
                       </View>
-                    )}
-                    {comp.address && (
+                    ) : null}
+                    {comp.email ? (
                       <View style={styles.compRow}>
-                        <SymbolView name={{ ios: 'mappin', android: 'location_on', web: 'location_on' }} size={14} tintColor={Brand.textSecondary} />
-                        <Text style={styles.compDetailText}>{comp.address}</Text>
+                        <SymbolView
+                          name={{ ios: 'envelope.fill', android: 'mail', web: 'mail' }}
+                          size={12}
+                          tintColor={Monochrome.textMuted}
+                        />
+                        <AppText style={styles.compDetailText}>{comp.email}</AppText>
                       </View>
-                    )}
+                    ) : null}
                   </View>
                 </View>
               ))
             ) : (
               <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>No registered transport operators</Text>
+                <AppText style={styles.emptyText}>No transport operators found</AppText>
               </View>
             )}
           </View>
         )}
 
-        {/* --- Segment: Fare Rules --- */}
+        {/* FARE RULES TAB */}
         {activeSegment === 'fares' && (
           <View style={styles.sectionContainer}>
             {fareRules.length > 0 ? (
               fareRules.map((rule: any) => (
                 <View key={rule.id} style={styles.fareCard}>
                   <View style={styles.fareHeader}>
-                    <Text style={styles.fareTitle}>{rule.name || `Fare Rule #${rule.id}`}</Text>
+                    <AppText style={styles.fareTitle}>{rule.name || 'Standard Transit Fare'}</AppText>
                     <View style={styles.farePill}>
-                      <Text style={styles.farePillText}>
-                        {rule.type_label || rule.type || 'standard'}
-                      </Text>
+                      <AppText style={styles.farePillText}>{rule.type || 'Flat / Zone'}</AppText>
                     </View>
                   </View>
-                  <Text style={styles.fareDesc}>
-                    Base: {formatMoney(rule.base_amount ?? rule.amount)} ·
-                    Per km: {formatMoney(rule.per_km_amount) || 'Not distance-based'}
-                  </Text>
+                  <AppText style={styles.fareDesc}>
+                    {rule.description || 'Applicable to passenger tap-in and tap-out validation.'}
+                  </AppText>
                 </View>
               ))
             ) : (
               <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>Standard Nepal Transit Fare System Active</Text>
+                <AppText style={styles.emptyText}>Standard government rate cards apply</AppText>
               </View>
             )}
           </View>
         )}
       </ScrollView>
 
-      {/* Route Stops Modal */}
-      <Modal visible={Boolean(selectedRoute)} animationType="slide" transparent>
+      {/* Route Detail Modal */}
+      <Modal visible={selectedRoute !== null} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalRouteCode}>{selectedRoute?.code}</Text>
-                <Text style={styles.modalRouteName}>{selectedRoute?.name}</Text>
+                <AppText style={styles.modalRouteCode}>{selectedRoute?.code}</AppText>
+                <AppText style={styles.modalRouteName}>{selectedRoute?.name}</AppText>
               </View>
               <Pressable onPress={() => setSelectedRoute(null)} hitSlop={8}>
                 <SymbolView
                   name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
-                  size={24}
-                  tintColor={Brand.textSecondary}
+                  size={22}
+                  tintColor={Monochrome.textMuted}
                 />
               </Pressable>
             </View>
 
-            <Text style={styles.stopsHeading}>Ordered Bus Stops</Text>
+            <AppText style={styles.stopsHeading}>Scheduled departures · next 24 hours</AppText>
+            {loadingDepartures ? (
+              <View style={styles.departureLoading}>
+                <ActivityIndicator size="small" color={Monochrome.textPrimary} />
+                <AppText style={styles.loadingText}>Checking published trip schedules...</AppText>
+              </View>
+            ) : departureError ? (
+              <AppText style={styles.departureError}>{departureError}</AppText>
+            ) : routeDepartures.length > 0 ? (
+              <View style={styles.departureList}>
+                {routeDepartures.slice(0, 5).map((departure) => (
+                  <View key={departure.trip_id} style={styles.departureRow}>
+                    <AppText style={styles.departureTime}>
+                      {new Date(departure.scheduled_departure).toLocaleString()}
+                    </AppText>
+                    <AppText style={styles.departureMeta}>
+                      {departure.company_name || 'Transport operator'}
+                      {departure.bus_number ? ` · Bus ${departure.bus_number}` : ''}
+                    </AppText>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <AppText style={styles.departureEmpty}>No scheduled departures are published for this route in the next 24 hours.</AppText>
+            )}
+
+            <AppText style={styles.stopsHeading}>Bus Stops Along This Route</AppText>
 
             {loadingStops ? (
               <View style={styles.loadingBox}>
-                <ActivityIndicator size="small" color={Brand.teal.primary} />
-                <Text style={styles.loadingText}>Loading route sequence...</Text>
+                <ActivityIndicator size="small" color={Monochrome.textPrimary} />
+                <AppText style={styles.loadingText}>Fetching route stops...</AppText>
               </View>
             ) : routeStops.length > 0 ? (
-              <ScrollView style={styles.stopsList}>
-                {routeStops.map((stop, idx) => (
-                  <View key={stop.id} style={styles.stopTimelineItem}>
-                    <View style={styles.timelineLeft}>
-                      <View style={[
-                        styles.timelineDot,
-                        idx === 0 && styles.dotStart,
-                        idx === routeStops.length - 1 && styles.dotEnd,
-                      ]} />
-                      {idx < routeStops.length - 1 && <View style={styles.timelineLine} />}
+              <ScrollView style={styles.stopsList} showsVerticalScrollIndicator={false}>
+                {routeStops.map((stop, index) => {
+                  const isFirst = index === 0;
+                  const isLast = index === routeStops.length - 1;
+
+                  return (
+                    <View key={stop.id} style={styles.stopTimelineItem}>
+                      <View style={styles.timelineLeft}>
+                        <View
+                          style={[
+                            styles.timelineDot,
+                            isFirst && styles.dotStart,
+                            isLast && styles.dotEnd,
+                          ]}
+                        />
+                        {!isLast && <View style={styles.timelineLine} />}
+                      </View>
+                      <View style={styles.timelineContent}>
+                        <AppText style={styles.timelineStopName}>{stop.name}</AppText>
+                        <AppText style={styles.timelineSequence}>Stop #{stop.sequence}</AppText>
+                      </View>
                     </View>
-                    <View style={styles.timelineContent}>
-                      <Text style={styles.timelineStopName}>{stop.name}</Text>
-                      <Text style={styles.timelineSequence}>Stop #{stop.sequence || idx + 1}</Text>
-                    </View>
-                  </View>
-                ))}
+                  );
+                })}
               </ScrollView>
             ) : (
-              <Text style={styles.emptyText}>No stops sequenced for this route yet.</Text>
+              <View style={styles.emptyCard}>
+                <AppText style={styles.emptyText}>No stops registered for this route</AppText>
+              </View>
             )}
           </View>
         </View>
@@ -505,79 +970,67 @@ export default function TransitScreen() {
   );
 }
 
-function isLocationStale(lastSeenAt: string | null): boolean {
-  if (!lastSeenAt) return true;
-  const timestamp = Date.parse(lastSeenAt);
-  return Number.isNaN(timestamp) || Date.now() - timestamp > 120_000;
-}
-
-function formatMoney(value: unknown): string {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
-  const money = value as Record<string, unknown>;
-  if (typeof money.formatted === 'string') return money.formatted;
-  if (typeof money.amount_minor === 'number') return `Rs. ${(money.amount_minor / 100).toFixed(2)}`;
-  return '';
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Monochrome.background,
   },
   header: {
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfacePrimary,
+    borderBottomWidth: 1,
+    borderBottomColor: Monochrome.border,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   searchBarWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Brand.inputBackground,
+    backgroundColor: Monochrome.surfaceSecondary,
     marginHorizontal: Spacing.four,
     marginVertical: Spacing.two,
     borderRadius: 12,
     paddingHorizontal: Spacing.three,
     height: 44,
     gap: Spacing.two,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
-    color: Brand.text,
+    fontSize: 14,
+    color: Monochrome.textPrimary,
   },
   segmentBar: {
     flexDirection: 'row',
-    backgroundColor: '#E2E8F0',
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 12,
     marginHorizontal: Spacing.four,
     marginBottom: Spacing.two,
     padding: 3,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   segmentBtn: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 7,
     alignItems: 'center',
-    borderRadius: 10,
+    borderRadius: 9,
   },
   segmentBtnActive: {
-    backgroundColor: Brand.white,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: Monochrome.surfaceElevated,
   },
   segmentText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: Brand.textSecondary,
+    fontWeight: '500',
+    color: Monochrome.textMuted,
   },
   segmentTextActive: {
-    color: Brand.text,
+    color: Monochrome.textPrimary,
     fontWeight: '700',
   },
   scrollContent: {
@@ -589,21 +1042,197 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   subHeading: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
-    color: Brand.text,
-    marginBottom: 4,
+    color: Monochrome.textPrimary,
+    marginBottom: 6,
   },
   trackingButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Brand.teal.primary,
+    justifyContent: 'center',
+    backgroundColor: Monochrome.actionPrimary,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: Spacing.three,
+    gap: 8,
   },
   trackingButtonText: {
-    color: Brand.white,
+    color: Monochrome.actionPrimaryText,
     fontSize: 14,
+    fontWeight: '700',
+  },
+  serviceNoticesCard: {
+    padding: Spacing.three,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    backgroundColor: Monochrome.surfaceSecondary,
+    gap: Spacing.two,
+  },
+  serviceNoticesHeading: {
+    color: Monochrome.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  serviceNoticeItem: {
+    paddingTop: Spacing.two,
+    borderTopWidth: 1,
+    borderTopColor: Monochrome.border,
+    gap: 4,
+  },
+  serviceNoticeTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  serviceNoticeTitle: {
+    flex: 1,
+    color: Monochrome.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  serviceNoticeSeverity: {
+    color: Monochrome.textSecondary,
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  serviceNoticeText: {
+    color: Monochrome.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  serviceNoticeMeta: {
+    color: Monochrome.textMuted,
+    fontSize: 10,
+  },
+  serviceNoticeError: {
+    color: Monochrome.textSecondary,
+    fontSize: 11,
+  },
+  plannerCard: {
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderRadius: 16,
+    padding: Spacing.four,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    gap: Spacing.two,
+  },
+  plannerTitle: {
+    color: Monochrome.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  plannerSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  plannerInput: {
+    flex: 1,
+    minHeight: 42,
+    paddingHorizontal: Spacing.three,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    color: Monochrome.textPrimary,
+    backgroundColor: Monochrome.background,
+  },
+  plannerSearchButton: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: Monochrome.surfaceElevated,
+  },
+  plannerSearchButtonText: {
+    color: Monochrome.textPrimary,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  plannerStopOption: {
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    borderRadius: 8,
+    backgroundColor: Monochrome.surfaceElevated,
+  },
+  plannerStopText: {
+    color: Monochrome.textPrimary,
+    fontSize: 13,
+  },
+  planButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 42,
+    borderRadius: 10,
+    backgroundColor: Monochrome.actionPrimary,
+  },
+  planButtonText: {
+    color: Monochrome.actionPrimaryText,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  plannerError: {
+    color: Monochrome.textPrimary,
+    fontSize: 12,
+  },
+  plannerHint: {
+    color: Monochrome.textMuted,
+    fontSize: 12,
+  },
+  recentSearches: {
+    gap: 6,
+    paddingTop: Spacing.two,
+  },
+  recentSearchesHeading: {
+    color: Monochrome.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  recentSearchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 9,
+    borderRadius: 8,
+    backgroundColor: Monochrome.surfaceElevated,
+  },
+  recentSearchText: {
+    flex: 1,
+    color: Monochrome.textPrimary,
+    fontSize: 11,
+  },
+  recentSearchDate: {
+    color: Monochrome.textMuted,
+    fontSize: 10,
+  },
+  journeyOption: {
+    padding: Spacing.three,
+    borderRadius: 10,
+    backgroundColor: Monochrome.surfaceElevated,
+    gap: 4,
+  },
+  journeyOptionName: {
+    color: Monochrome.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  journeyOptionMeta: {
+    color: Monochrome.textMuted,
+    fontSize: 11,
+  },
+  favoriteFilter: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    backgroundColor: Monochrome.surfaceSecondary,
+  },
+  favoriteFilterText: {
+    color: Monochrome.textPrimary,
+    fontSize: 12,
     fontWeight: '700',
   },
   loadingBox: {
@@ -613,14 +1242,14 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 13,
-    color: Brand.textSecondary,
+    color: Monochrome.textSecondary,
   },
   routeCard: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 16,
     padding: Spacing.four,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Monochrome.border,
     gap: Spacing.three,
   },
   routeCardTop: {
@@ -628,16 +1257,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.three,
   },
+  routeOpenButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  favoriteButton: {
+    padding: 4,
+  },
   routeCodeBadge: {
-    backgroundColor: '#E0F2FE',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    backgroundColor: Monochrome.surfaceElevated,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   routeCodeText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0284C7',
+    fontSize: 13,
+    fontWeight: '700',
+    color: Monochrome.textPrimary,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   routeTitleGroup: {
     flex: 1,
@@ -645,11 +1286,11 @@ const styles = StyleSheet.create({
   routeName: {
     fontSize: 15,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   routeCompany: {
     fontSize: 12,
-    color: Brand.textSecondary,
+    color: Monochrome.textMuted,
     marginTop: 2,
   },
   routeMetricsRow: {
@@ -658,7 +1299,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: Spacing.two,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: Monochrome.surfaceElevated,
   },
   metricItem: {
     flexDirection: 'row',
@@ -668,7 +1309,7 @@ const styles = StyleSheet.create({
   },
   metricText: {
     fontSize: 12,
-    color: Brand.textSecondary,
+    color: Monochrome.textSecondary,
   },
   metricPills: {
     flexDirection: 'row',
@@ -676,8 +1317,8 @@ const styles = StyleSheet.create({
   },
   pillDistance: {
     fontSize: 11,
-    color: '#0369A1',
-    backgroundColor: '#F0F9FF',
+    color: Monochrome.textSecondary,
+    backgroundColor: Monochrome.surfaceElevated,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
@@ -685,19 +1326,22 @@ const styles = StyleSheet.create({
   },
   pillDuration: {
     fontSize: 11,
-    color: '#15803D',
-    backgroundColor: '#F0FDF4',
+    color: Monochrome.textSecondary,
+    backgroundColor: Monochrome.surfaceElevated,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
     fontWeight: '600',
   },
+  nearbyGroup: {
+    gap: Spacing.two,
+  },
   cardList: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 16,
     paddingHorizontal: Spacing.four,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Monochrome.border,
   },
   busRow: {
     flexDirection: 'row',
@@ -713,13 +1357,15 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: Monochrome.surfaceElevated,
   },
   busIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#E0F2FE',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -729,16 +1375,16 @@ const styles = StyleSheet.create({
   busNumber: {
     fontSize: 14,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   busRouteName: {
     fontSize: 12,
-    color: Brand.textSecondary,
+    color: Monochrome.textSecondary,
     marginTop: 2,
   },
   busCompany: {
     fontSize: 11,
-    color: '#64748B',
+    color: Monochrome.textMuted,
     marginTop: 1,
   },
   busLiveRight: {
@@ -746,9 +1392,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   speedText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#0284C7',
+    color: Monochrome.textPrimary,
   },
   liveIndicator: {
     flexDirection: 'row',
@@ -759,24 +1405,26 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#22C55E',
+    backgroundColor: Monochrome.textPrimary,
   },
   liveText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#22C55E',
+    color: Monochrome.textPrimary,
   },
   staleDot: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: Monochrome.textMuted,
   },
   staleText: {
-    color: '#B45309',
+    color: Monochrome.textMuted,
   },
   stopIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#CCFBF1',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -786,24 +1434,24 @@ const styles = StyleSheet.create({
   stopName: {
     fontSize: 14,
     fontWeight: '600',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   stopCode: {
     fontSize: 11,
-    color: Brand.textSecondary,
+    color: Monochrome.textMuted,
     marginTop: 2,
   },
   stopDistance: {
     fontSize: 12,
     fontWeight: '600',
-    color: Brand.teal.text,
+    color: Monochrome.textSecondary,
   },
   companyCard: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 16,
     padding: Spacing.four,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Monochrome.border,
     gap: Spacing.two,
   },
   compHeader: {
@@ -812,10 +1460,12 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   compIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#EFF6FF',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -825,28 +1475,30 @@ const styles = StyleSheet.create({
   compName: {
     fontSize: 15,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   compCode: {
     fontSize: 12,
-    color: Brand.textSecondary,
+    color: Monochrome.textMuted,
     marginTop: 2,
   },
   statusTag: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   statusActive: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: Monochrome.surfaceElevated,
   },
   statusInactive: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: Monochrome.surfaceSecondary,
   },
   statusTagText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#166534',
+    color: Monochrome.textPrimary,
   },
   compDetails: {
     gap: 4,
@@ -859,14 +1511,14 @@ const styles = StyleSheet.create({
   },
   compDetailText: {
     fontSize: 12,
-    color: Brand.textSecondary,
+    color: Monochrome.textSecondary,
   },
   fareCard: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 14,
     padding: Spacing.four,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Monochrome.border,
     gap: 6,
   },
   fareHeader: {
@@ -877,45 +1529,56 @@ const styles = StyleSheet.create({
   fareTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   farePill: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: Monochrome.surfaceElevated,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   farePillText: {
-    fontSize: 11,
-    color: '#D97706',
+    fontSize: 10,
+    color: Monochrome.textSecondary,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   fareDesc: {
     fontSize: 13,
-    color: Brand.textSecondary,
+    color: Monochrome.textSecondary,
   },
   emptyCard: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 16,
     padding: Spacing.five,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Monochrome.border,
+    gap: 6,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Monochrome.textPrimary,
   },
   emptyText: {
-    fontSize: 14,
-    color: Brand.textSecondary,
+    fontSize: 13,
+    color: Monochrome.textMuted,
+    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.85)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfacePrimary,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.four,
     maxHeight: '80%',
@@ -927,56 +1590,92 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.three,
   },
   modalRouteCode: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0284C7',
+    fontSize: 12,
+    fontWeight: '700',
+    color: Monochrome.textMuted,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   modalRouteName: {
     fontSize: 18,
     fontWeight: '800',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
     marginTop: 2,
   },
   stopsHeading: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    color: Brand.textSecondary,
+    color: Monochrome.textSecondary,
     marginBottom: Spacing.two,
+  },
+  departureLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.two,
+  },
+  departureList: {
+    gap: Spacing.two,
+    marginBottom: Spacing.three,
+  },
+  departureRow: {
+    padding: Spacing.two,
+    borderRadius: 8,
+    backgroundColor: Monochrome.surfaceSecondary,
+  },
+  departureTime: {
+    color: Monochrome.textPrimary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  departureMeta: {
+    marginTop: 2,
+    color: Monochrome.textMuted,
+    fontSize: 11,
+  },
+  departureEmpty: {
+    marginBottom: Spacing.three,
+    color: Monochrome.textMuted,
+    fontSize: 12,
+  },
+  departureError: {
+    marginBottom: Spacing.three,
+    color: Monochrome.textSecondary,
+    fontSize: 12,
   },
   stopsList: {
     marginTop: Spacing.two,
   },
   stopTimelineItem: {
     flexDirection: 'row',
-    minHeight: 50,
+    minHeight: 48,
   },
   timelineLeft: {
     width: 24,
     alignItems: 'center',
   },
   timelineDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Brand.teal.primary,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Monochrome.textPrimary,
     marginTop: 4,
   },
   dotStart: {
-    backgroundColor: '#16A34A',
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    backgroundColor: Monochrome.textPrimary,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   dotEnd: {
-    backgroundColor: '#DC2626',
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    backgroundColor: Monochrome.textSecondary,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   timelineLine: {
-    width: 2,
+    width: 1.5,
     flex: 1,
-    backgroundColor: '#CBD5E1',
+    backgroundColor: Monochrome.border,
     marginVertical: 2,
   },
   timelineContent: {
@@ -987,11 +1686,11 @@ const styles = StyleSheet.create({
   timelineStopName: {
     fontSize: 14,
     fontWeight: '600',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   timelineSequence: {
     fontSize: 11,
-    color: Brand.textSecondary,
+    color: Monochrome.textMuted,
     marginTop: 1,
   },
 });

@@ -1,3 +1,4 @@
+import {AppText, AppTextInput } from '@/components/typography/app-text';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
@@ -6,8 +7,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -63,14 +62,14 @@ export default function ForgotPasswordScreen() {
               size={22}
               tintColor={Brand.text}
             />
-            <Text style={styles.backText}>Back to Sign In</Text>
+            <AppText style={styles.backText}>Back to Sign In</AppText>
           </Pressable>
 
           <View style={styles.header}>
-            <Text style={styles.title}>Forgot Password</Text>
-            <Text style={styles.subtitle}>
-              Enter your registered email address. We'll send instructions to reset your password.
-            </Text>
+            <AppText style={styles.title}>Forgot Password</AppText>
+            <AppText style={styles.subtitle}>
+              Enter your registered email address. We&apos;ll send instructions to reset your password.
+            </AppText>
           </View>
 
           {message ? (
@@ -80,7 +79,7 @@ export default function ForgotPasswordScreen() {
                 size={28}
                 tintColor={Brand.teal.primary}
               />
-              <Text style={styles.successText}>{message}</Text>
+              <AppText style={styles.successText}>{message}</AppText>
               <PrimaryButton
                 title="Enter Reset Token"
                 onPress={() => router.push(`/reset-password?email=${encodeURIComponent(email)}` as any)}
@@ -90,14 +89,14 @@ export default function ForgotPasswordScreen() {
           ) : (
             <View style={styles.form}>
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Email Address</Text>
+                <AppText style={styles.fieldLabel}>Email Address</AppText>
                 <View style={[styles.inputContainer, error ? styles.inputError : null]}>
                   <SymbolView
                     name={{ ios: 'envelope.fill', android: 'mail', web: 'mail' }}
                     size={18}
                     tintColor={Brand.textSecondary}
                   />
-                  <TextInput
+                  <AppTextInput
                     style={styles.input}
                     value={email}
                     onChangeText={(val) => {
@@ -111,7 +110,7 @@ export default function ForgotPasswordScreen() {
                     autoCorrect={false}
                   />
                 </View>
-                {error && <Text style={styles.errorText}>{error}</Text>}
+                {error && <AppText style={styles.errorText}>{error}</AppText>}
               </View>
 
               <PrimaryButton
@@ -125,7 +124,7 @@ export default function ForgotPasswordScreen() {
                 onPress={() => router.push(`/reset-password?email=${encodeURIComponent(email)}` as any)}
                 style={styles.tokenPrompt}
               >
-                <Text style={styles.tokenPromptText}>Already have a reset token? Enter it here</Text>
+                <AppText style={styles.tokenPromptText}>Already have a reset token? Enter it here</AppText>
               </Pressable>
             </View>
           )}

@@ -13,15 +13,15 @@ export type OnboardingScreenContent = {
 export const onboardingScreens: OnboardingScreenContent[] = [
   {
     illustration: 'pay',
-    title: 'Tap to Pay',
+    title: 'Scan to Pay',
     description:
-      'Pay for every ride with a single tap. No cash, no tickets — just tap your phone and go.',
+      'Scan the official driver QR code and confirm your fare using your Tap & Pay wallet.',
   },
   {
     illustration: 'ride',
     title: 'Ride Anywhere',
     description:
-      'One wallet for buses, trains, and metro lines across the city. Top up once and travel everywhere.',
+      'Add money to your wallet, manage your transit card, and review your bus travel history.',
   },
   {
     illustration: 'security',

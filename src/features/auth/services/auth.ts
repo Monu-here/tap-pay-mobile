@@ -13,6 +13,7 @@ import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 
 import { common } from '@/constants/strings';
+import { unregisterAllFcmTokens, unregisterCurrentDeviceFcmToken } from '@/features/notifications/fcm';
 
 import { apiRequest, type ApiResult } from './apiClient';
 import {
@@ -164,19 +165,26 @@ export async function getMe(): Promise<ApiResult<SessionUser>> {
  * login. The local session is cleared even if the request fails or the token is
  * already invalid (the client also logs out on a 401).
  */
-export async function logout(): Promise<void> {
+export async function logout(): Promise<{ serverRevoked: boolean }> {
+  let serverRevoked = false;
   try {
-    await apiRequest<unknown>(LOGOUT_PATH, { method: 'POST', body: {} });
+    await unregisterCurrentDeviceFcmToken();
+    const result = await apiRequest<unknown>(LOGOUT_PATH, { method: 'POST', body: {} });
+    serverRevoked = result.ok;
   } catch {
-    // Ignored — the local session is cleared regardless.
+    serverRevoked = false;
   } finally {
     try {
       await clearSession();
     } catch {
       setPendingAuthMessage('Could not clear the saved secure session. Please sign in again.');
     }
+    if (!serverRevoked) {
+      setPendingAuthMessage('You have been signed out on this device. The server could not confirm token revocation; sign in again when you have a connection.');
+    }
     router.replace('/login');
   }
+  return { serverRevoked };
 }
 
 /** Human-friendly device label for the login `device_name` (max 80 chars). */
@@ -252,5 +260,7 @@ export function destroySession(tokenId: number): Promise<ApiResult<{ current_ses
 
 /** POST /auth/logout-all */
 export function logoutAll(): Promise<ApiResult<{ sessions_revoked: number }>> {
-  return apiRequest('/auth/logout-all', { method: 'POST', body: {} });
+  return unregisterAllFcmTokens().then(() =>
+    apiRequest('/auth/logout-all', { method: 'POST', body: {} }),
+  );
 }

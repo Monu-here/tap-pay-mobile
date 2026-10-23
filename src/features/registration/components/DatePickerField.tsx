@@ -1,3 +1,4 @@
+import { AppText } from '@/components/typography/app-text';
 /**
  * Pressable date field used on the Personal Information screen.
  *
@@ -7,7 +8,7 @@
  */
 
 import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Brand, Spacing } from '@/constants/theme';
 
@@ -40,8 +41,8 @@ export function DatePickerField({
   return (
     <View style={styles.field}>
       <View style={styles.labelRow}>
-        <Text style={styles.fieldLabel}>{label}</Text>
-        {required && <Text style={styles.requiredMark}>*</Text>}
+        <AppText style={styles.fieldLabel}>{label}</AppText>
+        {required && <AppText style={styles.requiredMark}>*</AppText>}
       </View>
       <Pressable
         accessibilityRole="button"
@@ -54,12 +55,12 @@ export function DatePickerField({
           size={18}
           tintColor={hasError ? Brand.error : Brand.textSecondary}
         />
-        <Text style={[styles.value, !value && styles.placeholder]} numberOfLines={1}>
+        <AppText style={[styles.value, !value && styles.placeholder]} numberOfLines={1}>
           {value ?? placeholder}
-        </Text>
-        {suffix && <Text style={styles.suffix}>{suffix}</Text>}
+        </AppText>
+        {suffix && <AppText style={styles.suffix}>{suffix}</AppText>}
       </Pressable>
-      {hasError && <Text style={styles.fieldError}>{error}</Text>}
+      {hasError && <AppText style={styles.fieldError}>{error}</AppText>}
     </View>
   );
 }

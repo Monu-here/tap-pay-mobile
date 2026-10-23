@@ -38,6 +38,24 @@ export type TransportCompanyItem = {
   active_routes_count?: number;
 };
 
+export type ServiceNoticeItem = {
+  id: number;
+  title: string;
+  message: string;
+  severity: 'information' | 'delay' | 'disruption' | 'closure';
+  starts_at: string;
+  ends_at: string | null;
+  company: { id: number; name: string } | null;
+  route: { id: number; name: string } | null;
+  stop: { id: number; name: string } | null;
+};
+
+export function getServiceNotices(): Promise<ApiResult<{ notices: ServiceNoticeItem[] }>> {
+  return apiRequest<unknown>('/service-notices').then((result) =>
+    normalizeCollection<ServiceNoticeItem, 'notices'>(result, 'notices'),
+  );
+}
+
 export function getNearbyStops(latitude: number, longitude: number, radius = 2000): Promise<ApiResult<{ stops: PublicStop[] }>> {
   const radiusKm = radius > 25 ? radius / 1000 : radius;
   return apiRequest<unknown>(
@@ -61,8 +79,9 @@ export function getNearbyBuses(latitude: number, longitude: number, radiusKm = 5
         const route = bus.route && typeof bus.route === 'object'
           ? bus.route as Record<string, unknown>
           : {};
-        const company = bus.company && typeof bus.company === 'object'
-          ? bus.company as Record<string, unknown>
+        const companyData = bus.transport_company ?? bus.company;
+        const company = companyData && typeof companyData === 'object'
+          ? companyData as Record<string, unknown>
           : {};
         return {
           bus_id: Number(bus.bus_id),

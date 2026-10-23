@@ -1,3 +1,4 @@
+import { AppText } from '@/components/typography/app-text';
 /**
  * Selectable card used on the "Select User Type" screen.
  *
@@ -8,7 +9,7 @@
  */
 
 import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Brand, Spacing } from '@/constants/theme';
 
@@ -52,8 +53,8 @@ export function UserTypeCard({
         />
       </View>
       <View style={styles.textContent}>
-        <Text style={[styles.title, selected && styles.titleSelected]}>{title}</Text>
-        <Text style={styles.description}>{description}</Text>
+        <AppText style={[styles.title, selected && styles.titleSelected]}>{title}</AppText>
+        <AppText style={styles.description}>{description}</AppText>
       </View>
       {selected && (
         <View style={styles.checkBadge}>

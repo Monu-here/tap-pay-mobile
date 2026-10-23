@@ -1,3 +1,4 @@
+import {AppText, AppTextInput } from '@/components/typography/app-text';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -9,10 +10,9 @@ import {
   Platform,
   Pressable,
   RefreshControl,
+  Share,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,18 +20,19 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 
 import { PrimaryButton } from '@/components/ui/primary-button';
-import { Brand, Spacing } from '@/constants/theme';
+import { Monochrome, Spacing } from '@/constants/theme';
 import {
   getDashboard,
   getPayment,
   getPaymentGateways,
   getWalletTransactions,
-  simulatePayment,
+  getWalletStatementSummary,
   topUp,
   verifyPayment,
   type PaymentGateway,
   type WalletSummary,
   type WalletTransaction,
+  type WalletStatementSummary,
 } from '@/features/passenger/services/passengerApi';
 import {
   isFailedPaymentStatus,
@@ -41,15 +42,31 @@ import { createIdempotencyKey } from '@/features/auth/services/apiClient';
 
 type PendingPayment = { reference: string; amount: number };
 
+function parseAmountMinor(value: string): number | null {
+  const normalized = value.trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
+
+  const [whole, fraction = ''] = normalized.split('.');
+  const amountMinor = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  return Number.isSafeInteger(amountMinor) && amountMinor > 0 ? amountMinor : null;
+}
+
 export default function WalletScreen() {
   const insets = useSafeAreaInsets();
 
   const [wallet, setWallet] = useState<WalletSummary | null>(null);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [statementSummary, setStatementSummary] = useState<WalletStatementSummary | null>(null);
+  const [transactionCursor, setTransactionCursor] = useState<string | null>(null);
   const [gateways, setGateways] = useState<PaymentGateway[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'credit' | 'debit'>('all');
+  const [transactionType, setTransactionType] = useState<'all' | 'load' | 'fare'>('all');
+  const [transactionStatus, setTransactionStatus] = useState<'all' | 'pending' | 'successful' | 'failed' | 'reversed'>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [statementLoading, setStatementLoading] = useState(false);
 
   // Top Up Modal State
   const [topUpModalVisible, setTopUpModalVisible] = useState(false);
@@ -71,10 +88,11 @@ export default function WalletScreen() {
     if (isRefresh) setRefreshing(true);
 
     try {
-      const [dashRes, txnsRes, gwRes] = await Promise.all([
+      const [dashRes, txnsRes, gwRes, summaryRes] = await Promise.all([
         getDashboard(),
-        getWalletTransactions(1),
+        getWalletTransactions({ perPage: 100 }),
         getPaymentGateways(),
+        getWalletStatementSummary(),
       ]);
 
       if (dashRes.ok && dashRes.data) {
@@ -82,7 +100,9 @@ export default function WalletScreen() {
       }
       if (txnsRes.ok && txnsRes.data) {
         setTransactions(txnsRes.data.transactions || []);
+        setTransactionCursor(typeof txnsRes.meta?.next_cursor === 'string' ? txnsRes.meta.next_cursor : null);
       }
+      if (summaryRes.ok && summaryRes.data) setStatementSummary(summaryRes.data);
       if (gwRes.ok && gwRes.data) {
         setGateways(gwRes.data.gateways || []);
         setSelectedGateway((current) =>
@@ -91,7 +111,7 @@ export default function WalletScreen() {
             : (gwRes.data.gateways[0]?.slug ?? ''),
         );
       }
-      const failures = [dashRes, txnsRes, gwRes].filter((result) => !result.ok);
+      const failures = [dashRes, txnsRes, gwRes, summaryRes].filter((result) => !result.ok);
       if (failures.length > 0) {
         setLoadError(failures[0].message || 'Some wallet data could not be loaded.');
       } else {
@@ -179,13 +199,19 @@ export default function WalletScreen() {
   }, [checkPaymentStatus, pendingPayment]);
 
   const handleTopUpSubmit = async () => {
-    const num = parseFloat(amountInput);
-    if (isNaN(num) || num <= 0) {
-      setErrorMessage('Please enter a valid amount.');
+    const amountMinor = parseAmountMinor(amountInput);
+    if (amountMinor === null) {
+      setErrorMessage('Enter a valid amount with no more than two decimal places.');
       return;
     }
-    if (!selectedGateway) {
-      setErrorMessage('No supported payment gateway is currently available. Please try again later.');
+    const gateway = gateways.find((item) => item.slug === selectedGateway);
+    if (!gateway || gateway.slug !== 'esewa') {
+      setErrorMessage('eSewa wallet top-up is not currently available. Please try again later.');
+      return;
+    }
+    if ((gateway.min_amount_minor !== undefined && amountMinor < gateway.min_amount_minor)
+      || (gateway.max_amount_minor !== undefined && amountMinor > gateway.max_amount_minor)) {
+      setErrorMessage('The entered amount is outside the eSewa top-up limits.');
       return;
     }
 
@@ -193,7 +219,6 @@ export default function WalletScreen() {
     setIsProcessing(true);
 
     try {
-      const amountMinor = Math.round(num * 100);
       const fingerprint = `${amountMinor}:${selectedGateway}`;
       if (!topUpRequest.current || topUpRequest.current.fingerprint !== fingerprint) {
         topUpRequest.current = { fingerprint, key: createIdempotencyKey() };
@@ -211,37 +236,22 @@ export default function WalletScreen() {
 
       topUpRequest.current = null;
       const payment = topUpRes.data.payment;
-      const pending = { reference: payment.reference, amount: num };
+      const pending = { reference: payment.reference, amount: amountMinor / 100 };
       setPendingPayment(pending);
       setTopUpSuccess(null);
 
-      // A dummy payment can be simulated, but its status is still confirmed by
-      // the payment endpoints before the UI reports a wallet credit.
-      if (selectedGateway === 'dummy') {
-        const token = topUpRes.data.checkout?.extra?.token;
-        const simRes = await simulatePayment(payment.reference, token);
-        if (!simRes.ok) {
-          setErrorMessage(simRes.message || 'Payment simulation failed.');
-          return;
-        }
-        await checkPaymentStatus(pending);
-      } else {
-        const redirectUrl = topUpRes.data.checkout?.checkout?.url;
-        if (!redirectUrl) {
-          setErrorMessage('Checkout was created without a payment URL. Verify the payment status to continue.');
-          setPaymentStatusMessage(null);
-          return;
-        }
-        try {
-          await Linking.openURL(redirectUrl);
-        } catch {
-          setErrorMessage('Could not open the payment checkout. You can still check the payment status.');
-        }
-        setPaymentStatusMessage(
-          `Checkout started with ${selectedGateway.toUpperCase()}. Complete payment, then return here to verify it.`,
-        );
-        void checkPaymentStatus(pending);
+      const redirectUrl = topUpRes.data.checkout?.checkout?.url;
+      if (!redirectUrl) {
+        setErrorMessage('eSewa checkout was created without a payment URL. Verify the payment status to continue.');
+        setPaymentStatusMessage(null);
+        return;
       }
+      try {
+        await Linking.openURL(redirectUrl);
+      } catch {
+        setErrorMessage('Could not open the eSewa checkout. You can retry checkout or check the payment status.');
+      }
+      setPaymentStatusMessage('Complete payment in eSewa, then return here to verify it.');
     } catch {
       setErrorMessage('Network error while processing payment.');
     } finally {
@@ -255,13 +265,122 @@ export default function WalletScreen() {
     return true;
   });
 
+  const applyStatementFilters = async () => {
+    const from = dateFrom.trim();
+    const to = dateTo.trim();
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+    if ((from && !datePattern.test(from)) || (to && !datePattern.test(to))) {
+      setLoadError('Use YYYY-MM-DD format for statement dates.');
+      return;
+    }
+    if (from && to && from > to) {
+      setLoadError('The statement start date must be before the end date.');
+      return;
+    }
+
+    setStatementLoading(true);
+    setLoadError(null);
+    try {
+      const filters = {
+        ...(transactionType !== 'all' ? { type: transactionType } : {}),
+        ...(filter !== 'all' ? { direction: filter } : {}),
+        ...(transactionStatus !== 'all' ? { status: transactionStatus } : {}),
+        ...(from ? { date_from: from } : {}),
+        ...(to ? { date_to: to } : {}),
+        perPage: 100,
+      } as const;
+      const [rows, summary] = await Promise.all([
+        getWalletTransactions(filters),
+        getWalletStatementSummary(filters),
+      ]);
+      if (!rows.ok || !rows.data) {
+        setLoadError(rows.message || 'Could not load the filtered statement.');
+        return;
+      }
+      if (!summary.ok || !summary.data) {
+        setLoadError(summary.message || 'Could not calculate statement totals.');
+        return;
+      }
+      setTransactions(rows.data.transactions);
+      setTransactionCursor(typeof rows.meta?.next_cursor === 'string' ? rows.meta.next_cursor : null);
+      setStatementSummary(summary.data);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Network error loading statement.');
+    } finally {
+      setStatementLoading(false);
+    }
+  };
+
+  const loadMoreTransactions = async () => {
+    if (!transactionCursor || statementLoading) return;
+    setStatementLoading(true);
+    try {
+      const result = await getWalletTransactions({
+        cursor: transactionCursor,
+        perPage: 100,
+        ...(transactionType !== 'all' ? { type: transactionType } : {}),
+        ...(filter !== 'all' ? { direction: filter } : {}),
+        ...(transactionStatus !== 'all' ? { status: transactionStatus } : {}),
+        ...(dateFrom.trim() ? { date_from: dateFrom.trim() } : {}),
+        ...(dateTo.trim() ? { date_to: dateTo.trim() } : {}),
+      });
+      if (!result.ok || !result.data) {
+        setLoadError(result.message || 'Could not load more statement entries.');
+        return;
+      }
+      setTransactions((current) => [...current, ...result.data.transactions]);
+      setTransactionCursor(typeof result.meta?.next_cursor === 'string' ? result.meta.next_cursor : null);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Network error loading more entries.');
+    } finally {
+      setStatementLoading(false);
+    }
+  };
+
+  const shareStatementCsv = async () => {
+    if (transactions.length === 0) {
+      Alert.alert('No statement entries', 'There are no ledger entries to share.');
+      return;
+    }
+    const csvCell = (value: string | number | null | undefined) =>
+      `"${String(value ?? '').replaceAll('"', '""')}"`;
+    const lines = [
+      ['Reference', 'Date', 'Type', 'Direction', 'Amount (minor)', 'Status', 'Description'].map(csvCell).join(','),
+      ...filteredTransactions.map((row) => [
+        row.reference,
+        row.created_at,
+        row.type,
+        row.direction,
+        row.amount_minor,
+        row.status,
+        row.description,
+      ].map(csvCell).join(',')),
+    ];
+    try {
+      await Share.share({
+        title: 'Tap & Pay wallet statement (loaded entries)',
+        message: lines.join('\n'),
+      });
+    } catch (error) {
+      Alert.alert('Could not share statement', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Wallet &amp; Payments</Text>
+        <AppText style={styles.headerTitle}>Wallet &amp; Payments</AppText>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open travel history"
+          onPress={() => router.push('/travel' as any)}
+          style={styles.travelHistoryButton}
+        >
+          <AppText style={styles.travelHistoryLink}>Travel</AppText>
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           onPress={() => loadWalletData(true)}
@@ -269,8 +388,8 @@ export default function WalletScreen() {
         >
           <SymbolView
             name={{ ios: 'arrow.clockwise', android: 'refresh', web: 'refresh' }}
-            size={20}
-            tintColor={Brand.text}
+            size={18}
+            tintColor={Monochrome.textPrimary}
           />
         </Pressable>
       </View>
@@ -279,14 +398,18 @@ export default function WalletScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => loadWalletData(true)} tintColor={Brand.teal.primary} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadWalletData(true)}
+            tintColor={Monochrome.textPrimary}
+          />
         }
       >
         {loadError ? (
           <View style={styles.loadErrorBox}>
-            <Text style={styles.errorBanner}>{loadError}</Text>
+            <AppText style={styles.errorBanner}>{loadError}</AppText>
             <Pressable onPress={() => loadWalletData(true)} accessibilityRole="button">
-              <Text style={styles.loadRetryText}>Retry</Text>
+              <AppText style={styles.loadRetryText}>Retry</AppText>
             </Pressable>
           </View>
         ) : null}
@@ -297,17 +420,17 @@ export default function WalletScreen() {
             <View style={styles.balanceTag}>
               <SymbolView
                 name={{ ios: 'checkmark.shield.fill', android: 'verified', web: 'verified' }}
-                size={16}
-                tintColor="#4ADE80"
+                size={14}
+                tintColor={Monochrome.textPrimary}
               />
-              <Text style={styles.balanceTagText}>LEDGER VERIFIED BALANCE</Text>
+              <AppText style={styles.balanceTagText}>VERIFIED WALLET BALANCE</AppText>
             </View>
-            <Text style={styles.currencyCode}>{wallet?.currency || 'NPR'}</Text>
+            <AppText style={styles.currencyCode}>{wallet?.currency || 'NPR'}</AppText>
           </View>
 
-          <Text style={styles.balanceDisplay}>
+          <AppText style={styles.balanceDisplay}>
             {wallet?.balance_formatted || 'Rs. 0.00'}
-          </Text>
+          </AppText>
 
           <View style={styles.balanceActionRow}>
             <Pressable
@@ -320,10 +443,10 @@ export default function WalletScreen() {
             >
               <SymbolView
                 name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }}
-                size={20}
-                tintColor={Brand.teal.text}
+                size={18}
+                tintColor={Monochrome.actionPrimaryText}
               />
-              <Text style={styles.actionTopUpText}>Add Money</Text>
+              <AppText style={styles.actionTopUpText}>Add Money</AppText>
             </Pressable>
 
             <Pressable
@@ -337,43 +460,127 @@ export default function WalletScreen() {
             >
               <SymbolView
                 name={{ ios: 'arrow.up.right.circle', android: 'north_east', web: 'north_east' }}
-                size={20}
-                tintColor={Brand.white}
+                size={18}
+                tintColor={Monochrome.textPrimary}
               />
-              <Text style={styles.actionWithdrawText}>Transfer</Text>
+              <AppText style={styles.actionWithdrawText}>Transfer</AppText>
             </Pressable>
           </View>
         </View>
 
         {/* Ledger Transactions Section */}
         <View style={styles.ledgerHeader}>
-          <Text style={styles.sectionHeading}>Transaction History</Text>
+          <AppText style={styles.sectionHeading}>Transaction History</AppText>
           <View style={styles.filterPills}>
             <Pressable
               onPress={() => setFilter('all')}
               style={[styles.filterPill, filter === 'all' && styles.filterPillActive]}
             >
-              <Text style={[styles.filterPillText, filter === 'all' && styles.filterPillTextActive]}>All</Text>
+              <AppText style={[styles.filterPillText, filter === 'all' && styles.filterPillTextActive]}>All</AppText>
             </Pressable>
             <Pressable
               onPress={() => setFilter('credit')}
               style={[styles.filterPill, filter === 'credit' && styles.filterPillActive]}
             >
-              <Text style={[styles.filterPillText, filter === 'credit' && styles.filterPillTextActive]}>Credits</Text>
+              <AppText style={[styles.filterPillText, filter === 'credit' && styles.filterPillTextActive]}>Credits</AppText>
             </Pressable>
             <Pressable
               onPress={() => setFilter('debit')}
               style={[styles.filterPill, filter === 'debit' && styles.filterPillActive]}
             >
-              <Text style={[styles.filterPillText, filter === 'debit' && styles.filterPillTextActive]}>Debits</Text>
+              <AppText style={[styles.filterPillText, filter === 'debit' && styles.filterPillTextActive]}>Debits</AppText>
+            </Pressable>
+          </View>
+        </View>
+
+        {statementSummary ? (
+          <View style={styles.statementSummaryCard}>
+            <AppText style={styles.statementSummaryTitle}>Ledger totals</AppText>
+            <View style={styles.statementSummaryRow}>
+              <AppText style={styles.statementSummaryText}>Credits: {statementSummary.total_credits.formatted}</AppText>
+              <AppText style={styles.statementSummaryText}>Debits: {statementSummary.total_debits.formatted}</AppText>
+            </View>
+            <View style={styles.statementSummaryRow}>
+              <AppText style={styles.statementSummaryText}>Opening: {statementSummary.opening_balance.formatted}</AppText>
+              <AppText style={styles.statementSummaryText}>Closing: {statementSummary.closing_balance.formatted}</AppText>
+            </View>
+          </View>
+        ) : null}
+
+        <View style={styles.statementFilters}>
+          <AppText style={styles.statementFilterLabel}>Transaction type</AppText>
+          <View style={styles.filterPills}>
+            {([
+              ['all', 'All'],
+              ['load', 'Top-ups'],
+              ['fare', 'Transport'],
+            ] as const).map(([value, label]) => (
+              <Pressable
+                key={value}
+                onPress={() => setTransactionType(value)}
+                style={[styles.filterPill, transactionType === value && styles.filterPillActive]}
+              >
+                <AppText style={[styles.filterPillText, transactionType === value && styles.filterPillTextActive]}>{label}</AppText>
+              </Pressable>
+            ))}
+          </View>
+          <AppText style={styles.statementFilterLabel}>Status</AppText>
+          <View style={styles.filterPills}>
+            {(['all', 'successful', 'pending', 'failed', 'reversed'] as const).map((value) => (
+              <Pressable
+                key={value}
+                onPress={() => setTransactionStatus(value)}
+                style={[styles.filterPill, transactionStatus === value && styles.filterPillActive]}
+              >
+                <AppText style={[styles.filterPillText, transactionStatus === value && styles.filterPillTextActive]}>
+                  {value === 'all' ? 'All' : value}
+                </AppText>
+              </Pressable>
+            ))}
+          </View>
+          <View style={styles.statementDateRow}>
+            <AppTextInput
+              value={dateFrom}
+              onChangeText={setDateFrom}
+              placeholder="From YYYY-MM-DD"
+              placeholderTextColor={Monochrome.textMuted}
+              style={styles.statementDateInput}
+              accessibilityLabel="Statement start date"
+            />
+            <AppTextInput
+              value={dateTo}
+              onChangeText={setDateTo}
+              placeholder="To YYYY-MM-DD"
+              placeholderTextColor={Monochrome.textMuted}
+              style={styles.statementDateInput}
+              accessibilityLabel="Statement end date"
+            />
+          </View>
+          <View style={styles.statementActions}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void applyStatementFilters()}
+              disabled={statementLoading}
+              style={styles.statementActionButton}
+            >
+              {statementLoading
+                ? <ActivityIndicator size="small" color={Monochrome.textPrimary} />
+                : <AppText style={styles.statementActionText}>Apply filters</AppText>}
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void shareStatementCsv()}
+              style={styles.statementActionButton}
+            >
+              <AppText style={styles.statementActionText}>Share loaded CSV</AppText>
             </Pressable>
           </View>
         </View>
 
         {loading && !refreshing ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={Brand.teal.primary} />
-            <Text style={styles.loadingText}>Fetching statement rows...</Text>
+            <ActivityIndicator size="small" color={Monochrome.textPrimary} />
+            <AppText style={styles.loadingText}>Fetching statement rows...</AppText>
           </View>
         ) : filteredTransactions.length > 0 ? (
           <View style={styles.transactionList}>
@@ -385,32 +592,32 @@ export default function WalletScreen() {
                   onPress={() => router.push(`/wallet/transaction/${item.reference}` as any)}
                   style={[styles.txnRow, idx > 0 && styles.rowDivider]}
                 >
-                  <View style={[styles.txnIconWrap, isCredit ? styles.txnCreditBg : styles.txnDebitBg]}>
+                  <View style={styles.txnIconWrap}>
                     <SymbolView
                       name={{
                         ios: isCredit ? 'arrow.down.left' : 'arrow.up.right',
                         android: isCredit ? 'arrow_downward' : 'arrow_upward',
                         web: isCredit ? 'arrow_downward' : 'arrow_upward',
                       }}
-                      size={18}
-                      tintColor={isCredit ? '#16A34A' : '#DC2626'}
+                      size={16}
+                      tintColor={Monochrome.textPrimary}
                     />
                   </View>
 
                   <View style={styles.txnCenter}>
-                    <Text style={styles.txnTitle} numberOfLines={1}>
+                    <AppText style={styles.txnTitle} numberOfLines={1}>
                       {item.description || item.type}
-                    </Text>
-                    <Text style={styles.txnRef}>{item.reference}</Text>
-                    <Text style={styles.txnDate}>{new Date(item.created_at).toLocaleString()}</Text>
+                    </AppText>
+                    <AppText style={styles.txnRef}>{item.reference}</AppText>
+                    <AppText style={styles.txnDate}>{new Date(item.created_at).toLocaleString()}</AppText>
                   </View>
 
                   <View style={styles.txnRight}>
-                    <Text style={[styles.txnAmount, isCredit ? styles.txnCreditText : styles.txnDebitText]}>
+                    <AppText style={styles.txnAmount}>
                       {isCredit ? '+' : '-'}Rs. {(item.amount_minor / 100).toFixed(2)}
-                    </Text>
+                    </AppText>
                     <View style={styles.txnStatusBadge}>
-                      <Text style={styles.txnStatusText}>{item.status}</Text>
+                      <AppText style={styles.txnStatusText}>{item.status}</AppText>
                     </View>
                   </View>
                 </Pressable>
@@ -422,12 +629,24 @@ export default function WalletScreen() {
             <SymbolView
               name={{ ios: 'doc.plaintext', android: 'receipt_long', web: 'receipt_long' }}
               size={36}
-              tintColor={Brand.textSecondary}
+              tintColor={Monochrome.textMuted}
             />
-            <Text style={styles.emptyTitle}>No Transactions Found</Text>
-            <Text style={styles.emptySubtitle}>Your top-ups and tap payments will appear here.</Text>
+            <AppText style={styles.emptyTitle}>No Transactions Found</AppText>
+            <AppText style={styles.emptySubtitle}>Your top-ups and tap payments will appear here.</AppText>
           </View>
         )}
+        {transactionCursor ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={statementLoading}
+            onPress={() => void loadMoreTransactions()}
+            style={styles.loadMoreStatementButton}
+          >
+            {statementLoading
+              ? <ActivityIndicator size="small" color={Monochrome.textPrimary} />
+              : <AppText style={styles.statementActionText}>Load more statement entries</AppText>}
+          </Pressable>
+        ) : null}
       </ScrollView>
 
       {/* Top Up / Add Money Modal */}
@@ -435,80 +654,72 @@ export default function WalletScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Money to Wallet</Text>
+              <AppText style={styles.modalTitle}>Add Money to Wallet</AppText>
               <Pressable onPress={() => setTopUpModalVisible(false)} hitSlop={8}>
                 <SymbolView
                   name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
-                  size={24}
-                  tintColor={Brand.textSecondary}
+                  size={22}
+                  tintColor={Monochrome.textMuted}
                 />
               </Pressable>
             </View>
 
-            {topUpSuccess ? (
-              <View style={styles.modalSuccessBox}>
-                <SymbolView
-                  name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
-                  size={48}
-                  tintColor={Brand.teal.primary}
-                />
-                <Text style={styles.modalSuccessText}>{topUpSuccess}</Text>
-                <PrimaryButton
-                  title="Done"
-                  onPress={() => {
-                    setTopUpSuccess(null);
-                    setPendingPayment(null);
-                    setTopUpModalVisible(false);
-                  }}
-                  style={styles.modalDoneButton}
-                />
-              </View>
-            ) : pendingPayment ? (
+            {pendingPayment ? (
               <View style={styles.paymentPendingBox}>
-                <ActivityIndicator color={Brand.teal.primary} animating={isProcessing} />
-                <Text style={styles.paymentPendingText}>
-                  {paymentStatusMessage || 'Payment has not yet been confirmed.'}
-                </Text>
-                <Text style={styles.paymentReference}>Reference: {pendingPayment.reference}</Text>
-                {errorMessage && <Text style={styles.errorBanner}>{errorMessage}</Text>}
+                <ActivityIndicator size="large" color={Monochrome.textPrimary} />
+                <AppText style={styles.paymentPendingText}>
+                  {paymentStatusMessage || 'Awaiting payment confirmation...'}
+                </AppText>
+                <AppText style={styles.paymentReference}>Reference: {pendingPayment.reference}</AppText>
                 <PrimaryButton
-                  title={isProcessing ? 'Checking Payment...' : 'Check Payment Status'}
+                  title={isProcessing ? 'Verifying...' : 'Check Payment Status'}
                   onPress={() => void checkPaymentStatus(pendingPayment)}
                   disabled={isProcessing}
                   style={styles.modalDoneButton}
                 />
                 <Pressable
-                  accessibilityRole="button"
-                  disabled={isProcessing}
                   onPress={() => {
                     setPendingPayment(null);
                     setPaymentStatusMessage(null);
-                    setErrorMessage(null);
+                  }}
+                  accessibilityRole="button"
+                >
+                  <AppText style={styles.closePendingText}>Cancel Check</AppText>
+                </Pressable>
+              </View>
+            ) : topUpSuccess ? (
+              <View style={styles.modalSuccessBox}>
+                <SymbolView
+                  name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
+                  size={52}
+                  tintColor={Monochrome.textPrimary}
+                />
+                <AppText style={styles.modalSuccessText}>{topUpSuccess}</AppText>
+                <PrimaryButton
+                  title="Done"
+                  onPress={() => {
+                    setTopUpSuccess(null);
                     setTopUpModalVisible(false);
                   }}
-                >
-                  <Text style={styles.closePendingText}>Close</Text>
-                </Pressable>
+                  style={styles.modalDoneButton}
+                />
               </View>
             ) : (
               <View style={styles.modalForm}>
-                <Text style={styles.inputLabel}>Enter Amount (NPR)</Text>
+                <AppText style={styles.inputLabel}>Enter Amount (NPR)</AppText>
                 <View style={styles.amountInputWrap}>
-                  <Text style={styles.currencyPrefix}>Rs.</Text>
-                  <TextInput
+                  <AppText style={styles.currencyPrefix}>Rs.</AppText>
+                  <AppTextInput
                     style={styles.amountInput}
-                    value={amountInput}
-                    onChangeText={(val) => {
-                      setAmountInput(val);
-                      setErrorMessage(null);
-                    }}
                     keyboardType="numeric"
+                    value={amountInput}
+                    onChangeText={setAmountInput}
                     placeholder="0"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={Monochrome.textMuted}
                   />
                 </View>
 
-                {/* Preset Chips */}
+                {/* Amount Quick Presets */}
                 <View style={styles.presetsRow}>
                   {PRESET_AMOUNTS.map((amt) => (
                     <Pressable
@@ -519,22 +730,25 @@ export default function WalletScreen() {
                         amountInput === amt.toString() && styles.presetChipActive,
                       ]}
                     >
-                      <Text style={[
-                        styles.presetChipText,
-                        amountInput === amt.toString() && styles.presetChipTextActive,
-                      ]}>
-                        Rs. {amt}
-                      </Text>
+                      <AppText
+                        style={[
+                          styles.presetChipText,
+                          amountInput === amt.toString() && styles.presetChipTextActive,
+                        ]}
+                      >
+                        +Rs. {amt}
+                      </AppText>
                     </Pressable>
                   ))}
                 </View>
 
-                {/* Payment Gateway Selector */}
-                <Text style={[styles.inputLabel, { marginTop: Spacing.three }]}>Select Payment Gateway</Text>
+                {/* Gateway Selector */}
+                <AppText style={[styles.inputLabel, { marginTop: Spacing.three }]}>
+                  Select Payment Gateway
+                </AppText>
                 <View style={styles.gatewaysList}>
                   {gateways.length > 0 ? (
-                    <>
-                    {gateways.map((gw) => (
+                    gateways.map((gw) => (
                       <Pressable
                         key={gw.slug}
                         onPress={() => setSelectedGateway(gw.slug)}
@@ -544,10 +758,10 @@ export default function WalletScreen() {
                         ]}
                       >
                         <View style={styles.gatewayInfo}>
-                          <Text style={styles.gatewayName}>{gw.name}</Text>
-                          {gw.slug === 'dummy' && (
-                            <Text style={styles.gatewayBadge}>Instant Simulator</Text>
-                          )}
+                          <AppText style={styles.gatewayName}>{gw.name}</AppText>
+                          {gw.currency ? (
+                            <AppText style={styles.gatewayBadge}>{gw.currency}</AppText>
+                          ) : null}
                         </View>
                         <SymbolView
                           name={{
@@ -555,31 +769,35 @@ export default function WalletScreen() {
                             android: selectedGateway === gw.slug ? 'check_circle' : 'radio_button_unchecked',
                             web: selectedGateway === gw.slug ? 'check_circle' : 'radio_button_unchecked',
                           }}
-                          size={20}
-                          tintColor={selectedGateway === gw.slug ? Brand.teal.primary : Brand.textSecondary}
+                          size={18}
+                          tintColor={Monochrome.textPrimary}
                         />
                       </Pressable>
-                    ))}
-                    <Text style={styles.gatewayNotice}>
-                      Only Tap &amp; Pay checkout sessions verified by the server can load your wallet.
-                      Scanning a merchant eSewa QR does not fund this wallet.
-                    </Text>
-                    </>
+                    ))
                   ) : (
-                    <Text style={styles.errorBanner}>
-                      No supported payment gateway is configured on the server.
-                    </Text>
+                    <AppText style={styles.gatewayNotice}>
+                      No online payment gateways are currently configured on this server.
+                    </AppText>
                   )}
                 </View>
 
-                {errorMessage && (
-                  <Text style={styles.errorBanner}>{errorMessage}</Text>
-                )}
+                <View style={styles.paymentSummary}>
+                  <AppText style={styles.summaryTitle}>Payment summary</AppText>
+                  <AppText style={styles.summaryRow}>Amount to add: Rs. {((parseAmountMinor(amountInput) ?? 0) / 100).toFixed(2)}</AppText>
+                  <AppText style={styles.summaryRow}>Payment method: {gateways.find((gateway) => gateway.slug === selectedGateway)?.name ?? 'eSewa unavailable'}</AppText>
+                  <AppText style={styles.summaryRow}>Current wallet balance: {wallet?.balance_formatted ?? 'Unavailable'}</AppText>
+                  <AppText style={styles.summaryRow}>
+                    Projected balance after verified payment: Rs. {(((wallet?.balance_minor ?? 0) + (parseAmountMinor(amountInput) ?? 0)) / 100).toFixed(2)}
+                  </AppText>
+                  <AppText style={styles.summaryNote}>Your wallet is credited only after the server verifies eSewa payment.</AppText>
+                </View>
+
+                {errorMessage && <AppText style={styles.errorBanner}>{errorMessage}</AppText>}
 
                 <PrimaryButton
-                  title={isProcessing ? 'Processing Payment...' : `Pay Rs. ${amountInput || '0'}`}
+                  title={isProcessing ? 'Processing...' : 'Confirm and Continue to eSewa'}
                   onPress={handleTopUpSubmit}
-                  disabled={isProcessing || !amountInput || !selectedGateway}
+                  disabled={isProcessing || gateways.length === 0}
                   style={styles.modalSubmitButton}
                 />
               </View>
@@ -594,7 +812,7 @@ export default function WalletScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Monochrome.background,
   },
   header: {
     flexDirection: 'row',
@@ -602,22 +820,38 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfacePrimary,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Monochrome.border,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   refreshIcon: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  travelHistoryButton: {
+    minWidth: 56,
+    height: 36,
+    paddingHorizontal: Spacing.two,
+    borderRadius: 18,
+    backgroundColor: Monochrome.actionSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  travelHistoryLink: {
+    color: Monochrome.actionSecondaryText,
+    fontSize: 12,
+    fontWeight: '700',
   },
   scrollContent: {
     paddingHorizontal: Spacing.four,
@@ -625,15 +859,12 @@ const styles = StyleSheet.create({
     gap: Spacing.four,
   },
   balanceCard: {
-    backgroundColor: '#0F172A',
+    backgroundColor: Monochrome.surfacePrimary,
     borderRadius: 20,
     padding: Spacing.four,
     gap: Spacing.three,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 6,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   balanceCardTop: {
     flexDirection: 'row',
@@ -646,20 +877,20 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   balanceTagText: {
-    color: '#94A3B8',
+    color: Monochrome.textSecondary,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1,
   },
   currencyCode: {
-    color: '#64748B',
+    color: Monochrome.textMuted,
     fontSize: 13,
     fontWeight: '700',
   },
   balanceDisplay: {
-    fontSize: 36,
+    fontSize: 34,
     fontWeight: '800',
-    color: Brand.white,
+    color: Monochrome.textPrimary,
     letterSpacing: -0.5,
   },
   balanceActionRow: {
@@ -669,7 +900,7 @@ const styles = StyleSheet.create({
   },
   actionTopUp: {
     flex: 1,
-    backgroundColor: Brand.teal.soft,
+    backgroundColor: Monochrome.actionPrimary,
     borderRadius: 12,
     paddingVertical: 12,
     flexDirection: 'row',
@@ -678,22 +909,24 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   actionTopUpText: {
-    color: Brand.teal.text,
+    color: Monochrome.actionPrimaryText,
     fontSize: 14,
     fontWeight: '700',
   },
   actionWithdraw: {
     flex: 1,
-    backgroundColor: '#1E293B',
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 12,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.two,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   actionWithdrawText: {
-    color: Brand.white,
+    color: Monochrome.textPrimary,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -704,30 +937,113 @@ const styles = StyleSheet.create({
     marginTop: Spacing.two,
   },
   sectionHeading: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
+  },
+  statementSummaryCard: {
+    padding: Spacing.three,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    backgroundColor: Monochrome.surfaceSecondary,
+    gap: 6,
+  },
+  statementSummaryTitle: {
+    color: Monochrome.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  statementSummaryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  statementSummaryText: {
+    color: Monochrome.textSecondary,
+    fontSize: 11,
+  },
+  statementFilters: {
+    padding: Spacing.three,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    backgroundColor: Monochrome.surfaceSecondary,
+    gap: Spacing.two,
+  },
+  statementFilterLabel: {
+    color: Monochrome.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  statementDateRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  statementDateInput: {
+    flex: 1,
+    minHeight: 40,
+    paddingHorizontal: Spacing.two,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    color: Monochrome.textPrimary,
+    fontSize: 11,
+  },
+  statementActions: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  statementActionButton: {
+    minHeight: 40,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.three,
+    borderRadius: 8,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+  },
+  statementActionText: {
+    color: Monochrome.textPrimary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  loadMoreStatementButton: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    backgroundColor: Monochrome.surfaceSecondary,
   },
   filterPills: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 6,
   },
   filterPill: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#E2E8F0',
+    paddingVertical: 5,
+    borderRadius: 10,
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   filterPillActive: {
-    backgroundColor: Brand.teal.primary,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderColor: Monochrome.textPrimary,
   },
   filterPillText: {
     fontSize: 12,
-    color: Brand.textSecondary,
+    color: Monochrome.textMuted,
     fontWeight: '600',
   },
   filterPillTextActive: {
-    color: Brand.white,
+    color: Monochrome.textPrimary,
   },
   loadingContainer: {
     padding: Spacing.five,
@@ -736,14 +1052,14 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 13,
-    color: Brand.textSecondary,
+    color: Monochrome.textSecondary,
   },
   transactionList: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 16,
     paddingHorizontal: Spacing.four,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Monochrome.border,
   },
   txnRow: {
     flexDirection: 'row',
@@ -753,20 +1069,17 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: Monochrome.surfaceElevated,
   },
   txnIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  txnCreditBg: {
-    backgroundColor: '#DCFCE7',
-  },
-  txnDebitBg: {
-    backgroundColor: '#FEE2E2',
   },
   txnCenter: {
     flex: 1,
@@ -774,73 +1087,72 @@ const styles = StyleSheet.create({
   txnTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   txnRef: {
-    fontSize: 12,
-    color: Brand.textSecondary,
+    fontSize: 11,
+    color: Monochrome.textMuted,
     marginTop: 2,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   txnDate: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: Monochrome.textMuted,
     marginTop: 2,
   },
   txnRight: {
     alignItems: 'flex-end',
   },
   txnAmount: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
-  },
-  txnCreditText: {
-    color: '#16A34A',
-  },
-  txnDebitText: {
-    color: '#DC2626',
+    color: Monochrome.textPrimary,
   },
   txnStatusBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
+    backgroundColor: Monochrome.surfaceElevated,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 8,
+    borderRadius: 6,
     marginTop: 4,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   txnStatusText: {
-    fontSize: 11,
-    color: Brand.textSecondary,
+    fontSize: 10,
+    color: Monochrome.textSecondary,
     fontWeight: '600',
     textTransform: 'capitalize',
   },
   emptyContainer: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 16,
     padding: Spacing.six,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Monochrome.border,
     gap: Spacing.two,
   },
   emptyTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   emptySubtitle: {
     fontSize: 13,
-    color: Brand.textSecondary,
+    color: Monochrome.textMuted,
     textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.85)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfacePrimary,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.four,
   },
@@ -853,7 +1165,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   modalForm: {
     gap: Spacing.two,
@@ -861,27 +1173,29 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: Brand.textSecondary,
+    color: Monochrome.textSecondary,
   },
   amountInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Brand.inputBackground,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 14,
     paddingHorizontal: Spacing.four,
     height: 56,
     gap: Spacing.two,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   currencyPrefix: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   amountInput: {
     flex: 1,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   presetsRow: {
     flexDirection: 'row',
@@ -893,27 +1207,52 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: Brand.inputBackground,
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   presetChipActive: {
-    backgroundColor: Brand.teal.soft,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderColor: Monochrome.textPrimary,
   },
   presetChipText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Brand.textSecondary,
+    color: Monochrome.textMuted,
   },
   presetChipTextActive: {
-    color: Brand.teal.text,
+    color: Monochrome.textPrimary,
   },
   gatewaysList: {
     gap: Spacing.two,
     marginTop: Spacing.one,
   },
+  paymentSummary: {
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderColor: Monochrome.border,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: Spacing.three,
+    gap: Spacing.two,
+  },
+  summaryTitle: {
+    color: Monochrome.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  summaryRow: {
+    color: Monochrome.textSecondary,
+    fontSize: 13,
+  },
+  summaryNote: {
+    color: Monochrome.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+  },
   gatewayNotice: {
     fontSize: 12,
     lineHeight: 17,
-    color: Brand.textSecondary,
+    color: Monochrome.textMuted,
     marginTop: Spacing.one,
   },
   gatewayItem: {
@@ -922,13 +1261,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: Spacing.three,
     borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    backgroundColor: Brand.white,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    backgroundColor: Monochrome.surfaceSecondary,
   },
   gatewayItemActive: {
-    borderColor: Brand.teal.primary,
-    backgroundColor: '#F0FDFA',
+    borderColor: Monochrome.textPrimary,
+    backgroundColor: Monochrome.surfaceElevated,
   },
   gatewayInfo: {
     flexDirection: 'row',
@@ -938,31 +1277,33 @@ const styles = StyleSheet.create({
   gatewayName: {
     fontSize: 14,
     fontWeight: '600',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   gatewayBadge: {
     fontSize: 11,
-    color: Brand.teal.text,
-    backgroundColor: Brand.teal.soft,
+    color: Monochrome.textSecondary,
+    backgroundColor: Monochrome.surfaceElevated,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
     fontWeight: '600',
   },
   errorBanner: {
-    color: Brand.error,
+    color: Monochrome.textPrimary,
     fontSize: 13,
     fontWeight: '500',
     marginTop: 4,
   },
   loadErrorBox: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 12,
     padding: Spacing.three,
     gap: Spacing.one,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   loadRetryText: {
-    color: Brand.teal.text,
+    color: Monochrome.textPrimary,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -977,7 +1318,7 @@ const styles = StyleSheet.create({
   modalSuccessText: {
     fontSize: 16,
     fontWeight: '600',
-    color: Brand.teal.text,
+    color: Monochrome.textPrimary,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -993,17 +1334,17 @@ const styles = StyleSheet.create({
   paymentPendingText: {
     fontSize: 15,
     fontWeight: '600',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
     textAlign: 'center',
     lineHeight: 22,
   },
   paymentReference: {
     fontSize: 12,
-    color: Brand.textSecondary,
+    color: Monochrome.textMuted,
   },
   closePendingText: {
     paddingVertical: Spacing.two,
-    color: Brand.textSecondary,
+    color: Monochrome.textMuted,
     fontSize: 14,
     fontWeight: '600',
   },

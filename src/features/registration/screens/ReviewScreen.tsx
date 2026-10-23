@@ -1,7 +1,8 @@
+import { AppText } from '@/components/typography/app-text';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/ui/primary-button';
@@ -9,6 +10,7 @@ import { Brand, Spacing } from '@/constants/theme';
 
 import { useRegistration } from '../RegistrationContext';
 import { registrationService } from '../services/registration';
+import type { RegistrationResult } from '../services/registration/types';
 import {
   EMPTY_PERSONAL,
   type DocumentImage,
@@ -31,6 +33,7 @@ export function ReviewScreen() {
   const { data } = useRegistration();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitFieldErrors, setSubmitFieldErrors] = useState<string[]>([]);
   const [cooldown, setCooldown] = useState(0);
 
   const personal = data?.personal ?? EMPTY_PERSONAL;
@@ -54,16 +57,29 @@ export function ReviewScreen() {
 
   const handleSubmit = async () => {
     setSubmitError(null);
+    setSubmitFieldErrors([]);
     setIsSubmitting(true);
 
     // 1) Create the account via the register endpoint. A 202 carries no
     //    token — it only confirms creation, so the user is signed in
     //    later (after their contact channels are verified).
-    const registrationResult = await registrationService.register(data);
+    let registrationResult: RegistrationResult;
+    try {
+      registrationResult = await registrationService.register(data);
+    } catch {
+      setIsSubmitting(false);
+      setSubmitError('Could not submit your account details. Please check your connection and try again.');
+      return;
+    }
     setIsSubmitting(false);
 
     if (!registrationResult.ok) {
       setSubmitError(registrationResult.message);
+      setSubmitFieldErrors(
+        Object.entries(registrationResult.fieldErrors ?? {}).map(
+          ([field, message]) => `${field.replaceAll('_', ' ')}: ${message}`,
+        ),
+      );
       if (registrationResult.retryAfter) setCooldown(registrationResult.retryAfter);
       return;
     }
@@ -98,10 +114,10 @@ export function ReviewScreen() {
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <Text style={styles.backIcon}>←</Text>
+          <AppText style={styles.backIcon}>←</AppText>
         </Pressable>
         <View style={styles.stepIndicator}>
-          <Text style={styles.stepLabel}>Step 4 of 7</Text>
+          <AppText style={styles.stepLabel}>Step 4 of 7</AppText>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${(4 / 7) * 100}%` }]} />
           </View>
@@ -116,17 +132,17 @@ export function ReviewScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headingBlock}>
-          <Text style={styles.title}>Review Your Details</Text>
-          <Text style={styles.subtitle}>
+          <AppText style={styles.title}>Review Your Details</AppText>
+          <AppText style={styles.subtitle}>
             Please check everything looks right before submitting
-          </Text>
+          </AppText>
         </View>
 
         <View style={styles.notice}>
-          <Text style={styles.noticeText}>
+          <AppText style={styles.noticeText}>
             Your identity documents will be reviewed by our team before your
             account is approved.
-          </Text>
+          </AppText>
         </View>
 
         <ReviewSection
@@ -240,9 +256,16 @@ export function ReviewScreen() {
         )}
 
         <View style={styles.footer}>
-          {submitError && <Text style={styles.submitError}>{submitError}</Text>}
+          {submitError && (
+            <View style={styles.submitErrorBox} accessibilityRole="alert">
+              <AppText style={styles.submitError}>{submitError}</AppText>
+              {submitFieldErrors.map((message) => (
+                <AppText key={message} style={styles.submitFieldError}>{message}</AppText>
+              ))}
+            </View>
+          )}
           {cooldown > 0 && (
-            <Text style={styles.submitCooldown}>{`You can try again in ${cooldown}s`}</Text>
+            <AppText style={styles.submitCooldown}>{`You can try again in ${cooldown}s`}</AppText>
           )}
           <PrimaryButton
             label={isSubmitting ? 'Creating account…' : 'Continue to Verification'}
@@ -257,7 +280,7 @@ export function ReviewScreen() {
             onPress={() => router.back()}
             style={styles.backTextButton}
           >
-            <Text style={styles.backText}>Back</Text>
+            <AppText style={styles.backText}>Back</AppText>
           </Pressable>
         </View>
       </ScrollView>
@@ -279,16 +302,16 @@ function ReviewSection({
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>{title}</Text>
+        <AppText style={styles.cardTitle}>{title}</AppText>
         <Pressable accessibilityRole="button" hitSlop={8} onPress={onEdit}>
-          <Text style={styles.editButton}>Edit</Text>
+          <AppText style={styles.editButton}>Edit</AppText>
         </Pressable>
       </View>
       <View style={styles.rows}>
         {rows.map((row) => (
           <View key={row.label} style={styles.row}>
-            <Text style={styles.rowLabel}>{row.label}</Text>
-            <Text style={styles.rowValue}>{row.value}</Text>
+            <AppText style={styles.rowLabel}>{row.label}</AppText>
+            <AppText style={styles.rowValue}>{row.value}</AppText>
           </View>
         ))}
       </View>
@@ -419,10 +442,24 @@ const styles = StyleSheet.create({
   footer: {
     gap: Spacing.two,
   },
+  submitErrorBox: {
+    gap: Spacing.one,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F0C6C9',
+    backgroundColor: '#FCEBEC',
+    padding: Spacing.three,
+  },
   submitError: {
     color: Brand.error,
     fontSize: 13,
-    textAlign: 'center',
+    lineHeight: 19,
+    fontWeight: '600',
+  },
+  submitFieldError: {
+    color: Brand.text,
+    fontSize: 12,
+    lineHeight: 18,
   },
   submitCooldown: {
     color: Brand.textSecondary,

@@ -1,3 +1,4 @@
+import { AppText } from '@/components/typography/app-text';
 /**
  * Shared shell for both OTP verification screens.
  *
@@ -8,7 +9,7 @@
  */
 
 import { type ReactNode, type Ref } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 
@@ -88,11 +89,11 @@ export function OtpVerificationLayout({
 
   const resendView: ReactNode = canResend ? (
     <Pressable accessibilityRole="button" hitSlop={8} onPress={onResend} style={styles.resendButton}>
-      <Text style={styles.resendActive}>Resend code</Text>
+      <AppText style={styles.resendActive}>Resend code</AppText>
     </Pressable>
   ) : (
     <View style={styles.resendButton}>
-      <Text style={styles.resendWaiting}>Resend code in {secondsLeft}s</Text>
+      <AppText style={styles.resendWaiting}>Resend code in {secondsLeft}s</AppText>
     </View>
   );
 
@@ -111,10 +112,10 @@ export function OtpVerificationLayout({
           onPress={onBack}
           style={styles.backButton}
         >
-          <Text style={styles.backIcon}>←</Text>
+          <AppText style={styles.backIcon}>←</AppText>
         </Pressable>
         <View style={styles.stepIndicator}>
-          <Text style={styles.stepLabel}>Step {step} of 7</Text>
+          <AppText style={styles.stepLabel}>Step {step} of 7</AppText>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${(step / 7) * 100}%` }]} />
           </View>
@@ -130,8 +131,8 @@ export function OtpVerificationLayout({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headingBlock}>
-          <Text style={styles.title}>{heading}</Text>
-          <Text style={styles.message}>{message}</Text>
+          <AppText style={styles.title}>{heading}</AppText>
+          <AppText style={styles.message}>{message}</AppText>
         </View>
 
         <View style={styles.destinationCard}>
@@ -147,10 +148,10 @@ export function OtpVerificationLayout({
             />
           </View>
           <View style={styles.destinationTextWrap}>
-            {destinationLabel && <Text style={styles.destinationLabel}>{destinationLabel}</Text>}
-            <Text style={styles.destination} numberOfLines={1}>
+            {destinationLabel && <AppText style={styles.destinationLabel}>{destinationLabel}</AppText>}
+            <AppText style={styles.destination} numberOfLines={1}>
               {destination}
-            </Text>
+            </AppText>
           </View>
         </View>
 
@@ -161,13 +162,13 @@ export function OtpVerificationLayout({
           hasError={Boolean(shownError)}
         />
 
-        {shownError && <Text style={styles.error}>{shownError}</Text>}
+        {shownError && <AppText style={styles.error}>{shownError}</AppText>}
 
         {devHint && (
           <View style={styles.devHint}>
-            <Text style={styles.devHintText}>
+            <AppText style={styles.devHintText}>
               Development build: the mock code is {devHint}. No email or SMS is actually sent.
-            </Text>
+            </AppText>
           </View>
         )}
 
@@ -180,7 +181,7 @@ export function OtpVerificationLayout({
           />
           {resendView}
           <Pressable accessibilityRole="button" hitSlop={8} onPress={onBack} style={styles.changeButton}>
-            <Text style={styles.changeText}>{changeLabel}</Text>
+            <AppText style={styles.changeText}>{changeLabel}</AppText>
           </Pressable>
         </View>
 
@@ -193,24 +194,24 @@ export function OtpVerificationLayout({
               onPress={onResendEmail}
               style={styles.emailResendButton}
             >
-              <Text style={[styles.emailResendText, isResendingEmail && styles.emailResendBusy]}>
+              <AppText style={[styles.emailResendText, isResendingEmail && styles.emailResendBusy]}>
                 {isResendingEmail ? 'Sending…' : (resendEmailLabel ?? 'Resend verification email')}
-              </Text>
+              </AppText>
             </Pressable>
             {resendEmailStatus && (
-              <Text
+              <AppText
                 style={[
                   styles.emailResendStatus,
                   resendEmailStatus.tone === 'error' && styles.emailResendStatusError,
                 ]}
               >
                 {resendEmailStatus.message}
-              </Text>
+              </AppText>
             )}
           </View>
         )}
 
-        <Text style={styles.note}>{footerNote}</Text>
+        <AppText style={styles.note}>{footerNote}</AppText>
       </ScrollView>
     </View>
   );

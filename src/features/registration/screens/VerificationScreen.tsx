@@ -1,3 +1,4 @@
+import { AppText } from '@/components/typography/app-text';
 /**
  * Screen — Email + phone OTP verification.
  *
@@ -17,7 +18,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -99,33 +99,33 @@ function ChannelCard({ channel, state, title, destination, inputRef }: ChannelCa
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.cardHeaderText}>
-          <Text style={styles.cardTitle}>{title}</Text>
-          <Text style={styles.cardDestination} numberOfLines={1}>
+          <AppText style={styles.cardTitle}>{title}</AppText>
+          <AppText style={styles.cardDestination} numberOfLines={1}>
             {destination}
-          </Text>
+          </AppText>
         </View>
         <View style={[styles.badge, state.isVerified ? styles.badgeVerified : styles.badgePending]}>
-          <Text
+          <AppText
             style={[
               styles.badgeText,
               state.isVerified ? styles.badgeTextVerified : styles.badgeTextPending,
             ]}
           >
             {state.isVerified ? V.verifiedBadge : V.pendingBadge}
-          </Text>
+          </AppText>
         </View>
       </View>
 
       {state.isVerified ? (
         <View style={styles.verifiedRow}>
           <View style={styles.verifiedDot}>
-            <Text style={styles.verifiedDotText}>✓</Text>
+            <AppText style={styles.verifiedDotText}>✓</AppText>
           </View>
-          <Text style={styles.verifiedText}>{V.verifiedBadge}</Text>
+          <AppText style={styles.verifiedText}>{V.verifiedBadge}</AppText>
         </View>
       ) : (
         <View style={styles.cardBody}>
-          <Text style={styles.helper}>{V.codeHelper}</Text>
+          <AppText style={styles.helper}>{V.codeHelper}</AppText>
           <OtpCodeInput
             ref={inputRef}
             value={state.code}
@@ -136,9 +136,9 @@ function ChannelCard({ channel, state, title, destination, inputRef }: ChannelCa
             length={VERIFICATION_CODE_LENGTH}
           />
           {state.codeSent && !errorMessage && (
-            <Text style={styles.sentHint}>{sentSuccessHint}</Text>
+            <AppText style={styles.sentHint}>{sentSuccessHint}</AppText>
           )}
-          {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
+          {errorMessage && <AppText style={styles.error}>{errorMessage}</AppText>}
           <PrimaryButton
             label={
               state.status === 'sending'
@@ -232,7 +232,7 @@ export function VerificationScreen() {
             onPress={() => router.replace(dashboardPath as any)}
             style={styles.backButton}
           >
-            <Text style={styles.backIcon}>←</Text>
+            <AppText style={styles.backIcon}>←</AppText>
           </Pressable>
         )}
       </View>
@@ -243,8 +243,8 @@ export function VerificationScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heading}>
-          <Text style={styles.title}>{V.title}</Text>
-          <Text style={styles.subtitle}>{V.subtitle}</Text>
+          <AppText style={styles.title}>{V.title}</AppText>
+          <AppText style={styles.subtitle}>{V.subtitle}</AppText>
         </View>
 
         <ChannelCard
@@ -263,7 +263,7 @@ export function VerificationScreen() {
         />
 
         {VERIFICATION_DEV_CODE_FOR_DISPLAY && (
-          <Text style={styles.devHint}>{V.devCodeHint}</Text>
+          <AppText style={styles.devHint}>{V.devCodeHint}</AppText>
         )}
 
         {!REQUIRE_VERIFICATION && (

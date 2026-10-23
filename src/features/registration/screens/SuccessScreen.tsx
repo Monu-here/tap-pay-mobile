@@ -1,3 +1,4 @@
+import { AppText } from '@/components/typography/app-text';
 /**
  * Screen 7 — Registration success.
  *
@@ -13,7 +14,7 @@
  */
 
 import { Redirect, router } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 
@@ -68,36 +69,36 @@ export function SuccessScreen() {
           <SymbolView name={SUCCESS_SYMBOL} size={40} tintColor={Brand.white} />
         </View>
 
-        <Text style={styles.title}>Contact details verified</Text>
-        <Text style={styles.subtitle}>
+        <AppText style={styles.title}>Contact details verified</AppText>
+        <AppText style={styles.subtitle}>
           Your email and phone number have both been verified.
-        </Text>
+        </AppText>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Verified contacts</Text>
+          <AppText style={styles.cardTitle}>Verified contacts</AppText>
           <View style={styles.row}>
-            <Text style={styles.rowLabel}>Email</Text>
-            <Text style={styles.rowValue} numberOfLines={1}>
+            <AppText style={styles.rowLabel}>Email</AppText>
+            <AppText style={styles.rowValue} numberOfLines={1}>
               {personal.email.trim() || '—'}
-            </Text>
+            </AppText>
           </View>
           <View style={styles.row}>
-            <Text style={styles.rowLabel}>Phone</Text>
-            <Text style={styles.rowValue}>
+            <AppText style={styles.rowLabel}>Phone</AppText>
+            <AppText style={styles.rowValue}>
               {personal.phoneNumber.trim() ? formatNepalPhone(personal.phoneNumber) : '—'}
-            </Text>
+            </AppText>
           </View>
           <View style={styles.row}>
-            <Text style={styles.rowLabel}>User type</Text>
-            <Text style={styles.rowValue}>{userTypeLabel}</Text>
+            <AppText style={styles.rowLabel}>User type</AppText>
+            <AppText style={styles.rowValue}>{userTypeLabel}</AppText>
           </View>
         </View>
 
         <View style={styles.notice}>
-          <Text style={styles.noticeText}>
+          <AppText style={styles.noticeText}>
             Your account has been created. Your identity documents are reviewed by our team
             before your account is fully approved.
-          </Text>
+          </AppText>
         </View>
       </View>
 

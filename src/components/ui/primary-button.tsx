@@ -1,48 +1,78 @@
+import { AppText } from '@/components/typography/app-text';
 import {
   Pressable,
   StyleSheet,
-  Text,
   type PressableProps,
   type StyleProp,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
+import type { ReactNode } from 'react';
 
-import { Brand } from '@/constants/theme';
+import { Monochrome } from '@/constants/theme';
 
 export type PrimaryButtonProps = Omit<PressableProps, 'style'> & {
   label?: string;
   title?: string;
   style?: StyleProp<ViewStyle>;
+  labelStyle?: StyleProp<TextStyle>;
+  leadingIcon?: ReactNode;
 };
 
-export function PrimaryButton({ label, title, style, ...rest }: PrimaryButtonProps) {
+export function PrimaryButton({
+  label,
+  title,
+  style,
+  labelStyle,
+  leadingIcon,
+  disabled = false,
+  ...rest
+}: PrimaryButtonProps) {
   const text = label ?? title ?? '';
   return (
     <Pressable
       accessibilityRole="button"
-      style={({ pressed }) => [styles.button, pressed && styles.pressed, style]}
+      style={({ pressed }) => [
+        styles.button,
+        style,
+        disabled && styles.disabledButton,
+        pressed && !disabled && styles.pressed,
+      ]}
+      disabled={disabled}
       {...rest}
     >
-      <Text style={styles.label}>{text}</Text>
+      {leadingIcon}
+      <AppText style={[styles.label, labelStyle, disabled && styles.disabledLabel]}>{text}</AppText>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: Brand.primary,
-    borderRadius: 16,
-    paddingVertical: 16,
+    backgroundColor: Monochrome.actionPrimary,
+    borderRadius: 14,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  disabledButton: {
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   pressed: {
-    opacity: 0.85,
+    opacity: 0.88,
   },
   label: {
-    color: Brand.white,
-    fontSize: 17,
-    fontWeight: '600',
-    letterSpacing: 0.2,
+    color: Monochrome.actionPrimaryText,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  disabledLabel: {
+    color: Monochrome.textMuted,
   },
 });

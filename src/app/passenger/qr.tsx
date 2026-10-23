@@ -1,3 +1,4 @@
+import { AppText } from '@/components/typography/app-text';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -6,7 +7,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,7 +14,7 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import QRCode from 'react-native-qrcode-svg';
 
-import { Brand, Spacing } from '@/constants/theme';
+import { Monochrome, Spacing } from '@/constants/theme';
 import { getPassengerQr, type PassengerQrData } from '@/features/passenger/services/passengerApi';
 import { getSession } from '@/features/auth/session';
 
@@ -47,7 +47,10 @@ export default function PassengerQrScreen() {
   }, []);
 
   useEffect(() => {
-    fetchQr();
+    const frame = requestAnimationFrame(() => {
+      void fetchQr();
+    });
+    return () => cancelAnimationFrame(frame);
   }, [fetchQr]);
 
   // Countdown timer for dynamic QR code refresh
@@ -74,23 +77,23 @@ export default function PassengerQrScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
           <SymbolView
             name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-            size={22}
-            tintColor={Brand.white}
+            size={20}
+            tintColor={Monochrome.textPrimary}
           />
         </Pressable>
-        <Text style={styles.headerTitle}>My Transit QR</Text>
+        <AppText style={styles.headerTitle}>My Transit QR Pass</AppText>
         <Pressable onPress={fetchQr} style={styles.refreshIconBtn} hitSlop={10}>
           <SymbolView
             name={{ ios: 'arrow.clockwise', android: 'refresh', web: 'refresh' }}
-            size={20}
-            tintColor={Brand.teal.primary}
+            size={18}
+            tintColor={Monochrome.textPrimary}
           />
         </Pressable>
       </View>
@@ -107,30 +110,30 @@ export default function PassengerQrScreen() {
               <View style={styles.logoBadge}>
                 <SymbolView
                   name={{ ios: 'wave.3.right.circle.fill', android: 'nfc', web: 'nfc' }}
-                  size={22}
-                  tintColor={Brand.white}
+                  size={20}
+                  tintColor={Monochrome.textPrimary}
                 />
               </View>
               <View>
-                <Text style={styles.brandTitle}>TAP & PAY PASS</Text>
-                <Text style={styles.brandSubtitle}>Digital Transit Token</Text>
+                <AppText style={styles.brandTitle}>TAP &amp; PAY PASS</AppText>
+                <AppText style={styles.brandSubtitle}>Digital Transit Token</AppText>
               </View>
             </View>
 
             <View style={[styles.statusBadge, isActive ? styles.statusActive : styles.statusInactive]}>
-              <Text style={styles.statusText}>{isActive ? 'ACTIVE' : (qrData?.status?.toUpperCase() || 'INACTIVE')}</Text>
+              <AppText style={styles.statusText}>{isActive ? 'ACTIVE' : (qrData?.status?.toUpperCase() || 'INACTIVE')}</AppText>
             </View>
           </View>
 
           {/* Passenger Identity */}
           <View style={styles.passengerInfoRow}>
             <View>
-              <Text style={styles.infoLabel}>PASSENGER NAME</Text>
-              <Text style={styles.infoValue} numberOfLines={1}>{passengerName}</Text>
+              <AppText style={styles.infoLabel}>PASSENGER NAME</AppText>
+              <AppText style={styles.infoValue} numberOfLines={1}>{passengerName}</AppText>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.infoLabel}>CARD CODE</Text>
-              <Text style={styles.infoValue}>{maskedCode}</Text>
+              <AppText style={styles.infoLabel}>CARD CODE</AppText>
+              <AppText style={styles.infoValue}>{maskedCode}</AppText>
             </View>
           </View>
 
@@ -140,19 +143,19 @@ export default function PassengerQrScreen() {
           <View style={styles.qrContainer}>
             {loading ? (
               <View style={styles.qrLoadingBox}>
-                <ActivityIndicator size="large" color={Brand.teal.primary} />
-                <Text style={styles.qrLoadingText}>Generating cryptographic token...</Text>
+                <ActivityIndicator size="small" color={Monochrome.textPrimary} />
+                <AppText style={styles.qrLoadingText}>Generating cryptographic token...</AppText>
               </View>
             ) : error ? (
               <View style={styles.errorBox}>
                 <SymbolView
                   name={{ ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' }}
-                  size={36}
-                  tintColor="#EF4444"
+                  size={32}
+                  tintColor={Monochrome.textPrimary}
                 />
-                <Text style={styles.errorText}>{error}</Text>
+                <AppText style={styles.errorText}>{error}</AppText>
                 <Pressable onPress={fetchQr} style={styles.retryBtn}>
-                  <Text style={styles.retryBtnText}>Retry Generation</Text>
+                  <AppText style={styles.retryBtnText}>Retry Generation</AppText>
                 </Pressable>
               </View>
             ) : qrData ? (
@@ -161,9 +164,9 @@ export default function PassengerQrScreen() {
                   value={qrData.qr_payload}
                   size={220}
                   backgroundColor="#FFFFFF"
-                  color="#0B132B"
+                  color="#000000"
                 />
-                <Text style={styles.scanNotice}>Present this screen to the driver's scanner</Text>
+                <AppText style={styles.scanNotice}>Present this code to the driver for fare verification</AppText>
               </View>
             ) : null}
           </View>
@@ -180,11 +183,11 @@ export default function PassengerQrScreen() {
                 />
               </View>
               <View style={styles.timerDetails}>
-                <Text style={styles.timerText}>
-                  Refreshes in <Text style={{ fontWeight: '700', color: Brand.teal.primary }}>{secondsRemaining}s</Text>
-                </Text>
+                <AppText style={styles.timerText}>
+                  Refreshes in <AppText style={{ fontWeight: '700', color: Monochrome.textPrimary }}>{secondsRemaining}s</AppText>
+                </AppText>
                 <Pressable onPress={fetchQr} hitSlop={6}>
-                  <Text style={styles.manualRefreshText}>Refresh Now</Text>
+                  <AppText style={styles.manualRefreshText}>Refresh Now</AppText>
                 </Pressable>
               </View>
             </View>
@@ -193,8 +196,8 @@ export default function PassengerQrScreen() {
           {/* Card UID footnote */}
           {cardUid ? (
             <View style={styles.footerRow}>
-              <Text style={styles.footerLabel}>CARD UID</Text>
-              <Text style={styles.footerUid}>{cardUid}</Text>
+              <AppText style={styles.footerLabel}>CARD UID</AppText>
+              <AppText style={styles.footerUid}>{cardUid}</AppText>
             </View>
           ) : null}
         </View>
@@ -204,14 +207,14 @@ export default function PassengerQrScreen() {
           <View style={styles.tipsHeader}>
             <SymbolView
               name={{ ios: 'shield.checkerboard', android: 'security', web: 'security' }}
-              size={18}
-              tintColor={Brand.teal.primary}
+              size={16}
+              tintColor={Monochrome.textPrimary}
             />
-            <Text style={styles.tipsTitle}>Secure Transit Verification</Text>
+            <AppText style={styles.tipsTitle}>Secure Transit Verification</AppText>
           </View>
-          <Text style={styles.tipItem}>• Each QR token is digitally signed by the Tap & Pay server.</Text>
-          <Text style={styles.tipItem}>• Replayed or expired QR codes are rejected by the bus scanner.</Text>
-          <Text style={styles.tipItem}>• Fare is deducted securely from your linked digital wallet.</Text>
+          <AppText style={styles.tipItem}>• Each QR token is digitally signed by the Tap &amp; Pay server.</AppText>
+          <AppText style={styles.tipItem}>• Replayed or expired QR codes are rejected by the bus scanner.</AppText>
+          <AppText style={styles.tipItem}>• Fare is deducted securely from your linked digital wallet.</AppText>
         </View>
       </ScrollView>
     </View>
@@ -221,124 +224,130 @@ export default function PassengerQrScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: Monochrome.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+    backgroundColor: Monochrome.surfacePrimary,
+    borderBottomWidth: 1,
+    borderBottomColor: Monochrome.border,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Brand.white,
+    fontSize: 17,
+    fontWeight: '800',
+    color: Monochrome.textPrimary,
   },
   refreshIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(20, 184, 166, 0.15)',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   content: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.four,
   },
   passCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 24,
-    padding: Spacing.xl,
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderRadius: 22,
+    padding: Spacing.four,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 8,
+    borderColor: Monochrome.border,
   },
   passHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.four,
   },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.two,
   },
   logoBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: Brand.teal.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   brandTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
-    color: Brand.white,
+    color: Monochrome.textPrimary,
     letterSpacing: 0.8,
   },
   brandSubtitle: {
-    fontSize: 12,
-    color: '#94A3B8',
+    fontSize: 11,
+    color: Monochrome.textMuted,
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   statusActive: {
-    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+    backgroundColor: Monochrome.surfaceElevated,
   },
   statusInactive: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: Monochrome.surfacePrimary,
   },
   statusText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
-    color: '#4ADE80',
+    color: Monochrome.textPrimary,
     letterSpacing: 0.5,
   },
   passengerInfoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.three,
   },
   infoLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#64748B',
+    color: Monochrome.textMuted,
     letterSpacing: 0.6,
     marginBottom: 2,
   },
   infoValue: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    color: Brand.white,
+    color: Monochrome.textPrimary,
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    marginVertical: Spacing.md,
+    backgroundColor: Monochrome.surfaceElevated,
+    marginVertical: Spacing.three,
   },
   qrContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: Spacing.lg,
+    borderRadius: 18,
+    padding: Spacing.four,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 280,
@@ -347,55 +356,55 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scanNotice: {
-    marginTop: Spacing.md,
+    marginTop: Spacing.three,
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#000000',
     textAlign: 'center',
   },
   qrLoadingBox: {
     alignItems: 'center',
-    padding: Spacing.xl,
+    padding: Spacing.four,
   },
   qrLoadingText: {
-    marginTop: Spacing.md,
+    marginTop: Spacing.two,
     fontSize: 13,
-    color: '#64748B',
+    color: '#000000',
   },
   errorBox: {
     alignItems: 'center',
-    padding: Spacing.md,
+    padding: Spacing.three,
   },
   errorText: {
-    marginTop: Spacing.sm,
+    marginTop: Spacing.one,
     fontSize: 13,
-    color: '#EF4444',
+    color: '#000000',
     textAlign: 'center',
   },
   retryBtn: {
-    marginTop: Spacing.md,
-    backgroundColor: Brand.teal.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: 12,
+    marginTop: Spacing.three,
+    backgroundColor: '#000000',
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.two,
+    borderRadius: 10,
   },
   retryBtnText: {
-    color: Brand.white,
+    color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
   },
   timerRow: {
-    marginTop: Spacing.lg,
+    marginTop: Spacing.four,
   },
   timerIndicator: {
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    height: 3,
+    backgroundColor: Monochrome.surfaceElevated,
     borderRadius: 2,
     overflow: 'hidden',
   },
   timerProgress: {
     height: '100%',
-    backgroundColor: Brand.teal.primary,
+    backgroundColor: Monochrome.textPrimary,
   },
   timerDetails: {
     flexDirection: 'row',
@@ -405,54 +414,54 @@ const styles = StyleSheet.create({
   },
   timerText: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: Monochrome.textSecondary,
   },
   manualRefreshText: {
     fontSize: 12,
-    color: Brand.teal.primary,
+    color: Monochrome.textPrimary,
     fontWeight: '600',
   },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: Spacing.md,
-    paddingTop: Spacing.sm,
+    marginTop: Spacing.three,
+    paddingTop: Spacing.two,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    borderTopColor: Monochrome.surfaceElevated,
   },
   footerLabel: {
     fontSize: 10,
-    color: '#64748B',
+    color: Monochrome.textMuted,
     fontWeight: '700',
   },
   footerUid: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: Monochrome.textSecondary,
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', web: 'monospace' }),
   },
   tipsBox: {
-    marginTop: Spacing.xl,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    marginTop: Spacing.four,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 16,
-    padding: Spacing.lg,
+    padding: Spacing.four,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: Monochrome.border,
   },
   tipsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.two,
   },
   tipsTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    color: Brand.white,
+    color: Monochrome.textPrimary,
   },
   tipItem: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: Monochrome.textMuted,
     lineHeight: 18,
     marginBottom: 4,
   },

@@ -31,7 +31,7 @@ import { toRegistrationPayload } from './payload';
 import type { RegistrationResult, RegistrationService } from './types';
 
 const REGISTER_PATH = '/auth/register';
-const REQUEST_TIMEOUT_MS = 15000;
+const REQUEST_TIMEOUT_MS = 60000;
 const DEFAULT_RETRY_AFTER = 60;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -102,9 +102,13 @@ function toFormData(payload: ReturnType<typeof toRegistrationPayload>): FormData
 
   formData.append('name', payload.name);
   formData.append('name_en', payload.name_en);
+  if (payload.name_np) formData.append('name_np', payload.name_np);
   formData.append('user_type', payload.user_type);
   formData.append('email', payload.email);
   formData.append('phone', payload.phone);
+  if (payload.address) formData.append('address', payload.address);
+  if (payload.date_of_birth_ad) formData.append('date_of_birth_ad', payload.date_of_birth_ad);
+  if (payload.date_of_birth_bs) formData.append('date_of_birth_bs', payload.date_of_birth_bs);
   formData.append('password', payload.password);
   formData.append('password_confirmation', payload.password_confirmation);
 
@@ -115,8 +119,8 @@ function toFormData(payload: ReturnType<typeof toRegistrationPayload>): FormData
   if (payload.college_id_number !== undefined) {
     formData.append('college_id_number', payload.college_id_number);
   }
-  if (payload.college_id_expiry !== undefined) {
-    formData.append('college_id_expiry', payload.college_id_expiry);
+  if (payload.college_id_card_expiry_date !== undefined) {
+    formData.append('college_id_card_expiry_date', payload.college_id_card_expiry_date);
   }
   appendPhoto(formData, 'college_id_card_photo', payload.college_id_card_photo);
 
@@ -223,9 +227,15 @@ export class PlatformRegistrationService implements RegistrationService {
         console.log(`[register] no response (${reason})`);
       }
       if (error instanceof Error && error.name === 'AbortError') {
-        return { ok: false, message: 'The request timed out. Check your connection and try again.' };
+        return {
+          ok: false,
+          message: 'Account creation is taking longer than expected. Check your connection and try again; your details are still saved on this screen.',
+        };
       }
-      return { ok: false, message: common.network };
+      return {
+        ok: false,
+        message: 'Could not reach the Tap & Pay server. Check your internet connection. For a local build, make sure your phone can reach the API server on the same network.',
+      };
     } finally {
       clearTimeout(timeout);
     }

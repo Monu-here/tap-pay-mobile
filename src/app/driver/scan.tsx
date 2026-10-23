@@ -1,3 +1,4 @@
+import {AppText, AppTextInput } from '@/components/typography/app-text';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -6,8 +7,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,7 +14,7 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
-import { Brand, Spacing } from '@/constants/theme';
+import { Monochrome, Spacing } from '@/constants/theme';
 import {
   collectDriverPayment,
   getCurrentDriverBus,
@@ -128,33 +127,33 @@ export default function DriverScanScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
           <SymbolView
             name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-            size={22}
-            tintColor={Brand.white}
+            size={18}
+            tintColor={Monochrome.textPrimary}
           />
         </Pressable>
         <View style={styles.headerTitleGroup}>
-          <Text style={styles.headerTitle}>Scan Passenger QR</Text>
-          <Text style={styles.headerSubtitle}>
+          <AppText style={styles.headerTitle}>Scan Passenger QR</AppText>
+          <AppText style={styles.headerSubtitle}>
             {bus ? `Bus ${bus.bus_number}` : 'Driver POS Mode'}
-          </Text>
+          </AppText>
         </View>
         <Pressable
           disabled={!activeTrip}
           onPress={() => setManualInputModal(true)}
-          style={styles.manualBtn}
+          style={[styles.manualBtn, !activeTrip && styles.manualBtnDisabled]}
           hitSlop={8}
         >
           <SymbolView
             name={{ ios: 'keyboard', android: 'keyboard', web: 'keyboard' }}
-            size={20}
-            tintColor="#4ADE80"
+            size={18}
+            tintColor={activeTrip ? Monochrome.textPrimary : Monochrome.textMuted}
           />
         </Pressable>
       </View>
@@ -163,35 +162,35 @@ export default function DriverScanScreen() {
       <View style={styles.cameraWrapper}>
         {tripLoading ? (
           <View style={styles.permissionBox}>
-            <ActivityIndicator size="large" color="#4ADE80" />
-            <Text style={styles.permText}>Checking assigned bus and active trip…</Text>
+            <ActivityIndicator size="large" color={Monochrome.textPrimary} />
+            <AppText style={styles.permText}>Checking assigned bus and active trip…</AppText>
           </View>
         ) : !activeTrip ? (
           <View style={styles.permissionBox}>
-            <Text style={styles.permTitle}>No Active Trip</Text>
-            <Text style={styles.permText}>{tripMessage || 'Start an assigned trip before collecting fares.'}</Text>
+            <AppText style={styles.permTitle}>No Active Trip</AppText>
+            <AppText style={styles.permText}>{tripMessage || 'Start an assigned trip before collecting fares.'}</AppText>
           </View>
         ) : !permission ? (
           <View style={styles.permissionBox}>
-            <ActivityIndicator size="large" color="#4ADE80" />
-            <Text style={styles.permText}>Requesting camera permission...</Text>
+            <ActivityIndicator size="large" color={Monochrome.textPrimary} />
+            <AppText style={styles.permText}>Requesting camera permission...</AppText>
           </View>
         ) : !permission.granted ? (
           <View style={styles.permissionBox}>
             <SymbolView
               name={{ ios: 'camera.fill', android: 'photo_camera', web: 'photo_camera' }}
               size={48}
-              tintColor="#94A3B8"
+              tintColor={Monochrome.textMuted}
             />
-            <Text style={styles.permTitle}>Camera Access Required</Text>
-            <Text style={styles.permText}>
+            <AppText style={styles.permTitle}>Camera Access Required</AppText>
+            <AppText style={styles.permText}>
               Tap &amp; Pay needs camera permission to scan passenger transit QR codes on boarding.
-            </Text>
+            </AppText>
             <Pressable onPress={requestPermission} style={styles.grantBtn}>
-              <Text style={styles.grantBtnText}>Grant Camera Permission</Text>
+              <AppText style={styles.grantBtnText}>Grant Camera Permission</AppText>
             </Pressable>
             <Pressable onPress={() => setManualInputModal(true)} style={styles.textBtn}>
-              <Text style={styles.textBtnText}>Or enter QR payload manually</Text>
+              <AppText style={styles.textBtnText}>Or enter QR payload manually</AppText>
             </Pressable>
           </View>
         ) : (
@@ -214,14 +213,14 @@ export default function DriverScanScreen() {
 
                 {processing && (
                   <View style={styles.processingCover}>
-                    <ActivityIndicator size="large" color="#4ADE80" />
-                    <Text style={styles.processingText}>Verifying token with backend...</Text>
+                    <ActivityIndicator size="large" color={Monochrome.textPrimary} />
+                    <AppText style={styles.processingText}>Verifying token with backend...</AppText>
                   </View>
                 )}
               </View>
-              <Text style={styles.reticlePrompt}>
+              <AppText style={styles.reticlePrompt}>
                 Align passenger&apos;s phone QR inside the square
-              </Text>
+              </AppText>
             </View>
           </View>
         )}
@@ -232,12 +231,12 @@ export default function DriverScanScreen() {
         <View style={styles.busInfoRow}>
           <SymbolView
             name={{ ios: 'shield.lefthalf.filled', android: 'verified_user', web: 'verified_user' }}
-            size={18}
-            tintColor="#4ADE80"
+            size={16}
+            tintColor={Monochrome.textSecondary}
           />
-          <Text style={styles.bottomBarText}>
+          <AppText style={styles.bottomBarText}>
             Cryptographic Server Verification Active · Anti-Replay Guard On
-          </Text>
+          </AppText>
         </View>
       </View>
 
@@ -248,73 +247,73 @@ export default function DriverScanScreen() {
         transparent
       >
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, ticketResult ? styles.modalCardSuccess : styles.modalCardError]}>
+          <View style={styles.modalCard}>
             {ticketResult ? (
               <>
-                <View style={styles.resultIconCircleSuccess}>
+                <View style={styles.resultIconCircle}>
                   <SymbolView
                     name={{ ios: 'checkmark', android: 'check', web: 'check' }}
-                    size={32}
-                    tintColor="#FFFFFF"
+                    size={30}
+                    tintColor={Monochrome.textPrimary}
                   />
                 </View>
-                <Text style={styles.resultTitleSuccess}>FARED PAID & ISSUED</Text>
-                <Text style={styles.resultTicketNumber}>{ticketResult.ticket_number}</Text>
+                <AppText style={styles.resultTitle}>FARE PAID &amp; ISSUED</AppText>
+                <AppText style={styles.resultTicketNumber}>{ticketResult.ticket_number}</AppText>
 
                 <View style={styles.ticketDetailsBox}>
                   <View style={styles.ticketRow}>
-                    <Text style={styles.ticketLabel}>PASSENGER</Text>
-                    <Text style={styles.ticketValue}>{ticketResult.passenger_name}</Text>
+                    <AppText style={styles.ticketLabel}>PASSENGER</AppText>
+                    <AppText style={styles.ticketValue}>{ticketResult.passenger_name}</AppText>
                   </View>
                   <View style={styles.ticketRow}>
-                    <Text style={styles.ticketLabel}>FARE COLLECTED</Text>
-                    <Text style={[styles.ticketValue, { color: '#4ADE80' }]}>
+                    <AppText style={styles.ticketLabel}>FARE COLLECTED</AppText>
+                    <AppText style={styles.ticketValue}>
                       {ticketResult.fare_formatted}
-                    </Text>
+                    </AppText>
                   </View>
                   {ticketResult.balance_remaining_formatted && (
                     <View style={styles.ticketRow}>
-                      <Text style={styles.ticketLabel}>PASSENGER BALANCE</Text>
-                      <Text style={styles.ticketValue}>
+                      <AppText style={styles.ticketLabel}>PASSENGER BALANCE</AppText>
+                      <AppText style={styles.ticketValue}>
                         {ticketResult.balance_remaining_formatted}
-                      </Text>
+                      </AppText>
                     </View>
                   )}
                   <View style={styles.ticketRow}>
-                    <Text style={styles.ticketLabel}>ISSUED AT</Text>
-                    <Text style={styles.ticketValue}>
+                    <AppText style={styles.ticketLabel}>ISSUED AT</AppText>
+                    <AppText style={styles.ticketValue}>
                       {new Date(ticketResult.issued_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                    </Text>
+                    </AppText>
                   </View>
                 </View>
 
                 <Pressable onPress={resetScanner} style={styles.scanNextBtn}>
-                  <Text style={styles.scanNextBtnText}>Scan Next Passenger</Text>
+                  <AppText style={styles.scanNextBtnText}>Scan Next Passenger</AppText>
                 </Pressable>
               </>
             ) : errorResult ? (
               <>
-                <View style={styles.resultIconCircleError}>
+                <View style={styles.resultIconCircle}>
                   <SymbolView
                     name={{ ios: 'xmark', android: 'close', web: 'close' }}
-                    size={32}
-                    tintColor="#FFFFFF"
+                    size={30}
+                    tintColor={Monochrome.textPrimary}
                   />
                 </View>
-                <Text style={styles.resultTitleError}>BOARDING REJECTED</Text>
-                <Text style={styles.resultErrorReason}>{errorResult}</Text>
+                <AppText style={styles.resultTitle}>BOARDING REJECTED</AppText>
+                <AppText style={styles.resultErrorReason}>{errorResult}</AppText>
 
                 <View style={styles.rejectionNoticeBox}>
-                  <Text style={styles.rejectionNoticeText}>
+                  <AppText style={styles.rejectionNoticeText}>
                     • No fare has been deducted from the passenger wallet.
-                  </Text>
-                  <Text style={styles.rejectionNoticeText}>
+                  </AppText>
+                  <AppText style={styles.rejectionNoticeText}>
                     • Check passenger balance or request a fresh dynamic QR token.
-                  </Text>
+                  </AppText>
                 </View>
 
-                <Pressable onPress={resetScanner} style={[styles.scanNextBtn, { backgroundColor: '#EF4444' }]}>
-                  <Text style={styles.scanNextBtnText}>Dismiss & Scan Again</Text>
+                <Pressable onPress={resetScanner} style={styles.scanNextBtn}>
+                  <AppText style={styles.scanNextBtnText}>Dismiss &amp; Scan Again</AppText>
                 </Pressable>
               </>
             ) : null}
@@ -326,17 +325,17 @@ export default function DriverScanScreen() {
       <Modal visible={manualInputModal} animationType="fade" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.manualModalCard}>
-            <Text style={styles.manualModalTitle}>Manual QR Payload Entry</Text>
-            <Text style={styles.manualModalSub}>
+            <AppText style={styles.manualModalTitle}>Manual QR Payload Entry</AppText>
+            <AppText style={styles.manualModalSub}>
               Paste or type the encoded QR transit token for manual validation:
-            </Text>
+            </AppText>
 
-            <TextInput
+            <AppTextInput
               style={styles.manualInput}
               value={manualPayloadInput}
               onChangeText={setManualPayloadInput}
               placeholder="Paste base64 QR payload..."
-              placeholderTextColor="#64748B"
+              placeholderTextColor={Monochrome.textMuted}
               multiline
               autoCapitalize="none"
               autoCorrect={false}
@@ -344,10 +343,10 @@ export default function DriverScanScreen() {
 
             <View style={styles.manualModalActions}>
               <Pressable onPress={() => setManualInputModal(false)} style={styles.manualCancelBtn}>
-                <Text style={styles.manualCancelBtnText}>Cancel</Text>
+                <AppText style={styles.manualCancelBtnText}>Cancel</AppText>
               </Pressable>
               <Pressable onPress={handleManualSubmit} style={styles.manualSubmitBtn}>
-                <Text style={styles.manualSubmitBtnText}>Verify & Collect</Text>
+                <AppText style={styles.manualSubmitBtnText}>Verify &amp; Collect</AppText>
               </Pressable>
             </View>
           </View>
@@ -360,7 +359,7 @@ export default function DriverScanScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: Monochrome.background,
   },
   header: {
     flexDirection: 'row',
@@ -368,12 +367,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
+    backgroundColor: Monochrome.background,
+    borderBottomWidth: 1,
+    borderBottomColor: Monochrome.border,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -383,80 +387,26 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Brand.white,
+    color: Monochrome.textPrimary,
   },
   headerSubtitle: {
     fontSize: 12,
-    color: '#4ADE80',
-    fontWeight: '600',
+    color: Monochrome.textSecondary,
+    fontWeight: '500',
     marginTop: 2,
   },
   manualBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(74, 222, 128, 0.15)',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  fareToolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    backgroundColor: '#1E293B',
-    gap: Spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  fareToolbarLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 0.5,
-  },
-  farePillsRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  farePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  farePillSelected: {
-    backgroundColor: '#4ADE80',
-  },
-  farePillText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Brand.white,
-  },
-  farePillTextSelected: {
-    color: '#0F172A',
-  },
-  customFareBox: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    height: 32,
-  },
-  currencyPrefix: {
-    fontSize: 11,
-    color: '#94A3B8',
-    fontWeight: '700',
-  },
-  customFareInput: {
-    flex: 1,
-    fontSize: 13,
-    color: Brand.white,
-    fontWeight: '700',
-    padding: 0,
-    marginLeft: 4,
+  manualBtnDisabled: {
+    opacity: 0.4,
   },
   cameraWrapper: {
     flex: 1,
@@ -471,8 +421,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
   reticleFrame: {
-    width: 260,
-    height: 260,
+    width: 250,
+    height: 250,
     position: 'relative',
     backgroundColor: 'transparent',
     alignItems: 'center',
@@ -480,17 +430,17 @@ const styles = StyleSheet.create({
   },
   corner: {
     position: 'absolute',
-    width: 30,
-    height: 30,
-    borderColor: '#4ADE80',
+    width: 28,
+    height: 28,
+    borderColor: Monochrome.textPrimary,
   },
-  cornerTL: { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 10 },
-  cornerTR: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 10 },
-  cornerBL: { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 10 },
-  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 10 },
+  cornerTL: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 10 },
+  cornerTR: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 10 },
+  cornerBL: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 10 },
+  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 10 },
   processingCover: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -500,15 +450,17 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
     fontSize: 13,
     fontWeight: '600',
-    color: Brand.white,
+    color: Monochrome.textPrimary,
     textAlign: 'center',
   },
   reticlePrompt: {
     marginTop: Spacing.lg,
     fontSize: 13,
-    fontWeight: '600',
-    color: Brand.white,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    fontWeight: '500',
+    color: Monochrome.textSecondary,
+    backgroundColor: Monochrome.surfacePrimary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -520,21 +472,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: Spacing.xl,
     gap: Spacing.md,
+    backgroundColor: Monochrome.background,
   },
   permTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Brand.white,
+    color: Monochrome.textPrimary,
     marginTop: Spacing.sm,
   },
   permText: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: Monochrome.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
   grantBtn: {
-    backgroundColor: '#4ADE80',
+    backgroundColor: Monochrome.actionPrimary,
     paddingHorizontal: Spacing.xl,
     paddingVertical: 12,
     borderRadius: 14,
@@ -543,22 +496,22 @@ const styles = StyleSheet.create({
   grantBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: Monochrome.actionPrimaryText,
   },
   textBtn: {
     padding: Spacing.sm,
   },
   textBtnText: {
     fontSize: 13,
-    color: Brand.teal.primary,
+    color: Monochrome.textSecondary,
     fontWeight: '600',
   },
   bottomBar: {
-    backgroundColor: '#1E293B',
+    backgroundColor: Monochrome.surfacePrimary,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    borderTopColor: Monochrome.border,
   },
   busInfoRow: {
     flexDirection: 'row',
@@ -568,8 +521,8 @@ const styles = StyleSheet.create({
   },
   bottomBarText: {
     fontSize: 11,
-    color: '#94A3B8',
-    fontWeight: '600',
+    color: Monochrome.textSecondary,
+    fontWeight: '500',
   },
   modalBackdrop: {
     flex: 1,
@@ -581,71 +534,49 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 380,
-    backgroundColor: '#1E293B',
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 24,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     padding: Spacing.xl,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 10,
   },
-  modalCardSuccess: {
-    borderWidth: 2,
-    borderColor: '#4ADE80',
-  },
-  modalCardError: {
-    borderWidth: 2,
-    borderColor: '#EF4444',
-  },
-  resultIconCircleSuccess: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#22C55E',
+  resultIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.md,
   },
-  resultIconCircleError: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#EF4444',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.md,
-  },
-  resultTitleSuccess: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#4ADE80',
-    letterSpacing: 0.5,
-  },
-  resultTitleError: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#EF4444',
+  resultTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Monochrome.textPrimary,
     letterSpacing: 0.5,
   },
   resultTicketNumber: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: Monochrome.textSecondary,
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', web: 'monospace' }),
     marginTop: 4,
   },
   resultErrorReason: {
     fontSize: 14,
     fontWeight: '600',
-    color: Brand.white,
+    color: Monochrome.textPrimary,
     textAlign: 'center',
     marginTop: Spacing.sm,
     lineHeight: 20,
   },
   ticketDetailsBox: {
     width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: Monochrome.surfacePrimary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     borderRadius: 16,
     padding: Spacing.md,
     marginTop: Spacing.lg,
@@ -658,17 +589,19 @@ const styles = StyleSheet.create({
   },
   ticketLabel: {
     fontSize: 11,
-    color: '#64748B',
+    color: Monochrome.textMuted,
     fontWeight: '700',
   },
   ticketValue: {
     fontSize: 13,
-    color: Brand.white,
+    color: Monochrome.textPrimary,
     fontWeight: '700',
   },
   rejectionNoticeBox: {
     width: '100%',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     borderRadius: 12,
     padding: Spacing.md,
     marginTop: Spacing.md,
@@ -676,12 +609,12 @@ const styles = StyleSheet.create({
   },
   rejectionNoticeText: {
     fontSize: 12,
-    color: '#FCA5A5',
+    color: Monochrome.textSecondary,
     lineHeight: 18,
   },
   scanNextBtn: {
     width: '100%',
-    backgroundColor: '#22C55E',
+    backgroundColor: Monochrome.actionPrimary,
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
@@ -689,34 +622,38 @@ const styles = StyleSheet.create({
   },
   scanNextBtnText: {
     fontSize: 15,
-    fontWeight: '800',
-    color: Brand.white,
+    fontWeight: '700',
+    color: Monochrome.actionPrimaryText,
   },
   manualModalCard: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: '#1E293B',
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     padding: Spacing.lg,
   },
   manualModalTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: Brand.white,
+    color: Monochrome.textPrimary,
   },
   manualModalSub: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: Monochrome.textSecondary,
     marginTop: 4,
     lineHeight: 18,
   },
   manualInput: {
     marginTop: Spacing.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     borderRadius: 12,
     padding: Spacing.md,
     fontSize: 13,
-    color: Brand.white,
+    color: Monochrome.textPrimary,
     minHeight: 90,
     textAlignVertical: 'top',
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', web: 'monospace' }),
@@ -731,14 +668,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: 10,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   manualCancelBtnText: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: Monochrome.textSecondary,
     fontWeight: '600',
   },
   manualSubmitBtn: {
-    backgroundColor: '#4ADE80',
+    backgroundColor: Monochrome.actionPrimary,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
     borderRadius: 10,
@@ -746,6 +686,6 @@ const styles = StyleSheet.create({
   manualSubmitBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0F172A',
+    color: Monochrome.actionPrimaryText,
   },
 });

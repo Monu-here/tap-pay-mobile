@@ -19,16 +19,20 @@ import type { DocumentImage, RegistrationData } from '../../types';
 export type RegistrationPayload = {
   name: string;
   name_en: string;
+  name_np?: string;
   user_type: string;
   email: string;
   phone: string;
+  address?: string;
+  date_of_birth_ad?: string;
+  date_of_birth_bs?: string;
   password: string;
   password_confirmation: string;
   // Student
   college_name?: string;
   college_address?: string;
   college_id_number?: string;
-  college_id_expiry?: string;
+  college_id_card_expiry_date?: string;
   college_id_card_photo?: DocumentImage | null;
   // General
   citizenship_number?: string;

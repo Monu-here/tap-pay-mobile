@@ -1,26 +1,56 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
-
 import '@/global.css';
 
 import { Platform } from 'react-native';
 
+/** Premium Urban Mobility palette used by the existing shared screen styles. */
+
+export const Monochrome = {
+  background: '#F5F7F5',
+  surfacePrimary: '#FFFFFF',
+  surfaceSecondary: '#FFFFFF',
+  surfaceElevated: '#E3F4EF',
+  border: '#E5EBE8',
+  borderLight: '#E5EBE8',
+  textPrimary: '#172B3A',
+  textSecondary: '#687782',
+  textMuted: '#687782',
+  actionPrimary: '#0F766E',
+  actionPrimaryText: '#FFFFFF',
+  actionSecondary: '#E3F4EF',
+  actionSecondaryText: '#115E59',
+  cardSurface: '#FFFFFF',
+  cardVirtual: '#115E59',
+  badgeBackground: '#E3F4EF',
+  badgeText: '#115E59',
+} as const;
+
+const DarkColors = {
+  background: '#111111',
+  surfacePrimary: '#000000',
+  surfaceSecondary: '#1C1C1C',
+  surfaceElevated: '#262626',
+  border: '#383838',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#B3B3B3',
+  textMuted: '#858585',
+} as const;
+
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: Monochrome.textPrimary,
+    background: Monochrome.background,
+    backgroundElement: Monochrome.surfaceSecondary,
+    backgroundSelected: Monochrome.surfaceElevated,
+    textSecondary: Monochrome.textSecondary,
+    border: Monochrome.border,
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: DarkColors.textPrimary,
+    background: DarkColors.background,
+    backgroundElement: DarkColors.surfaceSecondary,
+    backgroundSelected: DarkColors.surfaceElevated,
+    textSecondary: DarkColors.textSecondary,
+    border: DarkColors.border,
   },
 } as const;
 
@@ -28,13 +58,9 @@ export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
     sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
     serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: 'ui-monospace',
   },
   default: {
@@ -69,39 +95,49 @@ export const Spacing = {
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
 
-/**
- * Fixed brand colors for the Tap & Pay onboarding and login flows.
- * Derived from the app splash screen background (#208AEF) and the
- * app icon gradient (#3C9FFE -> #0274DF).
- */
 export const Brand = {
-  primary: '#208AEF',
-  primaryDark: '#0274DF',
-  gradientStart: '#3C9FFE',
-  gradientEnd: '#0274DF',
-  text: '#0A1B2E',
-  textSecondary: '#5C6B7A',
-  divider: '#E3E9F0',
-  inputBackground: '#F3F6FA',
+  background: Monochrome.background,
+  surfacePrimary: Monochrome.surfacePrimary,
+  surfaceSecondary: Monochrome.surfaceSecondary,
+  surfaceElevated: Monochrome.surfaceElevated,
+  border: Monochrome.border,
+  borderLight: Monochrome.borderLight,
+
+  primary: Monochrome.actionPrimary,
+  primaryText: Monochrome.actionPrimaryText,
+  primaryDark: '#115E59',
+
+  text: Monochrome.textPrimary,
+  textSecondary: Monochrome.textSecondary,
+  textMuted: Monochrome.textMuted,
+  divider: Monochrome.border,
+  inputBackground: Monochrome.surfaceSecondary,
   white: '#FFFFFF',
-  error: '#DC2626',
-  /**
-   * Teal accent palette used for the Tap & Pay registration flow.
-   * Derived from the app icon secondary gradient (#00B8A9 -> #00796B).
-   */
+  black: '#000000',
+  error: '#C2414B',
+
+  card: Monochrome.cardSurface,
+  cardElevated: Monochrome.surfaceElevated,
+
   teal: {
-    primary: '#00B8A9',
-    primaryDark: '#00796B',
-    light: '#E0F2F1',
-    soft: '#B2DFDB',
-    text: '#004D40',
+    primary: Monochrome.actionPrimary,
+    primaryDark: '#115E59',
+    light: '#E3F4EF',
+    soft: '#E3F4EF',
+    text: '#FFFFFF',
   },
-  /**
-   * User-type card selection states.
-   */
+
   selection: {
-    selectedBorder: '#208AEF',
-    selectedBackground: '#E8F1FF',
-    unselectedBackground: '#FFFFFF',
+    selectedBorder: Monochrome.actionPrimary,
+    selectedBackground: Monochrome.surfaceElevated,
+    unselectedBackground: Monochrome.surfaceSecondary,
   },
+} as const;
+
+export const SemanticColors = {
+  success: '#16845B',
+  warning: '#B7791F',
+  error: '#C2414B',
+  information: '#3478B8',
+  gold: '#E9B96E',
 } as const;

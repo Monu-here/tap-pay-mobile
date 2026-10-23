@@ -1,3 +1,4 @@
+import {AppText, AppTextInput } from '@/components/typography/app-text';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -7,8 +8,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -282,19 +281,19 @@ export default function LiveBusTrackingScreen() {
       <StatusBar style="dark" />
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton} accessibilityRole="button">
-          <Text style={styles.backButtonText}>Back</Text>
+          <AppText style={styles.backButtonText}>Back</AppText>
         </Pressable>
-        <Text style={styles.title}>Live Bus Tracking</Text>
+        <AppText style={styles.title}>Live Bus Tracking</AppText>
         <Pressable
           onPress={() => location ? void loadNearby(location) : void requestLocation()}
           style={styles.refreshButton}
           accessibilityRole="button"
         >
-          <Text style={styles.refreshButtonText}>{refreshing ? 'Updating' : 'Refresh'}</Text>
+          <AppText style={styles.refreshButtonText}>{refreshing ? 'Updating' : 'Refresh'}</AppText>
         </Pressable>
       </View>
 
-      <TextInput
+      <AppTextInput
         value={search}
         onChangeText={(value) => {
           setSearch(value);
@@ -310,28 +309,28 @@ export default function LiveBusTrackingScreen() {
       {loading && !location ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={Brand.teal.primary} />
-          <Text style={styles.secondary}>Finding your location…</Text>
+          <AppText style={styles.secondary}>Finding your location…</AppText>
         </View>
       ) : (
         <>
           {!permissionGranted || error ? (
             <View style={styles.locationNotice}>
-              <Text style={styles.message}>
+              <AppText style={styles.message}>
                 {error || 'Allow location access to find nearby live buses. You can still search routes and stops without location access.'}
-              </Text>
+              </AppText>
               <Pressable onPress={() => void requestLocation()} style={styles.primaryButton}>
-                <Text style={styles.primaryButtonText}>{permissionGranted ? 'Retry Nearby Tracking' : 'Enable Nearby Tracking'}</Text>
+                <AppText style={styles.primaryButtonText}>{permissionGranted ? 'Retry Nearby Tracking' : 'Enable Nearby Tracking'}</AppText>
               </Pressable>
               {permissionGranted ? (
                 <Pressable onPress={() => void Linking.openSettings()} style={styles.settingsButton}>
-                  <Text style={styles.secondary}>Open location settings</Text>
+                  <AppText style={styles.secondary}>Open location settings</AppText>
                 </Pressable>
               ) : null}
             </View>
           ) : null}
           {Platform.OS === 'web' ? (
             <View style={styles.webNotice}>
-              <Text style={styles.secondary}>Interactive maps are available in the iOS and Android app.</Text>
+              <AppText style={styles.secondary}>Interactive maps are available in the iOS and Android app.</AppText>
             </View>
           ) : initialRegion ? (
             <MapView
@@ -348,7 +347,7 @@ export default function LiveBusTrackingScreen() {
                   coordinate={{ latitude: bus.latitude, longitude: bus.longitude }}
                   title={`Bus ${bus.bus_number}`}
                   description={`${bus.route.name || 'Route unavailable'} · ${freshnessLabel(bus.last_seen_at)}`}
-                  pinColor={isStale(bus.last_seen_at) ? '#F59E0B' : '#0D9488'}
+                  pinColor={isStale(bus.last_seen_at) ? Brand.textMuted : Brand.white}
                   onPress={() => void selectBus(bus)}
                 />
               ))}
@@ -358,7 +357,7 @@ export default function LiveBusTrackingScreen() {
                   coordinate={{ latitude: stop.latitude, longitude: stop.longitude }}
                   title={stop.name}
                   description={`Stop ${stop.code}`}
-                  pinColor="#2563EB"
+                  pinColor={Brand.textSecondary}
                 />
               ))}
               {routeCoordinates.length > 1 ? (
@@ -367,52 +366,52 @@ export default function LiveBusTrackingScreen() {
             </MapView>
           ) : (
             <View style={styles.webNotice}>
-              <Text style={styles.secondary}>Choose a route or enable location to center the map.</Text>
+              <AppText style={styles.secondary}>Choose a route or enable location to center the map.</AppText>
             </View>
           )}
 
           <View style={styles.panel}>
             <View style={styles.panelHeader}>
-              <Text style={styles.panelTitle}>
+              <AppText style={styles.panelTitle}>
                 {selectedBus
                   ? `Bus ${selectedBus.bus_number}`
                   : selectedRoute
                     ? selectedRoute.name
                     : `${visibleBuses.length} nearby buses`}
-              </Text>
-              <Text style={styles.secondary}>
+              </AppText>
+              <AppText style={styles.secondary}>
                 {lastUpdated ? `Checked ${lastUpdated.toLocaleTimeString()}` : 'Waiting for location data'}
-              </Text>
+              </AppText>
             </View>
             {selectedBus || selectedRoute ? (
               <View style={styles.selectedBus}>
-                <Text style={styles.message}>
+                <AppText style={styles.message}>
                   {selectedBus
                     ? `${selectedBus.company.name || 'Transport operator'} · ${selectedBus.route.name || 'Route unavailable'}`
                     : `${selectedRoute?.code ?? ''} · ${selectedRoute?.name ?? 'Route'}`}
-                </Text>
+                </AppText>
                 {selectedBus ? (
                   <>
-                    <Text style={isStale(selectedBus.last_seen_at) ? styles.stale : styles.fresh}>
+                    <AppText style={isStale(selectedBus.last_seen_at) ? styles.stale : styles.fresh}>
                       {freshnessLabel(selectedBus.last_seen_at)}
-                    </Text>
-                    {selectedBus.status ? <Text style={styles.secondary}>Status: {selectedBus.status}</Text> : null}
+                    </AppText>
+                    {selectedBus.status ? <AppText style={styles.secondary}>Status: {selectedBus.status}</AppText> : null}
                   </>
                 ) : null}
                 {selectedBus?.route.destination ? (
-                  <Text style={styles.secondary}>Destination: {selectedBus.route.destination}</Text>
+                  <AppText style={styles.secondary}>Destination: {selectedBus.route.destination}</AppText>
                 ) : null}
                 {!selectedBus && selectedRoute?.destination_stop ? (
-                  <Text style={styles.secondary}>Destination: {selectedRoute.destination_stop}</Text>
+                  <AppText style={styles.secondary}>Destination: {selectedRoute.destination_stop}</AppText>
                 ) : null}
-                {routeError ? <Text style={styles.stale}>{routeError}</Text> : null}
+                {routeError ? <AppText style={styles.stale}>{routeError}</AppText> : null}
                 {routeStops.map((stop) => (
-                  <Text key={stop.id} style={styles.stopLine}>
+                  <AppText key={stop.id} style={styles.stopLine}>
                     {stop.sequence}. {stop.name}
-                  </Text>
+                  </AppText>
                 ))}
                 <Pressable onPress={clearSelectedBus}>
-                  <Text style={styles.clearSelection}>Clear selection</Text>
+                  <AppText style={styles.clearSelection}>Clear selection</AppText>
                 </Pressable>
               </View>
             ) : (
@@ -427,15 +426,15 @@ export default function LiveBusTrackingScreen() {
                     style={styles.busRow}
                   >
                     <View style={styles.busRowText}>
-                      <Text style={styles.message}>{route.code} · {route.name}</Text>
-                      <Text style={styles.secondary}>{route.company_name || 'Transport route'}</Text>
+                      <AppText style={styles.message}>{route.code} · {route.name}</AppText>
+                      <AppText style={styles.secondary}>{route.company_name || 'Transport route'}</AppText>
                     </View>
-                    <Text style={styles.fresh}>Route</Text>
+                    <AppText style={styles.fresh}>Route</AppText>
                   </Pressable>
                 )) : null}
-                {searchError ? <Text style={styles.stale}>{searchError}</Text> : null}
+                {searchError ? <AppText style={styles.stale}>{searchError}</AppText> : null}
                 {query && visibleStops.length ? (
-                  <Text style={styles.secondary}>{visibleStops.length} matching stops are shown on the map.</Text>
+                  <AppText style={styles.secondary}>{visibleStops.length} matching stops are shown on the map.</AppText>
                 ) : null}
                 {visibleBuses.map((bus) => (
                   <Pressable
@@ -444,25 +443,25 @@ export default function LiveBusTrackingScreen() {
                     style={styles.busRow}
                   >
                     <View style={styles.busRowText}>
-                      <Text style={styles.message}>Bus {bus.bus_number} · {bus.route.name || 'Route unavailable'}</Text>
-                      <Text style={styles.secondary}>{bus.company.name || 'Operator unavailable'}</Text>
+                      <AppText style={styles.message}>Bus {bus.bus_number} · {bus.route.name || 'Route unavailable'}</AppText>
+                      <AppText style={styles.secondary}>{bus.company.name || 'Operator unavailable'}</AppText>
                     </View>
-                    <Text style={isStale(bus.last_seen_at) ? styles.stale : styles.fresh}>
+                    <AppText style={isStale(bus.last_seen_at) ? styles.stale : styles.fresh}>
                       {freshnessLabel(bus.last_seen_at)}
-                    </Text>
+                    </AppText>
                   </Pressable>
                 ))}
                 {!visibleRoutes.length && !visibleBuses.length ? (
-                  <Text style={styles.secondary}>No buses or routes match this search.</Text>
+                  <AppText style={styles.secondary}>No buses or routes match this search.</AppText>
                 ) : null}
               </ScrollView>
             )}
             {!selectedBus && !selectedRoute && visibleBuses.length === 0 && visibleRoutes.length === 0 ? (
-              <Text style={styles.secondary}>
+              <AppText style={styles.secondary}>
                 {permissionGranted
                   ? 'No active buses are reporting a recent location in this area. No bus movement is simulated.'
                   : 'Enable location to retrieve nearby active buses.'}
-              </Text>
+              </AppText>
             ) : null}
           </View>
         </>
@@ -486,7 +485,7 @@ function freshnessLabel(lastSeenAt: string | null): string {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Brand.background,
   },
   header: {
     minHeight: 56,
@@ -500,7 +499,7 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   backButtonText: {
-    color: Brand.teal.text,
+    color: Brand.text,
     fontWeight: '700',
   },
   title: {
@@ -512,13 +511,13 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   refreshButtonText: {
-    color: Brand.teal.text,
+    color: Brand.text,
     fontWeight: '700',
   },
   search: {
-    backgroundColor: Brand.white,
+    backgroundColor: Brand.surfaceSecondary,
     borderRadius: 12,
-    borderColor: '#E2E8F0',
+    borderColor: Brand.border,
     borderWidth: 1,
     color: Brand.text,
     marginHorizontal: Spacing.three,
@@ -538,8 +537,8 @@ const styles = StyleSheet.create({
   },
   panel: {
     maxHeight: '43%',
-    backgroundColor: Brand.white,
-    borderTopColor: '#E2E8F0',
+    backgroundColor: Brand.surfacePrimary,
+    borderTopColor: Brand.border,
     borderTopWidth: 1,
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.two,
@@ -558,7 +557,7 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   busRow: {
-    borderTopColor: '#E2E8F0',
+    borderTopColor: Brand.border,
     borderTopWidth: 1,
     paddingVertical: Spacing.two,
     flexDirection: 'row',
@@ -587,17 +586,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   fresh: {
-    color: '#15803D',
+    color: Brand.textSecondary,
     fontSize: 11,
     fontWeight: '700',
   },
   stale: {
-    color: '#B45309',
+    color: Brand.textMuted,
     fontSize: 11,
     fontWeight: '700',
   },
   clearSelection: {
-    color: Brand.teal.text,
+    color: Brand.text,
     fontSize: 13,
     fontWeight: '700',
     marginTop: 4,
@@ -610,7 +609,7 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   locationNotice: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: Brand.surfaceElevated,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     gap: Spacing.two,
@@ -622,7 +621,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   primaryButtonText: {
-    color: Brand.white,
+    color: Brand.primaryText,
     fontWeight: '700',
   },
   settingsButton: {

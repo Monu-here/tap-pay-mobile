@@ -1,3 +1,4 @@
+import {AppText, AppTextInput } from '@/components/typography/app-text';
 /**
  * Screen — Login.
  *
@@ -17,8 +18,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
   type TextInputProps,
 } from 'react-native';
@@ -60,7 +59,7 @@ function LoginTextField({
   const hasError = Boolean(error);
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <AppText style={styles.fieldLabel}>{label}</AppText>
       <View
         style={[
           styles.fieldInputContainer,
@@ -72,7 +71,7 @@ function LoginTextField({
           size={18}
           tintColor={hasError ? Brand.error : Brand.textSecondary}
         />
-        <TextInput
+        <AppTextInput
           placeholderTextColor={Brand.textSecondary}
           style={[styles.fieldInput, style]}
           onSubmitEditing={onSubmit}
@@ -80,7 +79,7 @@ function LoginTextField({
         />
         {trailing}
       </View>
-      {hasError && <Text style={styles.fieldError}>{error}</Text>}
+      {hasError && <AppText style={styles.fieldError}>{error}</AppText>}
     </View>
   );
 }
@@ -226,106 +225,112 @@ export function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.logoContainer}>
-            <View style={styles.logoMark}>
-              <SymbolView
-                name={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }}
-                size={30}
-                tintColor={Brand.white}
-              />
+          <View style={styles.brandHeader}>
+            <View style={styles.logoContainer}>
+              <View style={styles.logoMark}>
+                <SymbolView
+                  name={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }}
+                  size={25}
+                  tintColor={Brand.white}
+                />
+              </View>
+              <AppText style={styles.logoText}>Tap &amp; Pay</AppText>
             </View>
-            <Text style={styles.logoText}>Tap &amp; Pay</Text>
+            <AppText style={styles.brandCaption}>SMARTER TRAVEL ACROSS NEPAL</AppText>
           </View>
 
           <View style={styles.heading}>
-            <Text style={styles.title}>{L.title}</Text>
-            <Text style={styles.subtitle}>{L.subtitle}</Text>
+            <AppText style={styles.eyebrow}>WELCOME BACK</AppText>
+            <AppText style={styles.title}>{L.title}</AppText>
+            <AppText style={styles.subtitle}>{L.subtitle}</AppText>
           </View>
 
-          <View style={styles.form}>
-            <LoginTextField
-              label={L.emailLabel}
-              value={email}
-              onChangeText={handleEmailChange}
-              placeholder={L.emailPlaceholder}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="email"
-              textContentType="emailAddress"
-              returnKeyType="next"
-              error={fieldErrors.email}
-              icon={{ ios: 'envelope.fill', android: 'email', web: 'email' }}
-            />
-            <LoginTextField
-              label={L.passwordLabel}
-              value={password}
-              onChangeText={handlePasswordChange}
-              placeholder={L.passwordPlaceholder}
-              secureTextEntry={!isPasswordVisible}
-              textContentType="password"
-              autoCapitalize="none"
-              returnKeyType="go"
-              onSubmit={handleSubmit}
-              error={fieldErrors.password}
-              icon={{ ios: 'lock.fill', android: 'lock', web: 'lock' }}
-              trailing={
-                <Pressable
-                  onPress={() => setIsPasswordVisible((visible) => !visible)}
-                  accessibilityRole="button"
-                  accessibilityLabel={isPasswordVisible ? L.hidePassword : L.showPassword}
-                  hitSlop={8}
-                  style={styles.visibilityToggle}
-                >
-                  <SymbolView
-                    name={{
-                      ios: isPasswordVisible ? 'eye.slash.fill' : 'eye.fill',
-                      android: isPasswordVisible ? 'visibility_off' : 'visibility',
-                      web: isPasswordVisible ? 'visibility_off' : 'visibility',
-                    }}
-                    size={18}
-                    tintColor={Brand.textSecondary}
-                  />
-                </Pressable>
-              }
-            />
+          <View style={styles.loginCard}>
+            <View style={styles.form}>
+              <LoginTextField
+                label={L.emailLabel}
+                value={email}
+                onChangeText={handleEmailChange}
+                placeholder={L.emailPlaceholder}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                textContentType="emailAddress"
+                returnKeyType="next"
+                error={fieldErrors.email}
+                icon={{ ios: 'envelope.fill', android: 'email', web: 'email' }}
+              />
+              <LoginTextField
+                label={L.passwordLabel}
+                value={password}
+                onChangeText={handlePasswordChange}
+                placeholder={L.passwordPlaceholder}
+                secureTextEntry={!isPasswordVisible}
+                textContentType="password"
+                autoCapitalize="none"
+                returnKeyType="go"
+                onSubmit={handleSubmit}
+                error={fieldErrors.password}
+                icon={{ ios: 'lock.fill', android: 'lock', web: 'lock' }}
+                trailing={
+                  <Pressable
+                    onPress={() => setIsPasswordVisible((visible) => !visible)}
+                    accessibilityRole="button"
+                    accessibilityLabel={isPasswordVisible ? L.hidePassword : L.showPassword}
+                    hitSlop={8}
+                    style={styles.visibilityToggle}
+                  >
+                    <SymbolView
+                      name={{
+                        ios: isPasswordVisible ? 'eye.slash.fill' : 'eye.fill',
+                        android: isPasswordVisible ? 'visibility_off' : 'visibility',
+                        web: isPasswordVisible ? 'visibility_off' : 'visibility',
+                      }}
+                      size={18}
+                      tintColor={Brand.textSecondary}
+                    />
+                  </Pressable>
+                }
+              />
 
-            <View style={styles.forgotPasswordRow}>
-              <Pressable
-                accessibilityRole="button"
-                hitSlop={8}
-                onPress={() => router.push(email ? `/forgot-password?email=${encodeURIComponent(email)}` as any : '/forgot-password')}
-              >
-                <Text style={styles.forgotPasswordLink}>Forgot Password?</Text>
-              </Pressable>
+              <View style={styles.forgotPasswordRow}>
+                <Pressable
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  onPress={() => router.push(email ? `/forgot-password?email=${encodeURIComponent(email)}` as any : '/forgot-password')}
+                >
+                  <AppText style={styles.forgotPasswordLink}>Forgot Password?</AppText>
+                </Pressable>
+              </View>
+
+              {generalError && <AppText style={styles.generalError}>{generalError}</AppText>}
+              {cooldown > 0 && (
+                <AppText style={styles.cooldownText}>{t(L.retryIn, { seconds: cooldown })}</AppText>
+              )}
             </View>
 
-            {generalError && <Text style={styles.generalError}>{generalError}</Text>}
-            {cooldown > 0 && (
-              <Text style={styles.cooldownText}>{t(L.retryIn, { seconds: cooldown })}</Text>
-            )}
+            <View style={styles.footer}>
+              <PrimaryButton
+                label={isSubmitting ? L.loggingIn : L.loginCta}
+                onPress={handleSubmit}
+                disabled={isDisabled}
+                style={isSubmitting ? styles.buttonLoading : undefined}
+              />
+
+              <View style={styles.registerRow}>
+                <AppText style={styles.registerPrompt}>{L.registerPrompt}</AppText>
+                <Pressable
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  onPress={() => router.push('/register/personal-info')}
+                >
+                  <AppText style={styles.registerLink}>{L.registerCta}</AppText>
+                </Pressable>
+              </View>
+            </View>
           </View>
         </ScrollView>
-
-        <View style={styles.footer}>
-          <PrimaryButton
-            label={isSubmitting ? L.loggingIn : L.loginCta}
-            onPress={handleSubmit}
-            disabled={isDisabled}
-            style={isSubmitting ? styles.buttonLoading : undefined}
-          />
-
-          <View style={styles.registerRow}>
-            <Text style={styles.registerPrompt}>{L.registerPrompt}</Text>
-            <Pressable
-              accessibilityRole="button"
-              hitSlop={8}
-              onPress={() => router.push('/register/personal-info')}
-            >
-              <Text style={styles.registerLink}>{L.registerCta}</Text>
-            </Pressable>
-          </View>
-        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -334,45 +339,61 @@ export function LoginScreen() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: Brand.white,
+    backgroundColor: Brand.background,
   },
   container: {
     flex: 1,
-    backgroundColor: Brand.white,
+    backgroundColor: Brand.background,
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    gap: Spacing.four,
+    gap: Spacing.five,
+    paddingVertical: Spacing.four,
   },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: Spacing.two,
   },
+  brandHeader: {
+    gap: Spacing.two,
+    paddingVertical: Spacing.two,
+  },
   logoMark: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Brand.primary,
-    experimental_backgroundImage: `linear-gradient(160deg, ${Brand.gradientStart}, ${Brand.gradientEnd})`,
   },
   logoText: {
     color: Brand.text,
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 21,
+    fontWeight: '800',
     letterSpacing: -0.3,
+  },
+  brandCaption: {
+    color: Brand.primary,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.4,
   },
   heading: {
     gap: Spacing.one,
   },
+  eyebrow: {
+    color: Brand.primary,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
   title: {
     color: Brand.text,
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 30,
+    fontWeight: '800',
     letterSpacing: -0.3,
   },
   subtitle: {
@@ -382,6 +403,19 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: Spacing.three,
+  },
+  loginCard: {
+    backgroundColor: Brand.white,
+    borderRadius: 24,
+    padding: Spacing.four,
+    gap: Spacing.four,
+    borderWidth: 1,
+    borderColor: Brand.border,
+    shadowColor: '#183B35',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.07,
+    shadowRadius: 18,
+    elevation: 3,
   },
   field: {
     gap: Spacing.one,
@@ -396,6 +430,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
     backgroundColor: Brand.inputBackground,
+    borderWidth: 1,
+    borderColor: Brand.border,
     borderRadius: 14,
     paddingHorizontal: Spacing.three,
     height: 52,
@@ -424,7 +460,6 @@ const styles = StyleSheet.create({
   },
   footer: {
     gap: Spacing.three,
-    paddingTop: Spacing.two,
   },
   forgotPasswordRow: {
     alignItems: 'flex-end',

@@ -1,3 +1,4 @@
+import { AppText } from '@/components/typography/app-text';
 /**
  * BS (Bikram Sambat) date picker modal.
  *
@@ -11,7 +12,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 
@@ -125,7 +126,7 @@ export function BsDatePickerModal({ visible, value, onCancel, onConfirm }: BsDat
         <View style={styles.grabber} />
 
         <View style={styles.header}>
-          <Text style={styles.title}>Select Date (BS)</Text>
+          <AppText style={styles.title}>Select Date (BS)</AppText>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close"
@@ -161,7 +162,7 @@ export function BsDatePickerModal({ visible, value, onCancel, onConfirm }: BsDat
             onPress={() => setSession((prev) => ({ ...prev, showYears: !prev.showYears }))}
             style={styles.monthLabelWrap}
           >
-            <Text style={styles.monthLabel}>{monthLabel}</Text>
+            <AppText style={styles.monthLabel}>{monthLabel}</AppText>
             <SymbolView
               name={{
                 ios: showYears ? 'chevron.up' : 'chevron.down',
@@ -208,7 +209,7 @@ export function BsDatePickerModal({ visible, value, onCancel, onConfirm }: BsDat
                   }
                   style={[styles.yearItem, active && styles.yearItemActive]}
                 >
-                  <Text style={[styles.yearText, active && styles.yearTextActive]}>{year}</Text>
+                  <AppText style={[styles.yearText, active && styles.yearTextActive]}>{year}</AppText>
                 </Pressable>
               );
             })}
@@ -217,9 +218,9 @@ export function BsDatePickerModal({ visible, value, onCancel, onConfirm }: BsDat
           <>
             <View style={styles.weekdayRow}>
               {weekdayLabels.map((label, index) => (
-                <Text key={`${label}-${index}`} style={styles.weekdayLabel}>
+                <AppText key={`${label}-${index}`} style={styles.weekdayLabel}>
                   {label}
-                </Text>
+                </AppText>
               ))}
             </View>
 
@@ -245,19 +246,19 @@ export function BsDatePickerModal({ visible, value, onCancel, onConfirm }: BsDat
                       selected && styles.daySelected,
                     ]}
                   >
-                    <Text
+                    <AppText
                       style={[styles.dayText, selected && styles.dayTextSelected, disabled && styles.dayDisabled]}
                     >
                       {day.day}
-                    </Text>
+                    </AppText>
                   </Pressable>
                 );
               })}
             </View>
 
-            <Text style={styles.selectedPreview}>
+            <AppText style={styles.selectedPreview}>
               Selected: {formatBsIso(draft)}
-            </Text>
+            </AppText>
           </>
         )}
 
@@ -267,14 +268,14 @@ export function BsDatePickerModal({ visible, value, onCancel, onConfirm }: BsDat
             onPress={onCancel}
             style={[styles.actionButton, styles.cancelButton]}
           >
-            <Text style={styles.cancelText}>Cancel</Text>
+            <AppText style={styles.cancelText}>Cancel</AppText>
           </Pressable>
           <Pressable
             accessibilityRole="button"
             onPress={() => onConfirm(draft)}
             style={[styles.actionButton, styles.confirmButton]}
           >
-            <Text style={styles.confirmText}>Confirm</Text>
+            <AppText style={styles.confirmText}>Confirm</AppText>
           </Pressable>
         </View>
       </View>

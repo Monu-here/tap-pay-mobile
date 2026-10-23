@@ -32,6 +32,7 @@ export type ApiSuccess<T> = {
   status: number;
   message: string | null;
   data: T;
+  meta?: Record<string, unknown>;
 };
 
 export type ApiFailure = {
@@ -49,7 +50,7 @@ export type ApiResult<T> = ApiSuccess<T> | ApiFailure;
 
 export type RequestOptions = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-  /** Serialized to a JSON body. Omitted entirely for GET. */
+  /** JSON-serialized unless this is FormData. Omitted entirely for GET. */
   body?: unknown;
   /** Do not treat a 401 as session expiry (used by login/register). */
   skipAuthError?: boolean;
@@ -114,10 +115,9 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const method = options.method ?? 'GET';
   const url = `${API_BASE_URL}${path}`;
 
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-  };
+  const isMultipart = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (!isMultipart) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
   if (method !== 'GET') {
     headers['Idempotency-Key'] = options.idempotencyKey ?? createIdempotencyKey();
@@ -133,7 +133,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     const response = await fetch(url, {
       method,
       headers,
-      body: hasBody ? JSON.stringify(options.body) : undefined,
+      body: hasBody ? (isMultipart ? options.body as FormData : JSON.stringify(options.body)) : undefined,
       signal: controller.signal,
     });
     if (IS_DEV) console.log(`[api] ${method} ${url} -> ${response.status}`);
@@ -228,7 +228,13 @@ async function interpret<T>(response: Response, skipAuthError: boolean): Promise
   }
 
   if (response.ok) {
-    return { ok: true, status: response.status, message: typeof root?.message === 'string' ? root.message : null, data: (data ?? null) as T };
+    return {
+      ok: true,
+      status: response.status,
+      message: typeof root?.message === 'string' ? root.message : null,
+      data: (data ?? null) as T,
+      meta: asRecord(root?.meta) ?? undefined,
+    };
   }
 
   return { ok: false, status: response.status, kind: 'http', message, data: root };

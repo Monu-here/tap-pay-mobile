@@ -1,3 +1,4 @@
+import { AppText } from '@/components/typography/app-text';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -6,14 +7,13 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 
-import { Brand, Spacing } from '@/constants/theme';
+import { Monochrome, Spacing } from '@/constants/theme';
 import { getTravelHistory, type TravelRecord } from '@/features/passenger/services/passengerApi';
 
 export default function TravelHistoryScreen() {
@@ -22,7 +22,7 @@ export default function TravelHistoryScreen() {
   const [trips, setTrips] = useState<TravelRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [page, setPage] = useState(1);
+  const page = 1;
 
   const loadTrips = useCallback(async (pageNum = 1, isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -42,7 +42,10 @@ export default function TravelHistoryScreen() {
   }, []);
 
   useEffect(() => {
-    loadTrips(page);
+    const frame = requestAnimationFrame(() => {
+      void loadTrips(page);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [loadTrips, page]);
 
   return (
@@ -54,25 +57,29 @@ export default function TravelHistoryScreen() {
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
           <SymbolView
             name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-            size={22}
-            tintColor={Brand.text}
+            size={20}
+            tintColor={Monochrome.textPrimary}
           />
         </Pressable>
-        <Text style={styles.headerTitle}>Travel History</Text>
-        <View style={{ width: 40 }} />
+        <AppText style={styles.headerTitle}>Travel History</AppText>
+        <View style={{ width: 38 }} />
       </View>
 
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => loadTrips(1, true)} tintColor={Brand.teal.primary} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadTrips(1, true)}
+            tintColor={Monochrome.textPrimary}
+          />
         }
       >
         {loading && !refreshing ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={Brand.teal.primary} />
-            <Text style={styles.loadingText}>Fetching journey receipts...</Text>
+            <ActivityIndicator size="small" color={Monochrome.textPrimary} />
+            <AppText style={styles.loadingText}>Fetching journey receipts...</AppText>
           </View>
         ) : trips.length > 0 ? (
           <View style={styles.listCard}>
@@ -85,28 +92,30 @@ export default function TravelHistoryScreen() {
                 <View style={styles.iconWrap}>
                   <SymbolView
                     name={{ ios: 'bus.fill', android: 'directions_bus', web: 'directions_bus' }}
-                    size={20}
-                    tintColor="#0284C7"
+                    size={18}
+                    tintColor={Monochrome.textPrimary}
                   />
                 </View>
 
                 <View style={styles.infoCol}>
-                  <Text style={styles.routeName}>{trip.route_name || 'Bus Journey'}</Text>
-                  <Text style={styles.stopsText}>
+                  <AppText style={styles.routeName}>{trip.route_name || 'Bus Journey'}</AppText>
+                  <AppText style={styles.stopsText}>
                     {trip.boarding_stop && trip.exit_stop
                       ? `${trip.boarding_stop} → ${trip.exit_stop}`
                       : trip.bus_number ? `Bus: ${trip.bus_number}` : 'Public Transit'}
-                  </Text>
-                  <Text style={styles.dateText}>
+                  </AppText>
+                  <AppText style={styles.dateText}>
                     {trip.boarded_at ? new Date(trip.boarded_at).toLocaleString() : 'Recent'}
-                  </Text>
+                  </AppText>
                 </View>
 
                 <View style={styles.fareCol}>
-                  <Text style={styles.fareAmount}>
+                  <AppText style={styles.fareAmount}>
                     {trip.fare_formatted || `Rs. ${(trip.fare_minor / 100).toFixed(2)}`}
-                  </Text>
-                  <Text style={styles.statusBadge}>{trip.status.toUpperCase()}</Text>
+                  </AppText>
+                  <View style={styles.statusBadge}>
+                    <AppText style={styles.statusBadgeText}>{trip.status.toUpperCase()}</AppText>
+                  </View>
                 </View>
               </Pressable>
             ))}
@@ -115,13 +124,13 @@ export default function TravelHistoryScreen() {
           <View style={styles.emptyBox}>
             <SymbolView
               name={{ ios: 'bus', android: 'directions_bus', web: 'directions_bus' }}
-              size={44}
-              tintColor={Brand.textSecondary}
+              size={40}
+              tintColor={Monochrome.textMuted}
             />
-            <Text style={styles.emptyTitle}>No Journeys Recorded</Text>
-            <Text style={styles.emptySubtitle}>
+            <AppText style={styles.emptyTitle}>No Journeys Recorded</AppText>
+            <AppText style={styles.emptySubtitle}>
               When you tap your card or QR on public transit, each trip and its cryptographic fare receipt will be cataloged here.
-            </Text>
+            </AppText>
           </View>
         )}
       </ScrollView>
@@ -132,7 +141,7 @@ export default function TravelHistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Monochrome.background,
   },
   header: {
     flexDirection: 'row',
@@ -140,17 +149,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfacePrimary,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Monochrome.border,
   },
   backBtn: {
-    padding: Spacing.one,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   scrollContent: {
     paddingHorizontal: Spacing.four,
@@ -162,14 +178,14 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   loadingText: {
-    fontSize: 14,
-    color: Brand.textSecondary,
+    fontSize: 13,
+    color: Monochrome.textSecondary,
   },
   listCard: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Monochrome.border,
     overflow: 'hidden',
   },
   itemRow: {
@@ -180,13 +196,15 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: Monochrome.surfaceElevated,
   },
   iconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: '#E0F2FE',
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -197,15 +215,15 @@ const styles = StyleSheet.create({
   routeName: {
     fontSize: 15,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   stopsText: {
-    fontSize: 13,
-    color: '#475569',
+    fontSize: 12,
+    color: Monochrome.textSecondary,
   },
   dateText: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: Monochrome.textMuted,
     marginTop: 2,
   },
   fareCol: {
@@ -213,37 +231,41 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   fareAmount: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   statusBadge: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#16A34A',
-    backgroundColor: '#DCFCE7',
+    backgroundColor: Monochrome.surfaceElevated,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Monochrome.textSecondary,
   },
   emptyBox: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 16,
     padding: Spacing.six,
     alignItems: 'center',
     gap: Spacing.two,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Monochrome.border,
     marginTop: Spacing.four,
   },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   emptySubtitle: {
     fontSize: 13,
-    color: Brand.textSecondary,
+    color: Monochrome.textMuted,
     textAlign: 'center',
     lineHeight: 18,
   },

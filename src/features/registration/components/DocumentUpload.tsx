@@ -1,3 +1,4 @@
+import { AppText } from '@/components/typography/app-text';
 /**
  * Document image upload component.
  *
@@ -10,7 +11,7 @@
 
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 
 import { Brand, Spacing } from '@/constants/theme';
@@ -94,10 +95,10 @@ export function DocumentUpload({
   return (
     <View style={styles.field}>
       <View style={styles.labelRow}>
-        <Text style={styles.fieldLabel}>{label}</Text>
-        {required && <Text style={styles.requiredMark}>*</Text>}
+        <AppText style={styles.fieldLabel}>{label}</AppText>
+        {required && <AppText style={styles.requiredMark}>*</AppText>}
       </View>
-      {hint && <Text style={styles.hint}>{hint}</Text>}
+      {hint && <AppText style={styles.hint}>{hint}</AppText>}
 
       {value ? (
         <View style={styles.previewContainer}>
@@ -109,7 +110,7 @@ export function DocumentUpload({
               style={styles.actionButton}
               onPress={openPicker}
             >
-              <Text style={styles.actionText}>Replace</Text>
+              <AppText style={styles.actionText}>Replace</AppText>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -117,7 +118,7 @@ export function DocumentUpload({
               style={[styles.actionButton, styles.actionButtonDanger]}
               onPress={handleRemove}
             >
-              <Text style={styles.actionTextDanger}>Remove</Text>
+              <AppText style={styles.actionTextDanger}>Remove</AppText>
             </Pressable>
           </View>
         </View>
@@ -132,8 +133,8 @@ export function DocumentUpload({
             size={26}
             tintColor={Brand.teal.primary}
           />
-          <Text style={styles.placeholderText}>Add photo</Text>
-          <Text style={styles.placeholderHint}>Tap to select from gallery</Text>
+          <AppText style={styles.placeholderText}>Add photo</AppText>
+          <AppText style={styles.placeholderHint}>Tap to select from gallery</AppText>
         </Pressable>
       )}
     </View>

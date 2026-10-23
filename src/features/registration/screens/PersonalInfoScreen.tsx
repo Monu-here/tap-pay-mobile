@@ -1,3 +1,4 @@
+import { AppText } from '@/components/typography/app-text';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
@@ -7,7 +8,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -119,10 +119,10 @@ export function PersonalInfoScreen() {
           onPress={goBack}
           style={styles.backButton}
         >
-          <Text style={styles.backIcon}>←</Text>
+          <AppText style={styles.backIcon}>←</AppText>
         </Pressable>
         <View style={styles.stepIndicator}>
-          <Text style={styles.stepLabel}>Step 1 of 7</Text>
+          <AppText style={styles.stepLabel}>Step 1 of 7</AppText>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: "14%" }]} />
           </View>
@@ -138,12 +138,13 @@ export function PersonalInfoScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headingBlock}>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Enter your personal details to get started</Text>
+          <AppText style={styles.eyebrow}>TAP &amp; PAY · NEPAL</AppText>
+          <AppText style={styles.title}>Create Account</AppText>
+          <AppText style={styles.subtitle}>Enter your personal details to get started</AppText>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personal Details</Text>
+          <AppText style={styles.sectionTitle}>Personal Details</AppText>
           <FormTextField
             label="Full Name (English)"
             placeholder="Enter your full name"
@@ -165,7 +166,7 @@ export function PersonalInfoScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Contact Information</Text>
+          <AppText style={styles.sectionTitle}>Contact Information</AppText>
           <FormTextField
             label="Email Address"
             placeholder="you@example.com"
@@ -207,7 +208,7 @@ export function PersonalInfoScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Date of Birth</Text>
+          <AppText style={styles.sectionTitle}>Date of Birth</AppText>
           <DatePickerField
             label="Date of Birth (AD)"
             placeholder="Select Gregorian date"
@@ -226,14 +227,14 @@ export function PersonalInfoScreen() {
             suffix="BS"
           />
           {personal.dateOfBirthAD && personal.dateOfBirthBS && !errors.dateOfBirthAD && (
-            <Text style={styles.syncHint}>
+            <AppText style={styles.syncHint}>
               Filled automatically from your other selection
-            </Text>
+            </AppText>
           )}
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Security</Text>
+          <AppText style={styles.sectionTitle}>Security</AppText>
           <FormTextField
             label="Password"
             placeholder="Create a password"
@@ -265,14 +266,14 @@ export function PersonalInfoScreen() {
           />
         </View>
 
-        {formError && <Text style={styles.formError}>{formError}</Text>}
+        {formError && <AppText style={styles.formError}>{formError}</AppText>}
 
         <PrimaryButton label="Continue" onPress={handleContinue} />
 
         <View style={styles.loginRow}>
-          <Text style={styles.loginPrompt}>Already have an account?</Text>
+          <AppText style={styles.loginPrompt}>Already have an account?</AppText>
           <Pressable accessibilityRole="button" hitSlop={8} onPress={goToLogin}>
-            <Text style={styles.loginLink}>Login</Text>
+            <AppText style={styles.loginLink}>Login</AppText>
           </Pressable>
         </View>
       </ScrollView>
@@ -304,7 +305,7 @@ export function PersonalInfoScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Brand.white,
+    backgroundColor: Brand.background,
   },
   headerRow: {
     flexDirection: 'row',
@@ -316,7 +317,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Brand.inputBackground,
+    backgroundColor: Brand.teal.light,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -348,15 +349,21 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.two,
-    gap: Spacing.five,
+    gap: Spacing.four,
   },
   headingBlock: {
     gap: Spacing.one,
   },
+  eyebrow: {
+    color: Brand.primary,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
   title: {
     color: Brand.text,
-    fontSize: 26,
-    fontWeight: '700',
+    fontSize: 30,
+    fontWeight: '800',
     letterSpacing: -0.4,
   },
   subtitle: {
@@ -366,9 +373,14 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Brand.border,
+    backgroundColor: Brand.white,
   },
   sectionTitle: {
-    color: Brand.teal.text,
+    color: Brand.primaryDark,
     fontSize: 13,
     fontWeight: '700',
     textTransform: 'uppercase',

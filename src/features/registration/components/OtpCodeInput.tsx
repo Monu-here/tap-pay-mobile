@@ -1,3 +1,4 @@
+import {AppText, AppTextInput } from '@/components/typography/app-text';
 /**
  * 6-digit OTP input.
  *
@@ -8,7 +9,7 @@
  */
 
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Brand, Spacing } from '@/constants/theme';
 
@@ -71,12 +72,12 @@ export const OtpCodeInput = forwardRef<OtpCodeInputHandle, OtpCodeInputProps>(
                 Boolean(value[index]) && styles.boxFilled,
               ]}
             >
-              <Text style={styles.boxText}>{value[index] ?? ''}</Text>
+              <AppText style={styles.boxText}>{value[index] ?? ''}</AppText>
             </View>
           ))}
         </Pressable>
 
-        <TextInput
+        <AppTextInput
           ref={inputRef}
           value={value}
           onChangeText={handleChange}

@@ -1,7 +1,8 @@
+import { AppText } from '@/components/typography/app-text';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/ui/primary-button';
@@ -65,10 +66,10 @@ export function UserTypeScreen() {
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <Text style={styles.backIcon}>←</Text>
+          <AppText style={styles.backIcon}>←</AppText>
         </Pressable>
         <View style={styles.stepIndicator}>
-          <Text style={styles.stepLabel}>Step 2 of 7</Text>
+          <AppText style={styles.stepLabel}>Step 2 of 7</AppText>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: "29%" }]} />
           </View>
@@ -83,8 +84,8 @@ export function UserTypeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headingBlock}>
-          <Text style={styles.title}>Select User Type</Text>
-          <Text style={styles.subtitle}>Choose the category that best describes you</Text>
+          <AppText style={styles.title}>Select User Type</AppText>
+          <AppText style={styles.subtitle}>Choose the category that best describes you</AppText>
         </View>
 
         <View style={styles.cards}>
@@ -113,7 +114,7 @@ export function UserTypeScreen() {
             onPress={() => router.back()}
             style={styles.backTextButton}
           >
-            <Text style={styles.backText}>Back</Text>
+            <AppText style={styles.backText}>Back</AppText>
           </Pressable>
         </View>
       </ScrollView>

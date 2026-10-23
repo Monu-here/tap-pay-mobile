@@ -1,27 +1,30 @@
 import { Tabs } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useColorScheme } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { Brand, Colors } from '@/constants/theme';
+import { Monochrome } from '@/constants/theme';
+import { Typography } from '@/constants/typography';
 
 export default function TabsLayout() {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
-
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Brand.teal.primary,
-        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarActiveTintColor: Monochrome.actionPrimary,
+        tabBarInactiveTintColor: Monochrome.textMuted,
         tabBarStyle: {
-          backgroundColor: colors.background,
-          borderTopColor: colors.backgroundElement,
-          elevation: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.05,
-          shadowRadius: 4,
+          backgroundColor: Monochrome.surfacePrimary,
+          borderTopColor: Monochrome.border,
+          borderTopWidth: 1,
+          elevation: 0,
+          shadowOpacity: 0,
+          height: 64,
+          paddingBottom: 8,
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: {
+          ...Typography.navigationLabel,
+          fontSize: 11,
         },
       }}
     >
@@ -32,33 +35,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => (
             <SymbolView
               name={{ ios: 'house.fill', android: 'home', web: 'home' }}
-              size={22}
-              tintColor={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="wallet"
-        options={{
-          title: 'Wallet',
-          tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{ ios: 'wallet.pass.fill', android: 'account_balance_wallet', web: 'account_balance_wallet' }}
-              size={22}
-              tintColor={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="cards"
-        options={{
-          title: 'Cards',
-          tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }}
-              size={22}
+              size={20}
               tintColor={color}
             />
           ),
@@ -67,14 +44,48 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="transit"
         options={{
-          title: 'Transit',
+          title: 'Explore',
           tabBarIcon: ({ color }) => (
             <SymbolView
-              name={{ ios: 'bus.fill', android: 'directions_bus', web: 'directions_bus' }}
-              size={22}
+              name={{ ios: 'map.fill', android: 'map', web: 'map' }}
+              size={20}
               tintColor={color}
             />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="scan"
+        options={{
+          title: 'Scan',
+          tabBarIcon: ({ focused }) => (
+            <View style={[styles.scanButton, focused && styles.scanButtonFocused]}>
+              <SymbolView
+                name={{ ios: 'qrcode.viewfinder', android: 'qr_code_scanner', web: 'qr_code_scanner' }}
+                size={24}
+                tintColor="#FFFFFF"
+              />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="wallet"
+        options={{
+          title: 'Activity',
+          tabBarIcon: ({ color }) => (
+            <SymbolView
+              name={{ ios: 'clock.arrow.circlepath', android: 'history', web: 'history' }}
+              size={20}
+              tintColor={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="cards"
+        options={{
+          href: null,
         }}
       />
       <Tabs.Screen
@@ -84,7 +95,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => (
             <SymbolView
               name={{ ios: 'person.crop.circle.fill', android: 'person', web: 'person' }}
-              size={22}
+              size={20}
               tintColor={color}
             />
           ),
@@ -99,3 +110,20 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  scanButton: {
+    width: 48,
+    height: 48,
+    marginTop: -22,
+    borderRadius: 24,
+    backgroundColor: '#0F766E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: '#F5F7F5',
+  },
+  scanButtonFocused: {
+    backgroundColor: '#115E59',
+  },
+});

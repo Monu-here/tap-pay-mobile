@@ -47,10 +47,10 @@ export function getDriverAssignments(): Promise<ApiResult<{ assignments: DriverA
   return apiRequest<unknown>('/driver/assignments').then((result) =>
     mapApiData(normalizeCollection<Record<string, unknown>, 'assignments'>(result, 'assignments'), (data) => ({
       assignments: data.assignments.map((item) => {
-        const bus = item.bus && typeof item.bus === 'object' ? item.bus as Record<string, unknown> : {};
+        const bus = relation(item.bus, 'bus');
         return {
           id: Number(item.id),
-          bus_id: Number(bus.id ?? item.bus_id),
+          bus_id: Number(item.bus_id ?? bus.id ?? 0),
           bus_number: String(bus.bus_number ?? item.bus_number ?? ''),
           shift_date: String(item.starts_at ?? ''),
           status: String(item.status ?? ''),
@@ -84,15 +84,15 @@ export function getDriverTrips(): Promise<ApiResult<{ trips: DriverTripInfo[] }>
   return apiRequest<unknown>('/driver/trips').then((result) =>
     mapApiData(normalizeCollection<Record<string, unknown>, 'trips'>(result, 'trips'), (data) => ({
       trips: data.trips.map((item) => {
-        const route = item.route && typeof item.route === 'object' ? item.route as Record<string, unknown> : {};
-        const bus = item.bus && typeof item.bus === 'object' ? item.bus as Record<string, unknown> : {};
+        const route = relation(item.route, 'route');
+        const bus = relation(item.bus, 'bus');
         return {
           id: Number(item.id),
           trip_uid: typeof item.trip_uid === 'string' ? item.trip_uid : undefined,
-          route_id: Number(item.route_id ?? route.id),
+          route_id: Number(item.route_id ?? route.id ?? 0),
           route_name: typeof route.name === 'string' ? route.name : undefined,
           route_code: typeof route.code === 'string' ? route.code : undefined,
-          bus_id: Number(item.bus_id ?? bus.id),
+          bus_id: Number(item.bus_id ?? bus.id ?? 0),
           bus_number: typeof bus.bus_number === 'string' ? bus.bus_number : undefined,
           status: String(item.status ?? ''),
           started_at: typeof item.started_at === 'string' ? item.started_at : null,
@@ -140,6 +140,7 @@ export function reportDriverLocation(
   heading?: number,
   accuracy?: number,
 ): Promise<ApiResult<unknown>> {
+  console.log('Reporting driver location:', { latitude, longitude, speed, heading, accuracy }); 
   return apiRequest('/driver/location', {
     method: 'POST',
     body: {
@@ -197,6 +198,89 @@ export function getDriverTickets(): Promise<ApiResult<{ tickets: DriverTicket[] 
   return apiRequest('/driver/tickets');
 }
 
+export type DriverOperationalReport = {
+  id: number;
+  type: 'inspection' | 'incident' | 'vehicle_issue' | 'route_disruption';
+  category: string | null;
+  description: string | null;
+  checklist: Record<string, boolean> | null;
+  odometer_km: string | number | null;
+  status: 'submitted' | 'acknowledged' | 'resolved';
+  bus_number: string | null;
+  trip_reference: string | null;
+  created_at: string | null;
+};
+
+export type DriverOperationalReportPayload = {
+  type: DriverOperationalReport['type'];
+  category?: string;
+  description?: string;
+  checklist?: Record<string, boolean>;
+  odometer_km?: number;
+};
+
+export function getDriverOperationalReports(): Promise<ApiResult<{ reports: DriverOperationalReport[] }>> {
+  return apiRequest('/driver/reports');
+}
+
+export function createDriverOperationalReport(
+  payload: DriverOperationalReportPayload,
+): Promise<ApiResult<{ report: DriverOperationalReport }>> {
+  return apiRequest('/driver/reports', { method: 'POST', body: payload });
+}
+
+export type DriverFuelExpense = {
+  id: number;
+  bus_number: string | null;
+  amount_minor: number;
+  liters: string | number;
+  odometer_km: string | number;
+  station: string | null;
+  occurred_at: string;
+};
+
+export function getDriverFuelExpenses(): Promise<ApiResult<{ expenses: DriverFuelExpense[] }>> {
+  return apiRequest<unknown>('/driver/fuel-expenses').then((result) =>
+    normalizeCollection<DriverFuelExpense, 'expenses'>(result, 'expenses'),
+  );
+}
+
+export function createDriverFuelExpense(data: {
+  amount_minor: number;
+  liters: number;
+  odometer_km: number;
+  station?: string;
+  occurred_at: string;
+}): Promise<ApiResult<{ expense: DriverFuelExpense }>> {
+  return apiRequest('/driver/fuel-expenses', { method: 'POST', body: data });
+}
+
+export type DriverRouteStop = {
+  id: number;
+  name: string;
+  sequence: number;
+  latitude?: number;
+  longitude?: number;
+};
+
+export type DriverRouteInfo = {
+  bus: {
+    id: number;
+    bus_number: string;
+    registration_number: string;
+  };
+  route: {
+    id: number;
+    name: string;
+    code?: string;
+    stops: DriverRouteStop[];
+  };
+};
+
+export function getDriverRoute(): Promise<ApiResult<DriverRouteInfo | null>> {
+  return apiRequest<DriverRouteInfo | null>('/driver/route');
+}
+
 function wrapResource<T, K extends string>(result: ApiResult<unknown>, key: K): ApiResult<{ [P in K]: T }> {
   if (!result.ok) return result;
   if (!result.data || typeof result.data !== 'object' || Array.isArray(result.data)) {
@@ -220,4 +304,23 @@ function wrapResource<T, K extends string>(result: ApiResult<unknown>, key: K): 
     };
   }
   return { ...result, data: { [key]: resource as T } as { [P in K]: T } };
+}
+
+/**
+ * Read a relation off a payload.
+ *
+ * The API returns a relation as a plain nested object (`bus: { id }`). Older
+ * builds wrapped it one level deeper (`bus: { bus: { id } }`), so the wrapper is
+ * unwrapped when present. Without this, `bus.id` resolves to `undefined`,
+ * `Number(undefined)` becomes `NaN`, and every trip silently fails to match
+ * the driver's assigned bus.
+ */
+function relation(value: unknown, key: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const record = value as Record<string, unknown>;
+  const nested = record[key];
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+    return nested as Record<string, unknown>;
+  }
+  return record;
 }

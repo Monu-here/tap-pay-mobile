@@ -1,3 +1,4 @@
+import {AppText, AppTextInput } from '@/components/typography/app-text';
 /**
  * Shared form text-field component used across the registration screens.
  *
@@ -9,7 +10,7 @@
 
 import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
 import { type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { Pressable, StyleSheet, View, type TextInputProps } from 'react-native';
 
 import { Brand, Spacing } from '@/constants/theme';
 
@@ -40,8 +41,8 @@ export function FormTextField({
   return (
     <View style={styles.field}>
       <View style={styles.labelRow}>
-        <Text style={styles.fieldLabel}>{label}</Text>
-        {required && <Text style={styles.requiredMark}>*</Text>}
+        <AppText style={styles.fieldLabel}>{label}</AppText>
+        {required && <AppText style={styles.requiredMark}>*</AppText>}
       </View>
       <View
         style={[
@@ -56,15 +57,15 @@ export function FormTextField({
             tintColor={hasError ? Brand.error : Brand.textSecondary}
           />
         )}
-        {prefix && <Text style={styles.prefix}>{prefix}</Text>}
-        <TextInput
+        {prefix && <AppText style={styles.prefix}>{prefix}</AppText>}
+        <AppTextInput
           placeholderTextColor={Brand.textSecondary}
           style={[styles.fieldInput, style]}
           {...rest}
         />
         {trailing}
       </View>
-      {hasError && <Text style={styles.fieldError}>{error}</Text>}
+      {hasError && <AppText style={styles.fieldError}>{error}</AppText>}
     </View>
   );
 }

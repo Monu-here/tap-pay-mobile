@@ -1,3 +1,4 @@
+import {AppText, AppTextInput } from '@/components/typography/app-text';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
@@ -6,8 +7,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -75,14 +74,14 @@ export default function ResetPasswordScreen() {
               size={22}
               tintColor={Brand.text}
             />
-            <Text style={styles.backText}>Cancel and Sign In</Text>
+            <AppText style={styles.backText}>Cancel and Sign In</AppText>
           </Pressable>
 
           <View style={styles.header}>
-            <Text style={styles.title}>Reset Password</Text>
-            <Text style={styles.subtitle}>
+            <AppText style={styles.title}>Reset Password</AppText>
+            <AppText style={styles.subtitle}>
               Enter the reset token received in your email and choose a secure new password.
-            </Text>
+            </AppText>
           </View>
 
           {success ? (
@@ -92,10 +91,10 @@ export default function ResetPasswordScreen() {
                 size={36}
                 tintColor={Brand.teal.primary}
               />
-              <Text style={styles.successTitle}>Password Updated!</Text>
-              <Text style={styles.successText}>
+              <AppText style={styles.successTitle}>Password Updated!</AppText>
+              <AppText style={styles.successText}>
                 Your password has been securely reset. You can now sign in with your new credentials.
-              </Text>
+              </AppText>
               <PrimaryButton
                 title="Proceed to Sign In"
                 onPress={() => router.replace('/login')}
@@ -105,9 +104,9 @@ export default function ResetPasswordScreen() {
           ) : (
             <View style={styles.form}>
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Email Address</Text>
+                <AppText style={styles.fieldLabel}>Email Address</AppText>
                 <View style={styles.inputContainer}>
-                  <TextInput
+                  <AppTextInput
                     style={styles.input}
                     value={email}
                     onChangeText={(val) => {
@@ -123,9 +122,9 @@ export default function ResetPasswordScreen() {
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Reset Token</Text>
+                <AppText style={styles.fieldLabel}>Reset Token</AppText>
                 <View style={styles.inputContainer}>
-                  <TextInput
+                  <AppTextInput
                     style={styles.input}
                     value={token}
                     onChangeText={(val) => {
@@ -141,9 +140,9 @@ export default function ResetPasswordScreen() {
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>New Password</Text>
+                <AppText style={styles.fieldLabel}>New Password</AppText>
                 <View style={styles.inputContainer}>
-                  <TextInput
+                  <AppTextInput
                     style={styles.input}
                     value={password}
                     onChangeText={(val) => {
@@ -158,9 +157,9 @@ export default function ResetPasswordScreen() {
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Confirm New Password</Text>
+                <AppText style={styles.fieldLabel}>Confirm New Password</AppText>
                 <View style={styles.inputContainer}>
-                  <TextInput
+                  <AppTextInput
                     style={styles.input}
                     value={passwordConfirmation}
                     onChangeText={(val) => {
@@ -174,7 +173,7 @@ export default function ResetPasswordScreen() {
                 </View>
               </View>
 
-              {error && <Text style={styles.errorText}>{error}</Text>}
+              {error && <AppText style={styles.errorText}>{error}</AppText>}
 
               <PrimaryButton
                 title={isSubmitting ? 'Resetting Password...' : 'Reset Password'}

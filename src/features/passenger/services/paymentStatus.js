@@ -1,4 +1,4 @@
-const successfulStatuses = new Set(['completed', 'paid', 'success', 'succeeded']);
+const successfulStatuses = new Set(['completed', 'paid', 'success', 'succeeded', 'successful']);
 const failedStatuses = new Set(['cancelled', 'canceled', 'expired', 'failed', 'rejected']);
 
 function isSuccessfulPaymentStatus(status) {

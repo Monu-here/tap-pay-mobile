@@ -1,3 +1,4 @@
+import { AppText } from '@/components/typography/app-text';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import {
@@ -6,14 +7,13 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 
-import { Brand, Spacing } from '@/constants/theme';
+import { Monochrome, Spacing } from '@/constants/theme';
 import { getWalletTransaction } from '@/features/passenger/services/passengerApi';
 
 export default function TransactionDetailScreen() {
@@ -56,92 +56,94 @@ export default function TransactionDetailScreen() {
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
           <SymbolView
             name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-            size={22}
-            tintColor={Brand.text}
+            size={18}
+            tintColor={Monochrome.textPrimary}
           />
         </Pressable>
-        <Text style={styles.headerTitle}>Transaction Detail</Text>
+        <AppText style={styles.headerTitle}>Transaction Detail</AppText>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}>
         {loading ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={Brand.teal.primary} />
-            <Text style={styles.loadingText}>Loading ledger transaction...</Text>
+            <ActivityIndicator size="large" color={Monochrome.textPrimary} />
+            <AppText style={styles.loadingText}>Loading ledger transaction...</AppText>
           </View>
         ) : error ? (
           <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
+            <AppText style={styles.errorText}>{error}</AppText>
           </View>
         ) : txn ? (
           <View style={styles.receiptCard}>
             <View style={styles.cardHeader}>
-              <View style={[styles.statusIconBox, isCredit ? styles.bgCredit : styles.bgDebit]}>
+              <View style={styles.statusIconBox}>
                 <SymbolView
                   name={{
                     ios: isCredit ? 'arrow.down.left' : 'arrow.up.right',
                     android: isCredit ? 'arrow_downward' : 'arrow_upward',
                     web: isCredit ? 'arrow_downward' : 'arrow_upward',
                   }}
-                  size={30}
-                  tintColor={isCredit ? '#16A34A' : '#DC2626'}
+                  size={26}
+                  tintColor={Monochrome.textPrimary}
                 />
               </View>
-              <Text style={styles.transactionTitle}>{txn.description || txn.type}</Text>
-              <Text style={[styles.amountValue, isCredit ? styles.textCredit : styles.textDebit]}>
+              <AppText style={styles.transactionTitle}>{txn.description || txn.type}</AppText>
+              <AppText style={styles.amountValue}>
                 {isCredit ? '+' : '-'}{amountFormatted}
-              </Text>
+              </AppText>
               <View style={styles.statusPill}>
-                <Text style={styles.statusPillText}>{txn.status?.toUpperCase() || 'SUCCESSFUL'}</Text>
+                <AppText style={styles.statusPillText}>{txn.status?.toUpperCase() || 'SUCCESSFUL'}</AppText>
               </View>
             </View>
 
             <View style={styles.detailsGroup}>
               <View style={styles.detailRow}>
-                <Text style={styles.rowLabel}>Reference</Text>
-                <Text style={[styles.rowValue, styles.mono]}>{txn.reference || reference}</Text>
+                <AppText style={styles.rowLabel}>Reference</AppText>
+                <AppText style={[styles.rowValue, styles.mono]}>{txn.reference || reference}</AppText>
               </View>
 
               <View style={styles.detailRow}>
-                <Text style={styles.rowLabel}>Type</Text>
-                <Text style={styles.rowValue}>{txn.type_label || txn.type}</Text>
+                <AppText style={styles.rowLabel}>Type</AppText>
+                <AppText style={styles.rowValue}>{txn.type_label || txn.type}</AppText>
               </View>
 
               <View style={styles.detailRow}>
-                <Text style={styles.rowLabel}>Direction</Text>
-                <Text style={styles.rowValue}>{txn.direction_label || txn.direction}</Text>
+                <AppText style={styles.rowLabel}>Direction</AppText>
+                <AppText style={styles.rowValue}>{txn.direction_label || txn.direction}</AppText>
               </View>
 
               <View style={styles.detailRow}>
-                <Text style={styles.rowLabel}>Currency</Text>
-                <Text style={styles.rowValue}>{txn.currency || 'NPR'}</Text>
+                <AppText style={styles.rowLabel}>Currency</AppText>
+                <AppText style={styles.rowValue}>{txn.currency || 'NPR'}</AppText>
               </View>
 
               {txn.balance_before && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.rowLabel}>Balance Before</Text>
-                  <Text style={styles.rowValue}>{txn.balance_before.formatted || `Rs. ${(txn.balance_before.amount_minor / 100).toFixed(2)}`}</Text>
+                  <AppText style={styles.rowLabel}>Balance Before</AppText>
+                  <AppText style={styles.rowValue}>{txn.balance_before.formatted || `Rs. ${(txn.balance_before.amount_minor / 100).toFixed(2)}`}</AppText>
                 </View>
               )}
 
               {txn.balance_after && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.rowLabel}>Balance After</Text>
-                  <Text style={styles.rowValue}>{txn.balance_after.formatted || `Rs. ${(txn.balance_after.amount_minor / 100).toFixed(2)}`}</Text>
+                  <AppText style={styles.rowLabel}>Balance After</AppText>
+                  <AppText style={styles.rowValue}>{txn.balance_after.formatted || `Rs. ${(txn.balance_after.amount_minor / 100).toFixed(2)}`}</AppText>
                 </View>
               )}
 
               {txn.card && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.rowLabel}>Transit Card</Text>
-                  <Text style={styles.rowValue}>{txn.card.masked_code || txn.card.card_uid}</Text>
+                  <AppText style={styles.rowLabel}>Transit Card</AppText>
+                  <AppText style={styles.rowValue}>{txn.card.masked_code || txn.card.card_uid}</AppText>
                 </View>
               )}
 
               <View style={styles.detailRow}>
-                <Text style={styles.rowLabel}>Timestamp</Text>
-                <Text style={styles.rowValue}>{new Date(txn.created_at || Date.now()).toLocaleString()}</Text>
+                <AppText style={styles.rowLabel}>Timestamp</AppText>
+                <AppText style={styles.rowValue}>
+                  {txn.created_at ? new Date(txn.created_at).toLocaleString() : 'Not available'}
+                </AppText>
               </View>
             </View>
           </View>
@@ -154,109 +156,114 @@ export default function TransactionDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Monochrome.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
-    backgroundColor: Brand.white,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    backgroundColor: Monochrome.background,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Monochrome.border,
   },
   backBtn: {
-    padding: Spacing.one,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '800',
-    color: Brand.text,
+    fontWeight: '700',
+    color: Monochrome.textPrimary,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.four,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
   },
   loadingBox: {
-    padding: Spacing.six,
+    padding: Spacing.xl,
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: Spacing.sm,
   },
   loadingText: {
     fontSize: 14,
-    color: Brand.textSecondary,
+    color: Monochrome.textSecondary,
   },
   errorBox: {
-    backgroundColor: '#FEE2E2',
-    borderRadius: 14,
-    padding: Spacing.four,
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    borderRadius: 16,
+    padding: Spacing.lg,
     alignItems: 'center',
   },
   errorText: {
-    color: Brand.error,
+    color: Monochrome.textPrimary,
     fontSize: 14,
     fontWeight: '600',
   },
   receiptCard: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Monochrome.border,
     overflow: 'hidden',
   },
   cardHeader: {
-    padding: Spacing.five,
+    padding: Spacing.lg,
     alignItems: 'center',
-    gap: Spacing.one,
-    backgroundColor: '#FAF5FF',
+    gap: 8,
+    backgroundColor: Monochrome.surfacePrimary,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Monochrome.border,
   },
   statusIconBox: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.two,
-  },
-  bgCredit: {
-    backgroundColor: '#DCFCE7',
-  },
-  bgDebit: {
-    backgroundColor: '#FEE2E2',
+    marginBottom: 4,
   },
   transactionTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: Brand.text,
+    color: Monochrome.textSecondary,
   },
   amountValue: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '800',
+    color: Monochrome.textPrimary,
+    letterSpacing: -0.5,
     marginVertical: 4,
   },
-  textCredit: {
-    color: '#16A34A',
-  },
-  textDebit: {
-    color: '#DC2626',
-  },
   statusPill: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 6,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   statusPillText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#166534',
+    color: Monochrome.textPrimary,
+    letterSpacing: 0.5,
   },
   detailsGroup: {
-    padding: Spacing.five,
-    gap: Spacing.three,
+    padding: Spacing.lg,
+    gap: 14,
   },
   detailRow: {
     flexDirection: 'row',
@@ -265,13 +272,13 @@ const styles = StyleSheet.create({
   },
   rowLabel: {
     fontSize: 13,
-    color: Brand.textSecondary,
+    color: Monochrome.textMuted,
     fontWeight: '500',
   },
   rowValue: {
     fontSize: 14,
-    fontWeight: '700',
-    color: Brand.text,
+    fontWeight: '600',
+    color: Monochrome.textPrimary,
     textAlign: 'right',
   },
   mono: {

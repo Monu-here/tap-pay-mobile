@@ -1,3 +1,4 @@
+import { AppText } from '@/components/typography/app-text';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
@@ -7,7 +8,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -92,7 +92,7 @@ export function DocumentsScreen() {
   if (!userType || !data.documents) {
     return (
       <View style={styles.centerContainer}>
-        <Text style={styles.centerText}>Please select a user type first.</Text>
+        <AppText style={styles.centerText}>Please select a user type first.</AppText>
         <PrimaryButton label="Select User Type" onPress={() => router.replace('/register/user-type')} />
       </View>
     );
@@ -118,10 +118,10 @@ export function DocumentsScreen() {
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <Text style={styles.backIcon}>←</Text>
+          <AppText style={styles.backIcon}>←</AppText>
         </Pressable>
         <View style={styles.stepIndicator}>
-          <Text style={styles.stepLabel}>Step 3 of 7</Text>
+          <AppText style={styles.stepLabel}>Step 3 of 7</AppText>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: "43%" }]} />
           </View>
@@ -137,16 +137,16 @@ export function DocumentsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headingBlock}>
-          <Text style={styles.title}>{USER_TYPE_TITLES[userType]}</Text>
-          <Text style={styles.subtitle}>
+          <AppText style={styles.title}>{USER_TYPE_TITLES[userType]}</AppText>
+          <AppText style={styles.subtitle}>
             Provide your identity details so we can verify your account
-          </Text>
+          </AppText>
         </View>
 
         {userType === 'student' && (
           <>
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>College Information</Text>
+              <AppText style={styles.sectionTitle}>College Information</AppText>
               <FormTextField
                 label="College Name"
                 placeholder="Enter your college name"
@@ -166,7 +166,7 @@ export function DocumentsScreen() {
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>College ID Card</Text>
+              <AppText style={styles.sectionTitle}>College ID Card</AppText>
               <FormTextField
                 label="College ID Card Number"
                 placeholder="Enter ID card number"
@@ -197,7 +197,7 @@ export function DocumentsScreen() {
 
         {userType === 'general' && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Citizenship</Text>
+            <AppText style={styles.sectionTitle}>Citizenship</AppText>
             <FormTextField
               label="Citizenship Certificate Number"
               placeholder="Enter certificate number"
@@ -225,7 +225,7 @@ export function DocumentsScreen() {
 
         {userType === 'senior' && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Senior Citizen Card</Text>
+            <AppText style={styles.sectionTitle}>Senior Citizen Card</AppText>
             <FormTextField
               label="Senior Citizen Card Number"
               placeholder="Enter card number"
@@ -251,7 +251,7 @@ export function DocumentsScreen() {
           </View>
         )}
 
-        {formError && <Text style={styles.formError}>{formError}</Text>}
+        {formError && <AppText style={styles.formError}>{formError}</AppText>}
 
         <View style={styles.footer}>
           <PrimaryButton label="Continue" onPress={handleContinue} />
@@ -261,7 +261,7 @@ export function DocumentsScreen() {
             onPress={() => router.back()}
             style={styles.backTextButton}
           >
-            <Text style={styles.backText}>Back</Text>
+            <AppText style={styles.backText}>Back</AppText>
           </Pressable>
         </View>
       </ScrollView>

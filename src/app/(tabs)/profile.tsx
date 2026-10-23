@@ -1,16 +1,14 @@
+import {AppText, AppTextInput } from '@/components/typography/app-text';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Modal,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,7 +16,7 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 
 import { PrimaryButton } from '@/components/ui/primary-button';
-import { Brand, Spacing } from '@/constants/theme';
+import { Monochrome, Spacing } from '@/constants/theme';
 import {
   changePassword,
   destroySession,
@@ -83,7 +81,10 @@ export default function ProfileScreen() {
   }, []);
 
   useEffect(() => {
-    loadData();
+    const frame = requestAnimationFrame(() => {
+      void loadData();
+    });
+    return () => cancelAnimationFrame(frame);
   }, [loadData]);
 
   const handleSaveProfile = async () => {
@@ -103,27 +104,28 @@ export default function ProfileScreen() {
       if (res.ok) {
         setEditModalVisible(false);
         await loadData(true);
+        Alert.alert('Success', 'Profile updated successfully.');
       } else {
-        setEditError(res.message || 'Unable to update profile.');
+        setEditError(res.message || 'Could not update profile.');
       }
     } catch {
-      setEditError('Network error updating profile.');
+      setEditError('Connection failure. Check network.');
     } finally {
       setSavingProfile(false);
     }
   };
 
   const handleChangePassword = async () => {
-    if (!currentPwd || !newPwd) {
-      setPwdError('Current and new password are required.');
-      return;
-    }
-    if (newPwd.length < 8) {
-      setPwdError('New password must be at least 8 characters.');
+    if (!currentPwd || !newPwd || !confirmPwd) {
+      setPwdError('All fields are required.');
       return;
     }
     if (newPwd !== confirmPwd) {
-      setPwdError('Passwords do not match.');
+      setPwdError('New passwords do not match.');
+      return;
+    }
+    if (newPwd.length < 8) {
+      setPwdError('Password must be at least 8 characters long.');
       return;
     }
 
@@ -138,47 +140,32 @@ export default function ProfileScreen() {
         setCurrentPwd('');
         setNewPwd('');
         setConfirmPwd('');
-        setTimeout(() => {
-          setPwdModalVisible(false);
-          setPwdSuccess(null);
-        }, 1200);
+        setTimeout(() => setPwdModalVisible(false), 1500);
       } else {
-        setPwdError(res.message || 'Incorrect current password or invalid request.');
+        setPwdError(res.message || 'Unable to change password.');
       }
     } catch {
-      setPwdError('Network error changing password.');
+      setPwdError('Connection error. Please try again.');
     } finally {
       setChangingPwd(false);
     }
   };
 
   const handleRevokeSession = async (tokenId: number) => {
-    try {
-      const res = await destroySession(tokenId);
-      if (res.ok) {
-        await loadData(true);
-      } else {
-        Alert.alert('Error', res.message || 'Could not revoke session.');
-      }
-    } catch {
-      Alert.alert('Error', 'Connection error revoking session.');
-    }
-  };
-
-  const handleRevokeAllOther = async () => {
     Alert.alert(
-      'Sign Out All Other Devices',
-      'This will disconnect all other phones or browsers currently logged into your account.',
+      'Revoke Session',
+      'Sign out this device from your account?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Sign Out Others',
+          text: 'Sign Out Device',
           style: 'destructive',
           onPress: async () => {
-            const res = await logoutAll();
+            const res = await destroySession(tokenId);
             if (res.ok) {
-              Alert.alert('Success', `Signed out of ${res.data?.sessions_revoked ?? 0} other sessions.`);
               await loadData(true);
+            } else {
+              Alert.alert('Revocation Failed', res.message || 'Could not revoke session.');
             }
           },
         },
@@ -186,10 +173,46 @@ export default function ProfileScreen() {
     );
   };
 
-  const userType = session.user?.type || (profileData as any)?.type;
-  const userName = (profileData as any)?.name || session.user?.name || 'Passenger';
-  const userEmail = (profileData as any)?.email || session.user?.email || '';
-  const userPhone = (profileData as any)?.phone || session.user?.phone || 'Not set';
+  const handleLogout = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out of Tap & Pay?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+            router.replace('/login' as any);
+          },
+        },
+      ],
+    );
+  };
+
+  const handleLogoutAll = () => {
+    Alert.alert(
+      'Sign Out Everywhere',
+      'Sign out of all devices and active sessions?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out All',
+          style: 'destructive',
+          onPress: async () => {
+            await logoutAll();
+            router.replace('/login' as any);
+          },
+        },
+      ],
+    );
+  };
+
+  const name = (profileData?.name as string) || session.user?.name || 'Passenger';
+  const email = (profileData?.email as string) || session.user?.email || '';
+  const phone = (profileData?.phone as string) || session.user?.phone || 'No phone registered';
+  const roleType = (profileData?.type as string) || session.user?.type || 'passenger';
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -197,7 +220,7 @@ export default function ProfileScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Account &amp; Security</Text>
+        <AppText style={styles.headerTitle}>Account &amp; Security</AppText>
         <Pressable
           accessibilityRole="button"
           onPress={() => setEditModalVisible(true)}
@@ -205,10 +228,10 @@ export default function ProfileScreen() {
         >
           <SymbolView
             name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
-            size={18}
-            tintColor={Brand.primary}
+            size={14}
+            tintColor={Monochrome.textPrimary}
           />
-          <Text style={styles.editBtnText}>Edit</Text>
+          <AppText style={styles.editBtnText}>Edit</AppText>
         </Pressable>
       </View>
 
@@ -216,221 +239,256 @@ export default function ProfileScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} tintColor={Brand.teal.primary} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadData(true)}
+            tintColor={Monochrome.textPrimary}
+          />
         }
       >
-        {/* User Card */}
+        {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.avatarWrap}>
-            <Text style={styles.avatarLetter}>{userName.charAt(0).toUpperCase()}</Text>
+            <AppText style={styles.avatarLetter}>{name.charAt(0).toUpperCase()}</AppText>
           </View>
           <View style={styles.profileTextGroup}>
-            <Text style={styles.profileName}>{userName}</Text>
-            <Text style={styles.profileEmail}>{userEmail}</Text>
-            <Text style={styles.profilePhone}>{userPhone}</Text>
-          </View>
-          <View style={styles.typeBadge}>
-            <Text style={styles.typeBadgeText}>{(userType || 'passenger').toUpperCase()}</Text>
+            <AppText style={styles.profileName}>{name}</AppText>
+            <AppText style={styles.profileEmail}>{email}</AppText>
+            <AppText style={styles.profilePhone}>{phone}</AppText>
+            <View style={styles.typeBadge}>
+              <AppText style={styles.typeBadgeText}>{roleType.toUpperCase()}</AppText>
+            </View>
           </View>
         </View>
 
-        {/* Role Portals Section (Only for Admin, Company Admin, or Driver) */}
-        {(userType === 'super_admin' || userType === 'company_admin' || userType === 'driver') && (
+        {/* Portal Switching Section if User is Authorized */}
+        {(roleType === 'super_admin' || roleType === 'company_admin' || roleType === 'driver') && (
           <View style={styles.section}>
-            <Text style={styles.sectionHeading}>Management Portals</Text>
+            <AppText style={styles.sectionHeading}>Management Portal</AppText>
             <View style={styles.portalCard}>
-              {userType === 'super_admin' && (
-                <Pressable
-                  onPress={() => router.push('/portal/admin' as any)}
-                  style={styles.portalRow}
-                >
-                  <View style={[styles.portalIcon, { backgroundColor: '#EFF6FF' }]}>
-                    <SymbolView
-                      name={{ ios: 'shield.fill', android: 'security', web: 'security' }}
-                      size={22}
-                      tintColor="#2563EB"
-                    />
-                  </View>
-                  <View style={styles.portalInfo}>
-                    <Text style={styles.portalTitle}>Super-Admin Platform Portal</Text>
-                    <Text style={styles.portalSubtitle}>Manage companies, users, audit logs &amp; system</Text>
-                  </View>
+              <Pressable
+                onPress={() => {
+                  if (roleType === 'super_admin') router.push('/portal/admin' as any);
+                  else if (roleType === 'company_admin') router.push('/portal/company' as any);
+                  else if (roleType === 'driver') router.push('/portal/driver' as any);
+                }}
+                style={styles.portalRow}
+              >
+                <View style={styles.portalIcon}>
                   <SymbolView
-                    name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                    size={18}
-                    tintColor={Brand.textSecondary}
+                    name={{ ios: 'shield.fill', android: 'admin_panel_settings', web: 'admin_panel_settings' }}
+                    size={22}
+                    tintColor={Monochrome.textPrimary}
                   />
-                </Pressable>
-              )}
-
-              {userType === 'company_admin' && (
-                <Pressable
-                  onPress={() => router.push('/portal/company' as any)}
-                  style={styles.portalRow}
-                >
-                  <View style={[styles.portalIcon, { backgroundColor: '#F0FDF4' }]}>
-                    <SymbolView
-                      name={{ ios: 'building.2.fill', android: 'domain', web: 'domain' }}
-                      size={22}
-                      tintColor="#16A34A"
-                    />
-                  </View>
-                  <View style={styles.portalInfo}>
-                    <Text style={styles.portalTitle}>Transport Company Portal</Text>
-                    <Text style={styles.portalSubtitle}>Fleet buses, drivers, routes, settlements</Text>
-                  </View>
-                  <SymbolView
-                    name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                    size={18}
-                    tintColor={Brand.textSecondary}
-                  />
-                </Pressable>
-              )}
-
-              {userType === 'driver' && (
-                <Pressable
-                  onPress={() => router.push('/portal/driver' as any)}
-                  style={styles.portalRow}
-                >
-                  <View style={[styles.portalIcon, { backgroundColor: '#FEF3C7' }]}>
-                    <SymbolView
-                      name={{ ios: 'steeringwheel', android: 'drive_eta', web: 'drive_eta' }}
-                      size={22}
-                      tintColor="#D97706"
-                    />
-                  </View>
-                  <View style={styles.portalInfo}>
-                    <Text style={styles.portalTitle}>Driver Shift Console</Text>
-                    <Text style={styles.portalSubtitle}>Assigned bus, active trips &amp; location broadcast</Text>
-                  </View>
-                  <SymbolView
-                    name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                    size={18}
-                    tintColor={Brand.textSecondary}
-                  />
-                </Pressable>
-              )}
+                </View>
+                <View style={styles.portalInfo}>
+                  <AppText style={styles.portalTitle}>
+                    {roleType === 'super_admin' ? 'Super Admin Console' : roleType === 'company_admin' ? 'Company Fleet Portal' : 'Driver Console'}
+                  </AppText>
+                  <AppText style={styles.portalSubtitle}>Switch workspace</AppText>
+                </View>
+                <SymbolView
+                  name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                  size={16}
+                  tintColor={Monochrome.textMuted}
+                />
+              </Pressable>
             </View>
           </View>
         )}
 
-        {/* Security Settings Section */}
+        {/* Security & Preferences */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeading}>Security &amp; Credentials</Text>
+          <AppText style={styles.sectionHeading}>Security &amp; Preferences</AppText>
           <View style={styles.optionsCard}>
-            <Pressable
-              onPress={() => {
-                setPwdError(null);
-                setPwdSuccess(null);
-                setPwdModalVisible(true);
-              }}
-              style={styles.optionRow}
-            >
+            {(roleType === 'passenger' || roleType === 'driver') ? (
+              <Pressable onPress={() => router.push('/security/mpin' as any)} style={styles.optionRow}>
+                <View style={styles.optionLeft}>
+                  <SymbolView
+                    name={{ ios: 'lock.shield.fill', android: 'security', web: 'security' }}
+                    size={18}
+                    tintColor={Monochrome.textPrimary}
+                  />
+                  <AppText style={styles.optionText}>Security &amp; MPIN</AppText>
+                </View>
+                <SymbolView
+                  name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                  size={14}
+                  tintColor={Monochrome.textMuted}
+                />
+              </Pressable>
+            ) : null}
+            <Pressable onPress={() => setPwdModalVisible(true)} style={styles.optionRow}>
               <View style={styles.optionLeft}>
                 <SymbolView
-                  name={{ ios: 'key.fill', android: 'vpn_key', web: 'vpn_key' }}
-                  size={20}
-                  tintColor={Brand.primary}
+                  name={{ ios: 'lock.fill', android: 'lock', web: 'lock' }}
+                  size={18}
+                  tintColor={Monochrome.textPrimary}
                 />
-                <Text style={styles.optionText}>Change Password</Text>
+                <AppText style={styles.optionText}>Change Password</AppText>
               </View>
               <SymbolView
                 name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                size={16}
-                tintColor={Brand.textSecondary}
+                size={14}
+                tintColor={Monochrome.textMuted}
+              />
+            </Pressable>
+
+            <Pressable onPress={() => router.push('/notifications' as any)} style={[styles.optionRow, styles.rowBorder]}>
+              <View style={styles.optionLeft}>
+                <SymbolView
+                  name={{ ios: 'bell.fill', android: 'notifications', web: 'notifications' }}
+                  size={18}
+                  tintColor={Monochrome.textPrimary}
+                />
+                <AppText style={styles.optionText}>Notification Preferences</AppText>
+              </View>
+              <SymbolView
+                name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                size={14}
+                tintColor={Monochrome.textMuted}
               />
             </Pressable>
 
             <Pressable
-              onPress={handleRevokeAllOther}
+              onPress={() => router.push('/(tabs)/cards' as any)}
               style={[styles.optionRow, styles.rowBorder]}
             >
               <View style={styles.optionLeft}>
                 <SymbolView
-                  name={{ ios: 'shield.slash.fill', android: 'security_update_warning', web: 'security_update_warning' }}
-                  size={20}
-                  tintColor="#D97706"
+                  name={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }}
+                  size={18}
+                  tintColor={Monochrome.textPrimary}
                 />
-                <Text style={styles.optionText}>Sign Out All Other Devices</Text>
+                <AppText style={styles.optionText}>My cards</AppText>
               </View>
               <SymbolView
                 name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                size={16}
-                tintColor={Brand.textSecondary}
+                size={14}
+                tintColor={Monochrome.textMuted}
+              />
+            </Pressable>
+
+            <Pressable onPress={() => router.push('/travel' as any)} style={[styles.optionRow, styles.rowBorder]}>
+              <View style={styles.optionLeft}>
+                <SymbolView
+                  name={{ ios: 'ticket.fill', android: 'confirmation_number', web: 'confirmation_number' }}
+                  size={18}
+                  tintColor={Monochrome.textPrimary}
+                />
+                <AppText style={styles.optionText}>My Travel History</AppText>
+              </View>
+              <SymbolView
+                name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                size={14}
+                tintColor={Monochrome.textMuted}
+              />
+            </Pressable>
+
+            {roleType === 'passenger' ? (
+              <Pressable
+                onPress={() => router.push('/portal/concession' as any)}
+                style={[styles.optionRow, styles.rowBorder]}
+              >
+                <View style={styles.optionLeft}>
+                  <SymbolView
+                    name={{ ios: 'person.text.rectangle', android: 'badge', web: 'badge' }}
+                    size={18}
+                    tintColor={Monochrome.textPrimary}
+                  />
+                  <AppText style={styles.optionText}>Fare concession application</AppText>
+                </View>
+                <SymbolView
+                  name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                  size={14}
+                  tintColor={Monochrome.textMuted}
+                />
+              </Pressable>
+            ) : null}
+
+            <Pressable onPress={() => router.push('/support' as any)} style={[styles.optionRow, styles.rowBorder]}>
+              <View style={styles.optionLeft}>
+                <SymbolView
+                  name={{ ios: 'questionmark.circle.fill', android: 'help_outline', web: 'help_outline' }}
+                  size={18}
+                  tintColor={Monochrome.textPrimary}
+                />
+                <AppText style={styles.optionText}>Help, payments &amp; disputes</AppText>
+              </View>
+              <SymbolView
+                name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                size={14}
+                tintColor={Monochrome.textMuted}
               />
             </Pressable>
           </View>
         </View>
 
-        {/* Active Connected Sessions */}
+        {/* Active Authorized Sessions */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeading}>Active Device Sessions</Text>
+          <AppText style={styles.sectionHeading}>Active Sessions ({sessions.length})</AppText>
           <View style={styles.optionsCard}>
-            {sessions.map((sess, idx) => (
-              <View key={sess.id} style={[styles.sessionRow, idx > 0 && styles.rowBorder]}>
-                <View style={styles.sessionLeft}>
-                  <SymbolView
-                    name={{
-                      ios: sess.is_current ? 'iphone.badge.checkmark' : 'laptopcomputer',
-                      android: sess.is_current ? 'phone_iphone' : 'laptop',
-                      web: sess.is_current ? 'phone_iphone' : 'laptop',
-                    }}
-                    size={20}
-                    tintColor={sess.is_current ? '#16A34A' : Brand.textSecondary}
-                  />
-                  <View>
-                    <View style={styles.sessionTitleRow}>
-                      <Text style={styles.sessionDeviceName}>{sess.name || 'Mobile App'}</Text>
-                      {sess.is_current && (
-                        <View style={styles.currentBadge}>
-                          <Text style={styles.currentBadgeText}>THIS DEVICE</Text>
-                        </View>
-                      )}
+            {loading && !refreshing ? (
+              <ActivityIndicator size="small" color={Monochrome.textPrimary} style={{ padding: Spacing.four }} />
+            ) : sessions.length > 0 ? (
+              sessions.map((sess, idx) => (
+                <View key={sess.id} style={[styles.sessionRow, idx > 0 && styles.rowBorder]}>
+                  <View style={styles.sessionLeft}>
+                    <SymbolView
+                      name={{
+                        ios: sess.is_current ? 'laptopcomputer.and.iphone' : 'iphone',
+                        android: sess.is_current ? 'devices' : 'smartphone',
+                        web: sess.is_current ? 'devices' : 'smartphone',
+                      }}
+                      size={20}
+                      tintColor={Monochrome.textPrimary}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.sessionTitleRow}>
+                        <AppText style={styles.sessionDeviceName}>
+                          {sess.name || 'Mobile App / Browser'}
+                        </AppText>
+                        {sess.is_current ? (
+                          <View style={styles.currentBadge}>
+                            <AppText style={styles.currentBadgeText}>THIS DEVICE</AppText>
+                          </View>
+                        ) : null}
+                      </View>
+                      <AppText style={styles.sessionMeta}>
+                        {sess.last_used_at ? new Date(sess.last_used_at).toLocaleDateString() : 'Active'}
+                      </AppText>
                     </View>
-                    <Text style={styles.sessionMeta}>
-                      Last active: {sess.last_used_at ? new Date(sess.last_used_at).toLocaleDateString() : 'Active now'}
-                    </Text>
                   </View>
+                  {!sess.is_current && (
+                    <Pressable
+                      onPress={() => handleRevokeSession(sess.id)}
+                      style={styles.revokeBtn}
+                    >
+                      <AppText style={styles.revokeBtnText}>Revoke</AppText>
+                    </Pressable>
+                  )}
                 </View>
-
-                {!sess.is_current && (
-                  <Pressable
-                    onPress={() => handleRevokeSession(sess.id)}
-                    style={styles.revokeBtn}
-                  >
-                    <Text style={styles.revokeBtnText}>Revoke</Text>
-                  </Pressable>
-                )}
-              </View>
-            ))}
+              ))
+            ) : (
+              <AppText style={{ padding: Spacing.four, color: Monochrome.textMuted, fontSize: 13 }}>
+                No active remote sessions found.
+              </AppText>
+            )}
           </View>
         </View>
 
-        {/* Sign Out Button */}
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            Alert.alert(
-              'Sign Out',
-              'Are you sure you want to sign out of Tap & Pay?',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Sign Out',
-                  style: 'destructive',
-                  onPress: () => void logout(),
-                },
-              ],
-            );
-          }}
-          style={styles.logoutButton}
-        >
+        {/* Logout Actions */}
+        <Pressable onPress={handleLogout} style={styles.logoutButton}>
           <SymbolView
-            name={{ ios: 'rectangle.portrait.and.arrow.right', android: 'logout', web: 'logout' }}
+            name={{ ios: 'arrow.right.square.fill', android: 'logout', web: 'logout' }}
             size={18}
-            tintColor="#DC2626"
+            tintColor={Monochrome.textPrimary}
           />
-          <Text style={styles.logoutButtonText}>Sign Out of Tap &amp; Pay</Text>
+          <AppText style={styles.logoutButtonText}>Sign Out</AppText>
+        </Pressable>
+
+        <Pressable onPress={handleLogoutAll} style={styles.logoutAllButton}>
+          <AppText style={styles.logoutAllButtonText}>Sign Out Everywhere</AppText>
         </Pressable>
       </ScrollView>
 
@@ -439,44 +497,44 @@ export default function ProfileScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Profile</Text>
+              <AppText style={styles.modalTitle}>Edit Account Details</AppText>
               <Pressable onPress={() => setEditModalVisible(false)} hitSlop={8}>
                 <SymbolView
                   name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
-                  size={24}
-                  tintColor={Brand.textSecondary}
+                  size={22}
+                  tintColor={Monochrome.textMuted}
                 />
               </Pressable>
             </View>
 
             <View style={styles.modalForm}>
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Full Name</Text>
-                <TextInput
+                <AppText style={styles.fieldLabel}>Full Name</AppText>
+                <AppTextInput
                   style={styles.input}
                   value={nameInput}
                   onChangeText={(val) => {
                     setNameInput(val);
                     setEditError(null);
                   }}
-                  placeholder="Your Name"
-                  placeholderTextColor={Brand.textSecondary}
+                  placeholder="Enter full name"
+                  placeholderTextColor={Monochrome.textMuted}
                 />
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Phone Number</Text>
-                <TextInput
+                <AppText style={styles.fieldLabel}>Phone Number</AppText>
+                <AppTextInput
                   style={styles.input}
                   value={phoneInput}
                   onChangeText={setPhoneInput}
                   placeholder="98XXXXXXXX"
-                  placeholderTextColor={Brand.textSecondary}
+                  placeholderTextColor={Monochrome.textMuted}
                   keyboardType="phone-pad"
                 />
               </View>
 
-              {editError && <Text style={styles.errorText}>{editError}</Text>}
+              {editError && <AppText style={styles.errorText}>{editError}</AppText>}
 
               <PrimaryButton
                 title={savingProfile ? 'Saving...' : 'Save Profile'}
@@ -494,20 +552,20 @@ export default function ProfileScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Change Password</Text>
+              <AppText style={styles.modalTitle}>Change Password</AppText>
               <Pressable onPress={() => setPwdModalVisible(false)} hitSlop={8}>
                 <SymbolView
                   name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
-                  size={24}
-                  tintColor={Brand.textSecondary}
+                  size={22}
+                  tintColor={Monochrome.textMuted}
                 />
               </Pressable>
             </View>
 
             <View style={styles.modalForm}>
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Current Password</Text>
-                <TextInput
+                <AppText style={styles.fieldLabel}>Current Password</AppText>
+                <AppTextInput
                   style={styles.input}
                   value={currentPwd}
                   onChangeText={(val) => {
@@ -515,14 +573,14 @@ export default function ProfileScreen() {
                     setPwdError(null);
                   }}
                   placeholder="Enter current password"
-                  placeholderTextColor={Brand.textSecondary}
+                  placeholderTextColor={Monochrome.textMuted}
                   secureTextEntry
                 />
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>New Password</Text>
-                <TextInput
+                <AppText style={styles.fieldLabel}>New Password</AppText>
+                <AppTextInput
                   style={styles.input}
                   value={newPwd}
                   onChangeText={(val) => {
@@ -530,14 +588,14 @@ export default function ProfileScreen() {
                     setPwdError(null);
                   }}
                   placeholder="At least 8 characters"
-                  placeholderTextColor={Brand.textSecondary}
+                  placeholderTextColor={Monochrome.textMuted}
                   secureTextEntry
                 />
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Confirm New Password</Text>
-                <TextInput
+                <AppText style={styles.fieldLabel}>Confirm New Password</AppText>
+                <AppTextInput
                   style={styles.input}
                   value={confirmPwd}
                   onChangeText={(val) => {
@@ -545,13 +603,13 @@ export default function ProfileScreen() {
                     setPwdError(null);
                   }}
                   placeholder="Repeat new password"
-                  placeholderTextColor={Brand.textSecondary}
+                  placeholderTextColor={Monochrome.textMuted}
                   secureTextEntry
                 />
               </View>
 
-              {pwdError && <Text style={styles.errorText}>{pwdError}</Text>}
-              {pwdSuccess && <Text style={styles.successText}>{pwdSuccess}</Text>}
+              {pwdError && <AppText style={styles.errorText}>{pwdError}</AppText>}
+              {pwdSuccess && <AppText style={styles.successText}>{pwdSuccess}</AppText>}
 
               <PrimaryButton
                 title={changingPwd ? 'Updating...' : 'Update Password'}
@@ -570,7 +628,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Monochrome.background,
   },
   header: {
     flexDirection: 'row',
@@ -578,28 +636,30 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfacePrimary,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Monochrome.border,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   editBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   editBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: Brand.primary,
+    color: Monochrome.textPrimary,
   },
   scrollContent: {
     paddingHorizontal: Spacing.four,
@@ -607,71 +667,76 @@ const styles = StyleSheet.create({
     gap: Spacing.four,
   },
   profileCard: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 20,
     padding: Spacing.four,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Monochrome.border,
   },
   avatarWrap: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: Brand.teal.primary,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarLetter: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
-    color: Brand.white,
+    color: Monochrome.textPrimary,
   },
   profileTextGroup: {
     flex: 1,
   },
   profileName: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   profileEmail: {
     fontSize: 13,
-    color: Brand.textSecondary,
+    color: Monochrome.textSecondary,
     marginTop: 2,
   },
   profilePhone: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: Monochrome.textMuted,
     marginTop: 2,
   },
   typeBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: Monochrome.surfaceElevated,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 6,
     alignSelf: 'flex-start',
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   typeBadgeText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
-    color: Brand.textSecondary,
+    color: Monochrome.textSecondary,
   },
   section: {
     gap: Spacing.two,
   },
   sectionHeading: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   portalCard: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Monochrome.border,
     overflow: 'hidden',
   },
   portalRow: {
@@ -681,9 +746,12 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   portalIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -691,20 +759,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   portalTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   portalSubtitle: {
     fontSize: 12,
-    color: Brand.textSecondary,
+    color: Monochrome.textMuted,
     marginTop: 2,
   },
   optionsCard: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Monochrome.border,
     overflow: 'hidden',
   },
   optionRow: {
@@ -719,13 +787,13 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   optionText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   rowBorder: {
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: Monochrome.surfaceElevated,
   },
   sessionRow: {
     flexDirection: 'row',
@@ -745,63 +813,79 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sessionDeviceName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   currentBadge: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: Monochrome.surfaceElevated,
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 4,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   currentBadgeText: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#15803D',
+    color: Monochrome.textPrimary,
   },
   sessionMeta: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: Monochrome.textMuted,
     marginTop: 2,
   },
   revokeBtn: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: Monochrome.surfaceElevated,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   revokeBtnText: {
     fontSize: 11,
-    color: '#DC2626',
-    fontWeight: '700',
+    color: Monochrome.textSecondary,
+    fontWeight: '600',
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.two,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: Monochrome.surfaceSecondary,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: Monochrome.border,
     borderRadius: 14,
     paddingVertical: 14,
     marginTop: Spacing.two,
   },
   logoutButtonText: {
-    color: '#DC2626',
+    color: Monochrome.textPrimary,
     fontSize: 15,
     fontWeight: '700',
   },
+  logoutAllButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  logoutAllButtonText: {
+    color: Monochrome.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.85)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfacePrimary,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.four,
   },
@@ -814,7 +898,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
   },
   modalForm: {
     gap: Spacing.three,
@@ -825,24 +909,26 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: Brand.text,
+    color: Monochrome.textSecondary,
   },
   input: {
-    backgroundColor: Brand.inputBackground,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 12,
     paddingHorizontal: Spacing.three,
     height: 48,
     fontSize: 15,
-    color: Brand.text,
+    color: Monochrome.textPrimary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   errorText: {
     fontSize: 13,
-    color: Brand.error,
+    color: Monochrome.textPrimary,
     fontWeight: '500',
   },
   successText: {
     fontSize: 13,
-    color: '#16A34A',
+    color: Monochrome.textPrimary,
     fontWeight: '600',
   },
   modalActionBtn: {

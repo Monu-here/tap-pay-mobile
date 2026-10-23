@@ -47,9 +47,13 @@ export function toRegistrationPayload(data: RegistrationData): RegistrationPaylo
     // `name` falls back to the English name so it is never empty.
     name: personal.fullNameNepali.trim() || personal.fullNameEnglish.trim(),
     name_en: personal.fullNameEnglish.trim(),
+    name_np: personal.fullNameNepali.trim(),
     user_type: userType ? API_USER_TYPES[userType] : '',
     email: personal.email.trim().toLowerCase(),
     phone: toApiPhone(personal.phoneNumber),
+    address: personal.address.trim(),
+    date_of_birth_ad: personal.dateOfBirthAD,
+    date_of_birth_bs: personal.dateOfBirthBS,
     password: personal.password,
     // The register validator uses Laravel's `confirmed` rule on `password`.
     password_confirmation: personal.confirmPassword,
@@ -62,7 +66,7 @@ export function toRegistrationPayload(data: RegistrationData): RegistrationPaylo
     payload.college_address = documents.collegeAddress.trim();
     payload.college_id_number = documents.collegeIdNumber.trim();
     const expiry = documents.collegeIdExpiry.trim();
-    if (expiry) payload.college_id_expiry = expiry;
+    if (expiry) payload.college_id_card_expiry_date = expiry;
     payload.college_id_card_photo = documents.collegeIdPhoto;
   } else if (userType === 'general' && documents && 'citizenshipNumber' in documents) {
     payload.citizenship_number = documents.citizenshipNumber.trim();

@@ -1,21 +1,30 @@
+import { AppText } from '@/components/typography/app-text';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 
-import { Brand, Spacing } from '@/constants/theme';
-import { getDashboard, type DashboardData, type TravelRecord, type WalletTransaction } from '@/features/passenger/services/passengerApi';
+import { Monochrome, Spacing } from '@/constants/theme';
+import {
+  getDashboard,
+  getUnreadNotificationCount,
+  getRoutes,
+  type DashboardData,
+  type RouteInfo,
+  type TravelRecord,
+  type WalletTransaction,
+} from '@/features/passenger/services/passengerApi';
 import { getSession } from '@/features/auth/session';
 
 export default function HomeScreen() {
@@ -23,25 +32,41 @@ export default function HomeScreen() {
   const session = getSession();
 
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [routes, setRoutes] = useState<RouteInfo[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [balanceVisible, setBalanceVisible] = useState(true);
+  const [activityTab, setActivityTab] = useState<'trips' | 'wallet'>('trips');
 
-  const fetchDashboard = useCallback(async (isRefresh = false) => {
+  const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
 
     try {
-      const res = await getDashboard();
-      if (res.ok && res.data) {
-        setDashboard(res.data);
-      } else {
-        setError(res.message || 'Unable to load dashboard.');
+      const [dashRes, routesRes, notifRes] = await Promise.allSettled([
+        getDashboard(),
+        getRoutes(),
+        getUnreadNotificationCount(),
+      ]);
+
+      if (dashRes.status === 'fulfilled' && dashRes.value.ok && dashRes.value.data) {
+        setDashboard(dashRes.value.data);
+      } else if (dashRes.status === 'fulfilled' && !dashRes.value.ok) {
+        setError(dashRes.value.message || 'Unable to sync dashboard data.');
+      }
+
+      if (routesRes.status === 'fulfilled' && routesRes.value.ok && routesRes.value.data?.routes) {
+        setRoutes(routesRes.value.data.routes.slice(0, 3));
+      }
+
+      if (notifRes.status === 'fulfilled' && notifRes.value.ok && notifRes.value.data) {
+        setUnreadNotifications(notifRes.value.data.unread_count);
       }
     } catch {
-      setError('Connection failure. Check backend connection.');
+      setError('Connection failure. Please check your internet connection.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -49,63 +74,96 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    fetchDashboard();
-  }, [fetchDashboard]);
+    const frame = requestAnimationFrame(() => {
+      void fetchData();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [fetchData]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void fetchData(true);
+    });
+    return () => subscription.remove();
+  }, [fetchData]);
 
   const userName = session.user?.name || (dashboard?.user as any)?.name || 'Passenger';
   const userType = session.user?.type || (dashboard?.user as any)?.type;
   const isPrivileged = userType === 'super_admin' || userType === 'company_admin' || userType === 'driver';
 
+  const formatNpr = (formatted?: string | null, minor?: number): string => {
+    if (formatted) {
+      if (formatted.startsWith('NPR') || formatted.startsWith('Rs.')) return formatted;
+      return `NPR ${formatted}`;
+    }
+    if (typeof minor === 'number') {
+      return `NPR ${(minor / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    return 'NPR 0.00';
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
 
-      {/* Header Bar */}
+      {/* Header Section */}
       <View style={styles.header}>
-        <View style={styles.userInfo}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/(tabs)/profile' as any)}
+          style={styles.profileButton}
+        >
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{userName.charAt(0).toUpperCase()}</Text>
+            <AppText style={styles.avatarText}>{userName.charAt(0).toUpperCase()}</AppText>
           </View>
-          <View>
-            <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.userName} numberOfLines={1}>{userName}</Text>
+          <View style={styles.greetingWrap}>
+            <View style={styles.brandRow}>
+              <AppText style={styles.brandName}>TAP &amp; PAY</AppText>
+              <View style={styles.brandBadge}>
+                <AppText style={styles.brandBadgeText}>TRANSIT</AppText>
+              </View>
+            </View>
+            <AppText style={styles.userName} numberOfLines={1}>
+              {userName}
+            </AppText>
           </View>
-        </View>
+        </Pressable>
 
-        <View style={styles.headerActions}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push('/passenger/qr' as any)}
-            style={styles.iconButton}
-          >
-            <SymbolView
-              name={{ ios: 'qrcode', android: 'qr_code', web: 'qr_code' }}
-              size={22}
-              tintColor={Brand.teal.primary}
-            />
-          </Pressable>
+        <View style={styles.headerRightActions}>
           <Pressable
             accessibilityRole="button"
             onPress={() => router.push('/notifications' as any)}
-            style={styles.iconButton}
+            style={styles.headerIconButton}
+            hitSlop={8}
           >
             <SymbolView
               name={{ ios: 'bell.fill', android: 'notifications', web: 'notifications' }}
-              size={22}
-              tintColor={Brand.text}
+              size={18}
+              tintColor={Monochrome.textPrimary}
             />
+            {unreadNotifications > 0 && (
+              <View style={styles.unreadBadge}>
+                <AppText style={styles.unreadBadgeText}>
+                  {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                </AppText>
+              </View>
+            )}
           </Pressable>
         </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 80 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => fetchDashboard(true)} tintColor={Brand.teal.primary} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchData(true)}
+            tintColor={Monochrome.textPrimary}
+          />
         }
       >
-        {/* Privileged Role Banner */}
+        {/* Privileged Role Switcher */}
         {isPrivileged && (
           <Pressable
             onPress={() => {
@@ -118,349 +176,427 @@ export default function HomeScreen() {
             <View style={styles.portalBannerLeft}>
               <SymbolView
                 name={{ ios: 'shield.fill', android: 'admin_panel_settings', web: 'admin_panel_settings' }}
-                size={20}
-                tintColor={Brand.white}
+                size={16}
+                tintColor={Monochrome.textPrimary}
               />
-              <Text style={styles.portalBannerText}>
-                Access {userType === 'super_admin' ? 'Super-Admin' : userType === 'company_admin' ? 'Company Fleet' : 'Driver'} Portal
-              </Text>
+              <AppText style={styles.portalBannerText}>
+                Access {userType === 'super_admin' ? 'Super Admin' : userType === 'company_admin' ? 'Company Fleet' : 'Driver'} Portal
+              </AppText>
             </View>
             <SymbolView
               name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-              size={18}
-              tintColor={Brand.white}
+              size={14}
+              tintColor={Monochrome.textSecondary}
             />
           </Pressable>
-        )}
-
-        {/* Loading State */}
-        {loading && !refreshing && (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={Brand.teal.primary} />
-            <Text style={styles.loadingText}>Syncing wallet & transit records...</Text>
-          </View>
         )}
 
         {/* Error State */}
         {error && !loading && (
           <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
-            <Pressable onPress={() => fetchDashboard()} style={styles.retryButton}>
-              <Text style={styles.retryText}>Retry Sync</Text>
+            <View style={styles.errorTextRow}>
+              <SymbolView
+                name={{ ios: 'exclamationmark.circle.fill', android: 'error', web: 'error' }}
+                size={16}
+                tintColor={Monochrome.textPrimary}
+              />
+              <AppText style={styles.errorText}>{error}</AppText>
+            </View>
+            <Pressable onPress={() => fetchData()} style={styles.retryButton}>
+              <AppText style={styles.retryText}>Retry</AppText>
             </Pressable>
           </View>
         )}
 
-        {/* Balance & Wallet Card */}
+        {/* Loading Indicator */}
+        {loading && !refreshing && (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="small" color={Monochrome.textPrimary} />
+            <AppText style={styles.loadingText}>Syncing wallet &amp; transit services...</AppText>
+          </View>
+        )}
+
+        {/* Virtual Wallet Card (Fasset style black card) */}
         <View style={styles.walletCard}>
-          <View style={styles.walletHeader}>
+          <View style={styles.walletTopRow}>
             <View style={styles.walletLabelGroup}>
-              <SymbolView
-                name={{ ios: 'wallet.pass.fill', android: 'account_balance_wallet', web: 'account_balance_wallet' }}
-                size={18}
-                tintColor={Brand.white}
-              />
-              <Text style={styles.walletLabel}>TAP & PAY DIGITAL WALLET</Text>
+              <View style={styles.walletDot} />
+              <AppText style={styles.walletLabel}>TAP &amp; PAY DIGITAL WALLET</AppText>
             </View>
-            <Pressable onPress={() => setBalanceVisible(!balanceVisible)} hitSlop={8}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setBalanceVisible((prev) => !prev)}
+              style={styles.eyeButton}
+              hitSlop={8}
+            >
               <SymbolView
                 name={{
                   ios: balanceVisible ? 'eye.fill' : 'eye.slash.fill',
                   android: balanceVisible ? 'visibility' : 'visibility_off',
                   web: balanceVisible ? 'visibility' : 'visibility_off',
                 }}
-                size={20}
-                tintColor={Brand.white}
+                size={16}
+                tintColor={Monochrome.textSecondary}
               />
+              <AppText style={styles.eyeButtonText}>{balanceVisible ? 'Hide' : 'Show'}</AppText>
             </Pressable>
           </View>
 
-          <Text style={styles.balanceAmount}>
-            {balanceVisible
-              ? (dashboard?.wallet.balance_formatted || 'Rs. 0.00')
-              : '••••••••'}
-          </Text>
+          <View style={styles.balanceWrap}>
+            <AppText style={styles.balanceAmount}>
+              {balanceVisible
+                ? formatNpr(dashboard?.wallet.balance_formatted, dashboard?.wallet.balance_minor)
+                : '••••••••'}
+            </AppText>
+            <AppText style={styles.balanceCurrencyTag}>NPR • Contactless Transit</AppText>
+          </View>
 
-          <View style={styles.walletActions}>
+          {/* Quick Actions */}
+          <View style={styles.walletActionRow}>
             <Pressable
-              onPress={() => router.push('/passenger/qr' as any)}
-              style={[styles.walletButton, { backgroundColor: Brand.teal.primary }]}
-            >
-              <SymbolView
-                name={{ ios: 'qrcode', android: 'qr_code', web: 'qr_code' }}
-                size={18}
-                tintColor={Brand.white}
-              />
-              <Text style={[styles.walletButtonTextSecondary, { fontWeight: '700' }]}>My QR Pass</Text>
-            </Pressable>
-
-            <Pressable
+              accessibilityRole="button"
               onPress={() => router.push('/(tabs)/wallet' as any)}
-              style={[styles.walletButton, styles.walletButtonPrimary]}
+              style={[styles.walletActionBtn, styles.walletActionPrimary]}
             >
               <SymbolView
                 name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }}
-                size={18}
-                tintColor={Brand.teal.text}
+                size={16}
+                tintColor={Monochrome.actionPrimaryText}
               />
-              <Text style={styles.walletButtonTextPrimary}>Add Money</Text>
+              <AppText style={styles.walletActionPrimaryText}>Add Money</AppText>
             </Pressable>
+
+            
 
             <Pressable
-              onPress={() => router.push('/(tabs)/cards' as any)}
-              style={[styles.walletButton, styles.walletButtonSecondary]}
+              accessibilityRole="button"
+              onPress={() => router.push('/(tabs)/wallet' as any)}
+              style={[styles.walletActionBtn, styles.walletActionSecondary]}
             >
               <SymbolView
-                name={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }}
-                size={18}
-                tintColor={Brand.white}
+                name={{ ios: 'list.bullet.rectangle.portrait.fill', android: 'receipt_long', web: 'receipt_long' }}
+                size={16}
+                tintColor={Monochrome.textPrimary}
               />
-              <Text style={styles.walletButtonTextSecondary}>Cards</Text>
+              <AppText style={styles.walletActionSecondaryText}>Ledger</AppText>
             </Pressable>
           </View>
         </View>
 
-        {/* Primary NFC Card Badge */}
-        {dashboard?.primary_card ? (
-          <View style={styles.primaryCardBox}>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardIconGroup}>
-                <SymbolView
-                  name={{ ios: 'wave.3.right.circle.fill', android: 'nfc', web: 'nfc' }}
-                  size={24}
-                  tintColor={Brand.teal.primary}
-                />
-                <View>
-                  <Text style={styles.cardTitle}>{dashboard.primary_card.label || 'Primary Travel Card'}</Text>
-                  <Text style={styles.cardSubtitle}>
-                    {dashboard.primary_card.last_four ? `•••• ${dashboard.primary_card.last_four}` : dashboard.primary_card.uid}
-                  </Text>
-                </View>
-              </View>
-              <View style={[
-                styles.statusPill,
-                dashboard.primary_card.status === 'active' ? styles.statusPillActive : styles.statusPillInactive,
-              ]}>
-                <Text style={styles.statusPillText}>{dashboard.primary_card.status.toUpperCase()}</Text>
-              </View>
-            </View>
-          </View>
-        ) : (
-          <Pressable onPress={() => router.push('/(tabs)/cards' as any)} style={styles.noCardBox}>
-            <SymbolView
-              name={{ ios: 'creditcard.and.123', android: 'add_card', web: 'add_card' }}
-              size={24}
-              tintColor={Brand.primary}
-            />
-            <View style={styles.noCardTextGroup}>
-              <Text style={styles.noCardTitle}>No NFC Card Registered</Text>
-              <Text style={styles.noCardSubtitle}>Tap to link an NFC card for instant bus boarding</Text>
-            </View>
-            <SymbolView
-              name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-              size={18}
-              tintColor={Brand.textSecondary}
-            />
-          </Pressable>
-        )}
-
-        {/* Quick Action Shortcuts Grid */}
-        <View style={styles.sectionTitleRow}>
-          <Text style={styles.sectionTitle}>Transit Services</Text>
-        </View>
-
-        <View style={styles.shortcutsGrid}>
-          <Pressable onPress={() => router.push('/passenger/qr' as any)} style={styles.shortcutItem}>
-            <View style={[styles.shortcutIcon, { backgroundColor: '#CCFBF1' }]}>
-              <SymbolView
-                name={{ ios: 'qrcode', android: 'qr_code', web: 'qr_code' }}
-                size={22}
-                tintColor={Brand.teal.primary}
-              />
-            </View>
-            <Text style={styles.shortcutLabel}>My QR</Text>
-          </Pressable>
-
-          <Pressable onPress={() => router.push('/passenger/pay' as any)} style={styles.shortcutItem}>
-            <View style={[styles.shortcutIcon, { backgroundColor: '#CCFBF1' }]}>
+        {/* Primary Payment Hero Action */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/passenger/pay' as any)}
+          style={styles.heroScanButton}
+        >
+          <View style={styles.heroScanLeft}>
+            <View style={styles.heroScanIconBox}>
               <SymbolView
                 name={{ ios: 'qrcode.viewfinder', android: 'qr_code_scanner', web: 'qr_code_scanner' }}
-                size={22}
-                tintColor={Brand.teal.primary}
+                size={24}
+                tintColor={Monochrome.textPrimary}
               />
             </View>
-            <Text style={styles.shortcutLabel}>Pay Bus Fare</Text>
-          </Pressable>
-
-          <Pressable onPress={() => router.push('/(tabs)/transit' as any)} style={styles.shortcutItem}>
-            <View style={[styles.shortcutIcon, { backgroundColor: '#E0F2FE' }]}>
-              <SymbolView
-                name={{ ios: 'bus.fill', android: 'directions_bus', web: 'directions_bus' }}
-                size={22}
-                tintColor="#0284C7"
-              />
-            </View>
-            <Text style={styles.shortcutLabel}>Bus Routes</Text>
-          </Pressable>
-
-          <Pressable onPress={() => router.push('/(tabs)/wallet' as any)} style={styles.shortcutItem}>
-            <View style={[styles.shortcutIcon, { backgroundColor: '#DCFCE7' }]}>
-              <SymbolView
-                name={{ ios: 'arrow.left.arrow.right', android: 'sync_alt', web: 'sync_alt' }}
-                size={22}
-                tintColor="#16A34A"
-              />
-            </View>
-            <Text style={styles.shortcutLabel}>Transactions</Text>
-          </Pressable>
-
-          <Pressable onPress={() => router.push('/travel' as any)} style={styles.shortcutItem}>
-            <View style={[styles.shortcutIcon, { backgroundColor: '#F3E8FF' }]}>
-              <SymbolView
-                name={{ ios: 'clock.fill', android: 'history', web: 'history' }}
-                size={22}
-                tintColor="#9333EA"
-              />
-            </View>
-            <Text style={styles.shortcutLabel}>Travel History</Text>
-          </Pressable>
-
-          <Pressable onPress={() => router.push('/(tabs)/cards' as any)} style={styles.shortcutItem}>
-            <View style={[styles.shortcutIcon, { backgroundColor: '#FEF3C7' }]}>
-              <SymbolView
-                name={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }}
-                size={22}
-                tintColor="#D97706"
-              />
-            </View>
-            <Text style={styles.shortcutLabel}>Cards</Text>
-          </Pressable>
-
-          <Pressable onPress={() => router.push('/passenger/tracking' as any)} style={styles.shortcutItem}>
-            <View style={[styles.shortcutIcon, { backgroundColor: '#DBEAFE' }]}>
-              <SymbolView
-                name={{ ios: 'map.fill', android: 'map', web: 'map' }}
-                size={22}
-                tintColor="#2563EB"
-              />
-            </View>
-            <Text style={styles.shortcutLabel}>Live Bus Tracking</Text>
-          </Pressable>
-        </View>
-
-        {/* Monthly Activity Stats */}
-        {dashboard?.stats && (
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statNumber}>{dashboard.stats.total_trips}</Text>
-              <Text style={styles.statLabel}>Trips Completed</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statBox}>
-              <Text style={styles.statNumber}>{dashboard.stats.monthly_spent_formatted || 'Rs. 0'}</Text>
-              <Text style={styles.statLabel}>Monthly Transit</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statBox}>
-              <Text style={styles.statNumber}>{dashboard.stats.active_cards_count}</Text>
-              <Text style={styles.statLabel}>Active Cards</Text>
+            <View style={styles.heroScanTextWrap}>
+              <AppText style={styles.heroScanTitle}>Scan Driver QR to Pay</AppText>
+              <AppText style={styles.heroScanSubtitle}>
+                Instant contactless transit fare payment
+              </AppText>
             </View>
           </View>
-        )}
+          <View style={styles.heroScanArrow}>
+            <SymbolView
+              name={{ ios: 'arrow.right', android: 'arrow_forward', web: 'arrow_forward' }}
+              size={16}
+              tintColor={Monochrome.textPrimary}
+            />
+          </View>
+        </Pressable>
 
-        {/* Recent Trips Section */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Journeys</Text>
-          <Pressable onPress={() => router.push('/travel' as any)}>
-            <Text style={styles.viewAllText}>View All</Text>
+        {/* Payment Actions Grid */}
+        <View style={styles.actionsGrid}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/passenger/qr' as any)}
+            style={styles.actionGridCard}
+          >
+            <View style={styles.actionIconBox}>
+              <SymbolView
+                name={{ ios: 'qrcode', android: 'qr_code', web: 'qr_code' }}
+                size={20}
+                tintColor={Monochrome.textPrimary}
+              />
+            </View>
+            <AppText style={styles.actionCardTitle}>My QR Pass</AppText>
+            <AppText style={styles.actionCardDesc}>Show to driver</AppText>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/(tabs)/wallet' as any)}
+            style={styles.actionGridCard}
+          >
+            <View style={styles.actionIconBox}>
+              <SymbolView
+                name={{ ios: 'creditcard.fill', android: 'payments', web: 'payments' }}
+                size={20}
+                tintColor={Monochrome.textPrimary}
+              />
+            </View>
+            <AppText style={styles.actionCardTitle}>Top Up</AppText>
+            <AppText style={styles.actionCardDesc}>eSewa / Khalti</AppText>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/travel' as any)}
+            style={styles.actionGridCard}
+          >
+            <View style={styles.actionIconBox}>
+              <SymbolView
+                name={{ ios: 'ticket.fill', android: 'confirmation_number', web: 'confirmation_number' }}
+                size={20}
+                tintColor={Monochrome.textPrimary}
+              />
+            </View>
+            <AppText style={styles.actionCardTitle}>My Tickets</AppText>
+            <AppText style={styles.actionCardDesc}>Trip receipts</AppText>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/(tabs)/cards' as any)}
+            style={styles.actionGridCard}
+          >
+            <View style={styles.actionIconBox}>
+              <SymbolView
+                name={{ ios: 'wave.3.right', android: 'nfc', web: 'nfc' }}
+                size={20}
+                tintColor={Monochrome.textPrimary}
+              />
+            </View>
+            <AppText style={styles.actionCardTitle}>Transit Cards</AppText>
+            <AppText style={styles.actionCardDesc}>Manage travel cards</AppText>
           </Pressable>
         </View>
 
-        {dashboard?.recent_trips && dashboard.recent_trips.length > 0 ? (
-          <View style={styles.listCard}>
-            {dashboard.recent_trips.slice(0, 4).map((trip: TravelRecord, index: number) => (
+        {/* Travel & Transit Section */}
+        <View style={styles.sectionHeader}>
+          <View>
+            <AppText style={styles.sectionTitle}>Transit Routes</AppText>
+            <AppText style={styles.sectionSubtitle}>Public transit network</AppText>
+          </View>
+          <Pressable onPress={() => router.push('/(tabs)/transit' as any)}>
+            <AppText style={styles.viewAllText}>View All ›</AppText>
+          </Pressable>
+        </View>
+
+        {routes.length > 0 ? (
+          <View style={styles.routesContainer}>
+            {routes.map((route) => (
               <Pressable
-                key={trip.travel_uid || trip.id}
-                onPress={() => router.push(`/travel/${trip.travel_uid}` as any)}
-                style={[styles.listItem, index > 0 && styles.listDivider]}
+                key={route.id}
+                onPress={() => router.push('/(tabs)/transit' as any)}
+                style={styles.routeItemCard}
               >
-                <View style={styles.tripIconBox}>
+                <View style={styles.routeIconBox}>
                   <SymbolView
                     name={{ ios: 'bus.fill', android: 'directions_bus', web: 'directions_bus' }}
-                    size={20}
-                    tintColor={Brand.primary}
+                    size={18}
+                    tintColor={Monochrome.textPrimary}
                   />
                 </View>
-                <View style={styles.itemInfo}>
-                  <Text style={styles.itemTitle}>{trip.route_name || 'Transit Route'}</Text>
-                  <Text style={styles.itemSubtitle}>
-                    {trip.boarding_stop && trip.exit_stop
-                      ? `${trip.boarding_stop} → ${trip.exit_stop}`
-                      : trip.bus_number ? `Bus: ${trip.bus_number}` : 'Public Bus'}
-                  </Text>
-                  <Text style={styles.itemTime}>{trip.boarded_at ? new Date(trip.boarded_at).toLocaleDateString() : 'Recent'}</Text>
+                <View style={styles.routeInfoWrap}>
+                  <View style={styles.routeCodeRow}>
+                    <AppText style={styles.routeCodeBadge}>{route.code || 'ROUTE'}</AppText>
+                    {Boolean(route.company_name) && (
+                      <AppText style={styles.routeCompanyText}>{route.company_name}</AppText>
+                    )}
+                  </View>
+                  <AppText style={styles.routeNameText}>{route.name}</AppText>
+                  <AppText style={styles.routeStopsText}>
+                    {route.origin_stop && route.destination_stop
+                      ? `${route.origin_stop} ⇄ ${route.destination_stop}`
+                      : 'Kathmandu Transit Route'}
+                  </AppText>
                 </View>
-                <View style={styles.itemRight}>
-                  <Text style={styles.fareText}>
-                    {trip.fare_formatted || `Rs. ${(trip.fare_minor / 100).toFixed(2)}`}
-                  </Text>
-                  <Text style={styles.statusCompleted}>Completed</Text>
-                </View>
+                <SymbolView
+                  name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                  size={14}
+                  tintColor={Monochrome.textMuted}
+                />
               </Pressable>
             ))}
+
+            <Pressable
+              onPress={() => router.push('/passenger/tracking' as any)}
+              style={styles.liveTrackingBanner}
+            >
+              <SymbolView
+                name={{ ios: 'location.north.line.fill', android: 'near_me', web: 'near_me' }}
+                size={16}
+                tintColor={Monochrome.textPrimary}
+              />
+              <AppText style={styles.liveTrackingText}>
+                Open Live GPS Bus Tracking Map
+              </AppText>
+            </Pressable>
           </View>
         ) : (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No recent bus journeys recorded</Text>
+            <AppText style={styles.emptyCardText}>No transit routes found nearby</AppText>
           </View>
         )}
 
-        {/* Recent Wallet Transactions */}
+        {/* Recent Activity */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Wallet Activity</Text>
-          <Pressable onPress={() => router.push('/(tabs)/wallet' as any)}>
-            <Text style={styles.viewAllText}>View Ledger</Text>
+          <AppText style={styles.sectionTitle}>Recent Activity</AppText>
+          <Pressable
+            onPress={() => {
+              if (activityTab === 'trips') router.push('/travel' as any);
+              else router.push('/(tabs)/wallet' as any);
+            }}
+          >
+            <AppText style={styles.viewAllText}>
+              {activityTab === 'trips' ? 'All Journeys ›' : 'Full Ledger ›'}
+            </AppText>
           </Pressable>
         </View>
 
-        {dashboard?.recent_transactions && dashboard.recent_transactions.length > 0 ? (
-          <View style={styles.listCard}>
-            {dashboard.recent_transactions.slice(0, 4).map((txn: WalletTransaction, index: number) => {
-              const isCredit = txn.direction === 'credit';
-              return (
+        {/* Segmented Filter */}
+        <View style={styles.segmentedControl}>
+          <Pressable
+            onPress={() => setActivityTab('trips')}
+            style={[styles.segmentBtn, activityTab === 'trips' && styles.segmentBtnActive]}
+          >
+            <AppText
+              style={[
+                styles.segmentText,
+                activityTab === 'trips' && styles.segmentTextActive,
+              ]}
+            >
+              Bus Trips
+            </AppText>
+          </Pressable>
+          <Pressable
+            onPress={() => setActivityTab('wallet')}
+            style={[styles.segmentBtn, activityTab === 'wallet' && styles.segmentBtnActive]}
+          >
+            <AppText
+              style={[
+                styles.segmentText,
+                activityTab === 'wallet' && styles.segmentTextActive,
+              ]}
+            >
+              Wallet Activity
+            </AppText>
+          </Pressable>
+        </View>
+
+        {/* Trips List */}
+        {activityTab === 'trips' && (
+          <View style={styles.activityCard}>
+            {dashboard?.recent_trips && dashboard.recent_trips.length > 0 ? (
+              dashboard.recent_trips.slice(0, 4).map((trip: TravelRecord, idx: number) => (
                 <Pressable
-                  key={txn.reference || txn.id}
-                  onPress={() => router.push(`/wallet/transaction/${txn.reference}` as any)}
-                  style={[styles.listItem, index > 0 && styles.listDivider]}
+                  key={trip.travel_uid || trip.id}
+                  onPress={() => router.push(`/travel/${trip.travel_uid}` as any)}
+                  style={[styles.activityRow, idx > 0 && styles.rowBorder]}
                 >
-                  <View style={[styles.tripIconBox, isCredit ? styles.iconBoxCredit : styles.iconBoxDebit]}>
+                  <View style={styles.activityIconBox}>
                     <SymbolView
-                      name={{
-                        ios: isCredit ? 'arrow.down.left' : 'arrow.up.right',
-                        android: isCredit ? 'arrow_downward' : 'arrow_upward',
-                        web: isCredit ? 'arrow_downward' : 'arrow_upward',
-                      }}
-                      size={18}
-                      tintColor={isCredit ? '#16A34A' : '#DC2626'}
+                      name={{ ios: 'bus.fill', android: 'directions_bus', web: 'directions_bus' }}
+                      size={16}
+                      tintColor={Monochrome.textPrimary}
                     />
                   </View>
-                  <View style={styles.itemInfo}>
-                    <Text style={styles.itemTitle}>{txn.description || txn.type}</Text>
-                    <Text style={styles.itemSubtitle}>{txn.reference}</Text>
+                  <View style={styles.activityInfo}>
+                    <AppText style={styles.activityTitle}>{trip.route_name || 'Bus Journey'}</AppText>
+                    <AppText style={styles.activitySub}>
+                      {trip.boarding_stop && trip.exit_stop
+                        ? `${trip.boarding_stop} → ${trip.exit_stop}`
+                        : trip.bus_number ? `Bus: ${trip.bus_number}` : 'Public Bus'}
+                    </AppText>
+                    <AppText style={styles.activityDate}>
+                      {trip.boarded_at ? new Date(trip.boarded_at).toLocaleDateString() : 'Recent'}
+                    </AppText>
                   </View>
-                  <View style={styles.itemRight}>
-                    <Text style={[styles.amountText, isCredit ? styles.amountCredit : styles.amountDebit]}>
-                      {isCredit ? '+' : '-'}Rs. {(txn.amount_minor / 100).toFixed(2)}
-                    </Text>
-                    <Text style={styles.txnStatus}>{txn.status}</Text>
+                  <View style={styles.activityRight}>
+                    <AppText style={styles.tripFareText}>
+                      {formatNpr(trip.fare_formatted, trip.fare_minor)}
+                    </AppText>
+                    <View style={styles.statusBadge}>
+                      <AppText style={styles.statusBadgeText}>Paid</AppText>
+                    </View>
                   </View>
                 </Pressable>
-              );
-            })}
+              ))
+            ) : (
+              <View style={styles.emptyListWrap}>
+                <SymbolView
+                  name={{ ios: 'ticket', android: 'confirmation_number', web: 'confirmation_number' }}
+                  size={28}
+                  tintColor={Monochrome.textMuted}
+                />
+                <AppText style={styles.emptyListText}>No recent bus trips recorded</AppText>
+                <AppText style={styles.emptyListSub}>Scan a driver QR to pay your next fare</AppText>
+              </View>
+            )}
           </View>
-        ) : (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No recent wallet transactions</Text>
+        )}
+
+        {/* Wallet Transactions List */}
+        {activityTab === 'wallet' && (
+          <View style={styles.activityCard}>
+            {dashboard?.recent_transactions && dashboard.recent_transactions.length > 0 ? (
+              dashboard.recent_transactions.slice(0, 4).map((txn: WalletTransaction, idx: number) => {
+                const isCredit = txn.direction === 'credit';
+                return (
+                  <Pressable
+                    key={txn.reference || txn.id}
+                    onPress={() => router.push(`/wallet/transaction/${txn.reference}` as any)}
+                    style={[styles.activityRow, idx > 0 && styles.rowBorder]}
+                  >
+                    <View style={styles.activityIconBox}>
+                      <SymbolView
+                        name={{
+                          ios: isCredit ? 'arrow.down.left' : 'arrow.up.right',
+                          android: isCredit ? 'arrow_downward' : 'arrow_upward',
+                          web: isCredit ? 'arrow_downward' : 'arrow_upward',
+                        }}
+                        size={16}
+                        tintColor={Monochrome.textPrimary}
+                      />
+                    </View>
+                    <View style={styles.activityInfo}>
+                      <AppText style={styles.activityTitle}>{txn.description || txn.type}</AppText>
+                      <AppText style={styles.activityRef}>{txn.reference}</AppText>
+                      <AppText style={styles.activityDate}>
+                        {txn.created_at ? new Date(txn.created_at).toLocaleDateString() : 'Recent'}
+                      </AppText>
+                    </View>
+                    <View style={styles.activityRight}>
+                      <AppText style={styles.walletAmountText}>
+                        {isCredit ? '+' : '-'}{formatNpr(undefined, txn.amount_minor)}
+                      </AppText>
+                      <View style={styles.statusBadge}>
+                        <AppText style={styles.statusBadgeText}>{txn.status}</AppText>
+                      </View>
+                    </View>
+                  </Pressable>
+                );
+              })
+            ) : (
+              <View style={styles.emptyListWrap}>
+                <SymbolView
+                  name={{ ios: 'creditcard', android: 'credit_card', web: 'credit_card' }}
+                  size={28}
+                  tintColor={Monochrome.textMuted}
+                />
+                <AppText style={styles.emptyListText}>No recent wallet transactions</AppText>
+                <AppText style={styles.emptyListSub}>Add money using eSewa or Khalti</AppText>
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
@@ -471,7 +607,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Monochrome.background,
   },
   header: {
     flexDirection: 'row',
@@ -479,399 +615,568 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfacePrimary,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Monochrome.border,
   },
-  userInfo: {
+  profileButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
+    gap: 12,
     flex: 1,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Brand.teal.primary,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    fontSize: 18,
+    color: Monochrome.textPrimary,
+    fontSize: 16,
     fontWeight: '700',
-    color: Brand.white,
   },
-  greeting: {
-    fontSize: 12,
-    color: Brand.textSecondary,
-    fontWeight: '500',
+  greetingWrap: {
+    flex: 1,
   },
-  userName: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Brand.text,
-  },
-  headerActions: {
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: 6,
   },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F1F5F9',
+  brandName: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: Monochrome.textPrimary,
+    letterSpacing: 1.2,
+  },
+  brandBadge: {
+    backgroundColor: Monochrome.surfaceElevated,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  brandBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: Monochrome.textSecondary,
+  },
+  userName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Monochrome.textPrimary,
+    marginTop: 2,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  unreadBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: Monochrome.actionPrimary,
+    borderRadius: 7,
+    minWidth: 14,
+    height: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  unreadBadgeText: {
+    color: Monochrome.actionPrimaryText,
+    fontSize: 8,
+    fontWeight: '800',
   },
   scrollContent: {
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
+    paddingTop: Spacing.four,
     gap: Spacing.four,
   },
   portalBanner: {
-    backgroundColor: Brand.primaryDark,
-    borderRadius: 14,
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: Monochrome.surfaceSecondary,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
   portalBannerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: 8,
+    flex: 1,
   },
   portalBannerText: {
-    color: Brand.white,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  loadingBox: {
-    padding: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  loadingText: {
+    color: Monochrome.textPrimary,
     fontSize: 13,
-    color: Brand.textSecondary,
+    fontWeight: '600',
   },
   errorBox: {
-    backgroundColor: '#FEE2E2',
-    borderRadius: 12,
-    padding: Spacing.three,
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  errorText: {
-    color: Brand.error,
-    fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  retryButton: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: 6,
-    backgroundColor: Brand.error,
-    borderRadius: 8,
-  },
-  retryText: {
-    color: Brand.white,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  walletCard: {
-    backgroundColor: '#0F172A',
-    borderRadius: 20,
-    padding: Spacing.four,
-    gap: Spacing.three,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  walletHeader: {
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    borderRadius: 14,
+    padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  errorTextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  errorText: {
+    color: Monochrome.textPrimary,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  retryButton: {
+    backgroundColor: Monochrome.surfaceElevated,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+  },
+  retryText: {
+    color: Monochrome.textPrimary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  loadingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 6,
+  },
+  loadingText: {
+    color: Monochrome.textSecondary,
+    fontSize: 13,
+  },
+  walletCard: {
+    backgroundColor: Monochrome.surfacePrimary,
+    borderRadius: 22,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+  },
+  walletTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   walletLabelGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: 6,
+  },
+  walletDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Monochrome.textPrimary,
   },
   walletLabel: {
     fontSize: 11,
-    letterSpacing: 1.2,
-    color: '#94A3B8',
     fontWeight: '700',
+    color: Monochrome.textSecondary,
+    letterSpacing: 1.1,
+  },
+  eyeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Monochrome.surfaceSecondary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+  },
+  eyeButtonText: {
+    color: Monochrome.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  balanceWrap: {
+    marginTop: 14,
+    marginBottom: 18,
   },
   balanceAmount: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '800',
-    color: Brand.white,
+    color: Monochrome.textPrimary,
     letterSpacing: -0.5,
-    marginVertical: Spacing.one,
   },
-  walletActions: {
+  balanceCurrencyTag: {
+    color: Monochrome.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 3,
+  },
+  walletActionRow: {
     flexDirection: 'row',
-    gap: Spacing.two,
-    marginTop: Spacing.one,
+    gap: 10,
   },
-  walletButton: {
+  walletActionBtn: {
     flex: 1,
+    height: 42,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.two,
-    paddingVertical: 12,
-    borderRadius: 12,
+    gap: 6,
   },
-  walletButtonPrimary: {
-    backgroundColor: Brand.teal.soft,
+  walletActionPrimary: {
+    backgroundColor: Monochrome.actionPrimary,
   },
-  walletButtonTextPrimary: {
-    color: Brand.teal.text,
-    fontSize: 14,
+  walletActionPrimaryText: {
+    color: Monochrome.actionPrimaryText,
+    fontSize: 13,
     fontWeight: '700',
   },
-  walletButtonSecondary: {
-    backgroundColor: '#1E293B',
+  walletActionSecondary: {
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
   },
-  walletButtonTextSecondary: {
-    color: Brand.white,
-    fontSize: 14,
+  walletActionSecondaryText: {
+    color: Monochrome.textPrimary,
+    fontSize: 13,
     fontWeight: '600',
   },
-  primaryCardBox: {
-    backgroundColor: Brand.white,
-    borderRadius: 16,
-    padding: Spacing.four,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  cardHeader: {
+  heroScanButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  cardIconGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Brand.text,
-  },
-  cardSubtitle: {
-    fontSize: 13,
-    color: Brand.textSecondary,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    marginTop: 2,
-  },
-  statusPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  statusPillActive: {
-    backgroundColor: '#DCFCE7',
-  },
-  statusPillInactive: {
-    backgroundColor: '#FEE2E2',
-  },
-  statusPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#166534',
-  },
-  noCardBox: {
-    backgroundColor: Brand.white,
-    borderRadius: 16,
-    padding: Spacing.four,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderStyle: 'dashed',
+    borderColor: Monochrome.borderLight,
   },
-  noCardTextGroup: {
+  heroScanLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
     flex: 1,
   },
-  noCardTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Brand.text,
+  heroScanIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  noCardSubtitle: {
+  heroScanTextWrap: {
+    flex: 1,
+  },
+  heroScanTitle: {
+    color: Monochrome.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  heroScanSubtitle: {
+    color: Monochrome.textSecondary,
     fontSize: 12,
-    color: Brand.textSecondary,
     marginTop: 2,
   },
-  sectionTitleRow: {
-    marginTop: Spacing.one,
+  heroScanArrow: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  actionGridCard: {
+    flex: 1,
+    minWidth: '47%',
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+  },
+  actionIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  actionCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Monochrome.textPrimary,
+  },
+  actionCardDesc: {
+    fontSize: 11,
+    color: Monochrome.textMuted,
+    marginTop: 2,
   },
   sectionHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
     marginTop: Spacing.two,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: Monochrome.textMuted,
+    marginTop: 2,
   },
   viewAllText: {
-    fontSize: 14,
-    color: Brand.primary,
+    fontSize: 13,
     fontWeight: '600',
+    color: Monochrome.textSecondary,
   },
-  shortcutsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  routesContainer: {
+    gap: 10,
   },
-  shortcutItem: {
-    alignItems: 'center',
-    gap: Spacing.one,
-    flex: 1,
-  },
-  shortcutIcon: {
-    width: 52,
-    height: 52,
+  routeItemCard: {
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+  },
+  routeIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shortcutLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Brand.text,
-    textAlign: 'center',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    backgroundColor: Brand.white,
-    borderRadius: 16,
-    paddingVertical: Spacing.three,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  statBox: {
+  routeInfoWrap: {
     flex: 1,
-    alignItems: 'center',
-    gap: 2,
   },
-  statNumber: {
-    fontSize: 17,
+  routeCodeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  routeCodeBadge: {
+    fontSize: 10,
     fontWeight: '700',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
+    backgroundColor: Monochrome.surfaceElevated,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  statLabel: {
+  routeCompanyText: {
     fontSize: 11,
-    color: Brand.textSecondary,
+    color: Monochrome.textMuted,
   },
-  statDivider: {
-    width: 1,
-    height: '60%',
-    backgroundColor: '#E2E8F0',
-  },
-  listCard: {
-    backgroundColor: Brand.white,
-    borderRadius: 16,
-    paddingHorizontal: Spacing.four,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.three,
-    gap: Spacing.three,
-  },
-  listDivider: {
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  tripIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#F0F9FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconBoxCredit: {
-    backgroundColor: '#DCFCE7',
-  },
-  iconBoxDebit: {
-    backgroundColor: '#FEE2E2',
-  },
-  itemInfo: {
-    flex: 1,
-  },
-  itemTitle: {
+  routeNameText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Brand.text,
+    color: Monochrome.textPrimary,
+    marginTop: 2,
   },
-  itemSubtitle: {
+  routeStopsText: {
     fontSize: 12,
-    color: Brand.textSecondary,
+    color: Monochrome.textSecondary,
     marginTop: 2,
   },
-  itemTime: {
-    fontSize: 11,
-    color: '#94A3B8',
-    marginTop: 2,
+  liveTrackingBanner: {
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
-  itemRight: {
-    alignItems: 'flex-end',
-  },
-  fareText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Brand.text,
-  },
-  statusCompleted: {
-    fontSize: 11,
-    color: '#16A34A',
+  liveTrackingText: {
+    color: Monochrome.textPrimary,
+    fontSize: 13,
     fontWeight: '600',
-    marginTop: 2,
-  },
-  amountText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  amountCredit: {
-    color: '#16A34A',
-  },
-  amountDebit: {
-    color: '#DC2626',
-  },
-  txnStatus: {
-    fontSize: 11,
-    color: '#94A3B8',
-    marginTop: 2,
-    textTransform: 'capitalize',
   },
   emptyCard: {
-    backgroundColor: Brand.white,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 16,
-    padding: Spacing.five,
+    padding: 20,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Monochrome.border,
   },
-  emptyText: {
+  emptyCardText: {
+    color: Monochrome.textMuted,
+    fontSize: 13,
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderRadius: 12,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9,
+  },
+  segmentBtnActive: {
+    backgroundColor: Monochrome.surfaceElevated,
+  },
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: Monochrome.textMuted,
+  },
+  segmentTextActive: {
+    color: Monochrome.textPrimary,
+    fontWeight: '700',
+  },
+  activityCard: {
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 12,
+  },
+  rowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: Monochrome.surfaceElevated,
+  },
+  activityIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityInfo: {
+    flex: 1,
+  },
+  activityTitle: {
     fontSize: 14,
-    color: Brand.textSecondary,
+    fontWeight: '600',
+    color: Monochrome.textPrimary,
+  },
+  activitySub: {
+    fontSize: 12,
+    color: Monochrome.textSecondary,
+    marginTop: 2,
+  },
+  activityRef: {
+    fontSize: 11,
+    color: Monochrome.textMuted,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginTop: 2,
+  },
+  activityDate: {
+    fontSize: 11,
+    color: Monochrome.textMuted,
+    marginTop: 2,
+  },
+  activityRight: {
+    alignItems: 'flex-end',
+  },
+  tripFareText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Monochrome.textPrimary,
+  },
+  statusBadge: {
+    backgroundColor: Monochrome.surfaceElevated,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginTop: 3,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Monochrome.textSecondary,
+    textTransform: 'capitalize',
+  },
+  walletAmountText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Monochrome.textPrimary,
+  },
+  emptyListWrap: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    gap: 6,
+  },
+  emptyListText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Monochrome.textPrimary,
+  },
+  emptyListSub: {
+    fontSize: 12,
+    color: Monochrome.textMuted,
   },
 });

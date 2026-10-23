@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
   circle: {
     position: 'absolute',
     borderRadius: 999,
-    backgroundColor: '#E8F4FE',
+    backgroundColor: Brand.surfaceSecondary,
   },
   circleLarge: {
     width: 240,
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   circleSmall: {
     width: 180,
     height: 180,
-    backgroundColor: '#D6EBFD',
+    backgroundColor: Brand.surfaceElevated,
   },
   tile: {
     width: 128,
@@ -73,6 +73,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Brand.primary,
-    experimental_backgroundImage: `linear-gradient(160deg, ${Brand.gradientStart}, ${Brand.gradientEnd})`,
   },
 });
