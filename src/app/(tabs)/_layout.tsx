@@ -42,9 +42,9 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="transit"
+        name="history"
         options={{
-          title: 'Explore',
+          title: 'History',
           tabBarIcon: ({ color }) => (
             <SymbolView
               name={{ ios: 'map.fill', android: 'map', web: 'map' }}
@@ -54,6 +54,7 @@ export default function TabsLayout() {
           ),
         }}
       />
+      <Tabs.Screen name="transit" options={{ href: null }} />
       <Tabs.Screen
         name="scan"
         options={{
@@ -72,10 +73,10 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="wallet"
         options={{
-          title: 'Activity',
+          title: 'Statements',
           tabBarIcon: ({ color }) => (
             <SymbolView
-              name={{ ios: 'clock.arrow.circlepath', android: 'history', web: 'history' }}
+              name={{ ios: 'doc.plaintext', android: 'history', web: 'history' }}
               size={20}
               tintColor={color}
             />

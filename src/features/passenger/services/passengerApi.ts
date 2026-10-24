@@ -70,6 +70,8 @@ export type CardSummary = {
   last_four?: string | null;
   masked_code?: string | null;
   is_usable?: boolean;
+  deactivated_at?: string | null;
+  lost_at?: string | null;
 };
 
 export type BlockCardPayload = {
@@ -284,10 +286,10 @@ export function getCard(cardId: number): Promise<ApiResult<{ card: CardSummary }
   return apiRequest<{ card: CardSummary }>(`/cards/${cardId}`);
 }
 
-export function registerCard(uid: string, label?: string): Promise<ApiResult<{ card: CardSummary }>> {
+export function issueCard(): Promise<ApiResult<{ card: CardSummary }>> {
   return apiRequest<{ card: CardSummary }>('/cards', {
     method: 'POST',
-    body: { uid, label },
+    body: { card_type: 'nfc' },
   });
 }
 
@@ -711,6 +713,31 @@ export type TransitFareTicket = {
   issued_at: string;
   status: string;
 };
+
+export type PassengerFeedback = {
+  id: number;
+  travel_uid: string;
+  rating: number;
+  comment: string | null;
+  submitted_at: string;
+};
+
+export function submitPassengerFeedback(
+  travelUid: string,
+  rating: number,
+  comment: string,
+  idempotencyKey: string,
+): Promise<ApiResult<{ feedback: PassengerFeedback }>> {
+  return apiRequest('/passenger/feedback', {
+    method: 'POST',
+    idempotencyKey,
+    body: {
+      travel_uid: travelUid,
+      rating,
+      comment: comment.trim() || null,
+    },
+  });
+}
 
 export function quoteTransitFare(
   qrPayload: string,

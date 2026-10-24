@@ -13,13 +13,12 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import * as Location from 'expo-location';
 
 import { Monochrome, Spacing } from '@/constants/theme';
 import {
-  getFareRules,
   getJourneyOptions,
   saveRecentJourneySearch,
   getPassengerFavorites,
@@ -38,20 +37,31 @@ import {
 import {
   getNearbyBuses,
   getNearbyStops,
-  getPublicCompanies,
   getServiceNotices,
   searchStops,
   type PublicNearbyBus,
   type PublicStop,
   type ServiceNoticeItem,
-  type TransportCompanyItem,
 } from '@/features/transit/services/transitApi';
+
+const LIVE_LOCATION_MAX_AGE_MS = 120_000;
+
+function isBusLocationFresh(lastSeenAt: string | null, status: string | null): boolean {
+  if (!lastSeenAt || status !== 'active') return false;
+  const timestamp = Date.parse(lastSeenAt);
+  return Number.isFinite(timestamp) && Date.now() - timestamp <= LIVE_LOCATION_MAX_AGE_MS;
+}
 
 export default function TransitScreen() {
   const insets = useSafeAreaInsets();
+  const { section, query } = useLocalSearchParams<{ section?: string; query?: string }>();
+  const initialSection = section === 'saved' ? 'saved' : 'routes';
+  const hasBusSearch = typeof query === 'string' && query.trim().length > 0;
 
-  const [activeSegment, setActiveSegment] = useState<'routes' | 'nearby' | 'companies' | 'fares'>('routes');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeSegment, setActiveSegment] = useState<'routes' | 'nearby' | 'saved'>(
+    hasBusSearch ? 'nearby' : initialSection,
+  );
+  const [searchQuery, setSearchQuery] = useState(typeof query === 'string' ? query : '');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -60,8 +70,7 @@ export default function TransitScreen() {
   const [nearbyStops, setNearbyStops] = useState<PublicStop[]>([]);
   const [nearbyBuses, setNearbyBuses] = useState<PublicNearbyBus[]>([]);
   const [nearbyLocationAvailable, setNearbyLocationAvailable] = useState(false);
-  const [companies, setCompanies] = useState<TransportCompanyItem[]>([]);
-  const [fareRules, setFareRules] = useState<Record<string, unknown>[]>([]);
+  const [nearbyError, setNearbyError] = useState<string | null>(null);
   const [serviceNotices, setServiceNotices] = useState<ServiceNoticeItem[]>([]);
   const [serviceNoticesError, setServiceNoticesError] = useState<string | null>(null);
   const [favoriteRouteIds, setFavoriteRouteIds] = useState<number[]>([]);
@@ -88,27 +97,49 @@ export default function TransitScreen() {
   const [loadingDepartures, setLoadingDepartures] = useState(false);
   const [departureError, setDepartureError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (typeof query !== 'string') return;
+    const frame = requestAnimationFrame(() => {
+      setSearchQuery(query);
+      setActiveSegment('nearby');
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [query]);
+
+  const filteredNearbyBuses = nearbyBuses.filter((bus) => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    if (!normalizedQuery) return true;
+    return [
+      bus.bus_number,
+      bus.route.name,
+      bus.route.destination,
+      bus.company.name,
+    ].some((value) => value?.toLowerCase().includes(normalizedQuery));
+  });
+
   const loadTransitData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
     try {
       let location: Location.LocationObject | null = null;
+      let locationError: string | null = null;
       try {
         const permission = await Location.requestForegroundPermissionsAsync();
         if (permission.status === 'granted') {
           location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.Balanced,
           });
+        } else {
+          locationError = 'Location permission is needed to show nearby buses and stops.';
         }
-      } catch {
+      } catch (error) {
+        locationError = error instanceof Error ? error.message : 'Unable to access your location.';
         location = null;
       }
 
-      const [routesRes, compsRes, faresRes, favoritesRes, noticesRes, recentSearchesRes] = await Promise.all([
+      const [routesRes, favoritesRes, noticesRes, recentSearchesRes] = await Promise.all([
         getRoutes(),
-        getPublicCompanies(),
-        getFareRules(),
         getPassengerFavorites(),
         getServiceNotices(),
         getRecentJourneySearches(),
@@ -133,8 +164,15 @@ export default function TransitScreen() {
         setNearbyBuses([]);
       }
       setNearbyLocationAvailable(location !== null);
-      if (compsRes.ok && compsRes.data) setCompanies(compsRes.data.companies || []);
-      if (faresRes.ok && faresRes.data) setFareRules(faresRes.data.fare_rules || []);
+      setNearbyError(
+        !location
+          ? locationError
+          : !busesRes?.ok
+            ? busesRes?.message || 'Nearby buses could not be retrieved.'
+            : !stopsRes?.ok
+              ? stopsRes?.message || 'Nearby stops could not be retrieved.'
+              : null,
+      );
       if (noticesRes.ok && noticesRes.data) {
         setServiceNotices(noticesRes.data.notices);
         setServiceNoticesError(null);
@@ -147,8 +185,8 @@ export default function TransitScreen() {
       } else if (!recentSearchesRes.ok) {
         setRecentSearchError(recentSearchesRes.message || 'Could not load recent journey searches.');
       }
-    } catch {
-      // Ignored
+    } catch (error) {
+      setNearbyError(error instanceof Error ? error.message : 'Nearby transit data could not be retrieved.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -227,7 +265,7 @@ export default function TransitScreen() {
   };
 
   const filteredRoutes = routes.filter((r) => {
-    if (showFavoritesOnly && !favoriteRouteIds.includes(r.id)) return false;
+    if ((showFavoritesOnly || activeSegment === 'saved') && !favoriteRouteIds.includes(r.id)) return false;
     const q = searchQuery.toLowerCase().trim();
     if (!q) return true;
     return (
@@ -322,19 +360,13 @@ export default function TransitScreen() {
     });
   };
 
-  const filteredCompanies = companies.filter((c) => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return true;
-    return c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q);
-  });
-
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
 
       {/* Header */}
       <View style={styles.header}>
-        <AppText style={styles.headerTitle}>Transit &amp; Routes</AppText>
+        <AppText style={styles.headerTitle}>Explore Transit</AppText>
       </View>
 
       {/* Search Bar */}
@@ -346,7 +378,7 @@ export default function TransitScreen() {
         />
         <AppTextInput
           style={styles.searchInput}
-          placeholder="Search routes, bus stops, companies..."
+          placeholder="Search routes and bus stops..."
           placeholderTextColor={Monochrome.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -381,19 +413,14 @@ export default function TransitScreen() {
           </AppText>
         </Pressable>
         <Pressable
-          onPress={() => setActiveSegment('companies')}
-          style={[styles.segmentBtn, activeSegment === 'companies' && styles.segmentBtnActive]}
+          onPress={() => {
+            setShowFavoritesOnly(false);
+            setActiveSegment('saved');
+          }}
+          style={[styles.segmentBtn, activeSegment === 'saved' && styles.segmentBtnActive]}
         >
-          <AppText style={[styles.segmentText, activeSegment === 'companies' && styles.segmentTextActive]}>
-            Fleets
-          </AppText>
-        </Pressable>
-        <Pressable
-          onPress={() => setActiveSegment('fares')}
-          style={[styles.segmentBtn, activeSegment === 'fares' && styles.segmentBtnActive]}
-        >
-          <AppText style={[styles.segmentText, activeSegment === 'fares' && styles.segmentTextActive]}>
-            Fare Rules
+          <AppText style={[styles.segmentText, activeSegment === 'saved' && styles.segmentTextActive]}>
+            Saved Routes
           </AppText>
         </Pressable>
       </View>
@@ -409,6 +436,25 @@ export default function TransitScreen() {
           />
         }
       >
+        <View style={styles.exploreQuickActions}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/passenger/tracking' as any)}
+            style={styles.trackingButton}
+          >
+            <SymbolView name={{ ios: 'location.north.line.fill', android: 'near_me', web: 'near_me' }} size={16} tintColor={Monochrome.actionPrimaryText} />
+            <AppText style={styles.trackingButtonText}>Live Bus Tracking</AppText>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/travel' as any)}
+            style={styles.travelHistoryButton}
+          >
+            <SymbolView name={{ ios: 'clock.arrow.circlepath', android: 'history', web: 'history' }} size={16} tintColor={Monochrome.textPrimary} />
+            <AppText style={styles.travelHistoryButtonText}>Travel History</AppText>
+          </Pressable>
+        </View>
+
         {/* ROUTES TAB */}
         {activeSegment === 'routes' && (
           <View style={styles.sectionContainer}>
@@ -432,18 +478,6 @@ export default function TransitScreen() {
                 ))}
               </View>
             )}
-            <Pressable
-              onPress={() => router.push('/passenger/tracking' as any)}
-              style={styles.trackingButton}
-            >
-              <SymbolView
-                name={{ ios: 'map.fill', android: 'map', web: 'map' }}
-                size={16}
-                tintColor={Monochrome.actionPrimaryText}
-              />
-              <AppText style={styles.trackingButtonText}>Open Live Bus GPS Tracking</AppText>
-            </Pressable>
-
             <View style={styles.plannerCard}>
               <AppText style={styles.plannerTitle}>Plan a journey</AppText>
               <View style={styles.plannerSearchRow}>
@@ -661,6 +695,17 @@ export default function TransitScreen() {
         {/* NEARBY TAB */}
         {activeSegment === 'nearby' && (
           <View style={styles.sectionContainer}>
+            {loading && !refreshing ? (
+              <View style={styles.loadingBox}>
+                <ActivityIndicator size="small" color={Monochrome.textPrimary} />
+                <AppText style={styles.loadingText}>Finding nearby buses and stops...</AppText>
+              </View>
+            ) : null}
+            {nearbyError ? (
+              <View style={styles.emptyCard}>
+                <AppText style={styles.emptyText}>{nearbyError}</AppText>
+              </View>
+            ) : null}
             {favoriteStops.length > 0 && (
               <View style={styles.nearbyGroup}>
                 <AppText style={styles.subHeading}>Saved Stops</AppText>
@@ -710,11 +755,13 @@ export default function TransitScreen() {
               </View>
             )}
 
-            {nearbyBuses.length > 0 && (
+            {filteredNearbyBuses.length > 0 && (
               <View style={styles.nearbyGroup}>
-                <AppText style={styles.subHeading}>Nearby Active Buses</AppText>
+                <AppText style={styles.subHeading}>
+                  {searchQuery.trim() ? 'Bus Search Results' : 'Nearby Active Buses'}
+                </AppText>
                 <View style={styles.cardList}>
-                  {nearbyBuses.map((bus, idx) => (
+                  {filteredNearbyBuses.map((bus, idx) => (
                     <View key={bus.bus_id} style={[styles.busRow, idx > 0 && styles.rowDivider]}>
                       <View style={styles.busIconBox}>
                         <SymbolView
@@ -726,13 +773,16 @@ export default function TransitScreen() {
                       <View style={styles.busInfo}>
                         <AppText style={styles.busNumber}>{bus.bus_number}</AppText>
                         <AppText style={styles.busRouteName}>{bus.route.name || 'Active Line'}</AppText>
-                        <AppText style={styles.busCompany}>{bus.company.name || 'Fleet'}</AppText>
+                        <AppText style={styles.busCompany}>{bus.company.name || 'Operator unavailable'}</AppText>
+                        {typeof bus.distance_km === 'number' ? (
+                          <AppText style={styles.busCompany}>{bus.distance_km.toFixed(1)} km away</AppText>
+                        ) : null}
                       </View>
                       <View style={styles.busLiveRight}>
                         <View style={styles.liveIndicator}>
-                          <View style={[styles.liveDot, bus.status !== 'active' && styles.staleDot]} />
-                          <AppText style={[styles.liveText, bus.status !== 'active' && styles.staleText]}>
-                            {bus.status === 'active' ? 'Live' : 'Offline'}
+                          <View style={[styles.liveDot, !isBusLocationFresh(bus.last_seen_at, bus.status) && styles.staleDot]} />
+                          <AppText style={[styles.liveText, !isBusLocationFresh(bus.last_seen_at, bus.status) && styles.staleText]}>
+                            {isBusLocationFresh(bus.last_seen_at, bus.status) ? 'Live' : 'Location stale'}
                           </AppText>
                         </View>
                       </View>
@@ -780,101 +830,79 @@ export default function TransitScreen() {
               </View>
             )}
 
-            {nearbyLocationAvailable && nearbyBuses.length === 0 && nearbyStops.length === 0 && (
+            {nearbyLocationAvailable && !nearbyError && !loading && nearbyBuses.length === 0 && nearbyStops.length === 0 && (
               <View style={styles.emptyCard}>
-                <AppText style={styles.emptyText}>No active buses or stops within 3km of your location</AppText>
+                <AppText style={styles.emptyText}>
+                  {searchQuery.trim()
+                    ? `No nearby buses match “${searchQuery.trim()}”.`
+                    : 'No buses or stops were found within the nearby search area.'}
+                </AppText>
+              </View>
+            )}
+            {searchQuery.trim() && nearbyLocationAvailable && !nearbyError && !loading && filteredNearbyBuses.length === 0 && (nearbyBuses.length > 0 || nearbyStops.length > 0) && (
+              <View style={styles.emptyCard}>
+                <AppText style={styles.emptyText}>No nearby buses match “{searchQuery.trim()}”.</AppText>
               </View>
             )}
           </View>
         )}
 
-        {/* FLEETS / COMPANIES TAB */}
-        {activeSegment === 'companies' && (
+        {activeSegment === 'saved' && (
           <View style={styles.sectionContainer}>
             {loading && !refreshing ? (
               <View style={styles.loadingBox}>
                 <ActivityIndicator size="small" color={Monochrome.textPrimary} />
-                <AppText style={styles.loadingText}>Loading fleet operators...</AppText>
+                <AppText style={styles.loadingText}>Loading your saved routes...</AppText>
               </View>
-            ) : filteredCompanies.length > 0 ? (
-              filteredCompanies.map((comp) => (
-                <View key={comp.id} style={styles.companyCard}>
-                  <View style={styles.compHeader}>
-                    <View style={styles.compIcon}>
-                      <SymbolView
-                        name={{ ios: 'building.2.fill', android: 'business', web: 'business' }}
-                        size={18}
-                        tintColor={Monochrome.textPrimary}
-                      />
-                    </View>
-                    <View style={styles.compInfo}>
-                      <AppText style={styles.compName}>{comp.name}</AppText>
-                      <AppText style={styles.compCode}>Code: {comp.code}</AppText>
-                    </View>
-                    <View
-                      style={[
-                        styles.statusTag,
-                        comp.status === 'active' ? styles.statusActive : styles.statusInactive,
-                      ]}
+            ) : filteredRoutes.length > 0 ? (
+              filteredRoutes.map((route) => (
+                <View key={route.id} style={styles.routeCard}>
+                  <View style={styles.routeCardTop}>
+                    <Pressable
+                      onPress={() => void handleOpenRouteDetails(route)}
+                      style={styles.routeOpenButton}
+                      accessibilityRole="button"
+                      accessibilityLabel={`View ${route.name} route details`}
                     >
-                      <AppText style={styles.statusTagText}>
-                        {comp.status === 'active' ? 'Active' : comp.status}
+                      <View style={styles.routeCodeBadge}>
+                        <AppText style={styles.routeCodeText}>{route.code}</AppText>
+                      </View>
+                      <View style={styles.routeTitleGroup}>
+                        <AppText style={styles.routeName}>{route.name}</AppText>
+                        <AppText style={styles.routeCompany}>{route.company_name || 'Public Transit'}</AppText>
+                      </View>
+                      <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} size={14} tintColor={Monochrome.textMuted} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => void toggleRouteFavorite(route.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${route.name} from saved routes`}
+                      hitSlop={8}
+                      style={styles.favoriteButton}
+                    >
+                      <SymbolView name={{ ios: 'star.fill', android: 'star', web: 'star' }} size={18} tintColor={Monochrome.textPrimary} />
+                    </Pressable>
+                  </View>
+                  <Pressable onPress={() => void handleOpenRouteDetails(route)}>
+                    <View style={styles.routeMetricsRow}>
+                      <AppText style={styles.metricText} numberOfLines={1}>
+                        {route.origin_stop && route.destination_stop
+                          ? `${route.origin_stop} → ${route.destination_stop}`
+                          : 'Public Bus Route'}
                       </AppText>
                     </View>
-                  </View>
-
-                  <View style={styles.compDetails}>
-                    {comp.phone ? (
-                      <View style={styles.compRow}>
-                        <SymbolView
-                          name={{ ios: 'phone.fill', android: 'call', web: 'call' }}
-                          size={12}
-                          tintColor={Monochrome.textMuted}
-                        />
-                        <AppText style={styles.compDetailText}>{comp.phone}</AppText>
-                      </View>
-                    ) : null}
-                    {comp.email ? (
-                      <View style={styles.compRow}>
-                        <SymbolView
-                          name={{ ios: 'envelope.fill', android: 'mail', web: 'mail' }}
-                          size={12}
-                          tintColor={Monochrome.textMuted}
-                        />
-                        <AppText style={styles.compDetailText}>{comp.email}</AppText>
-                      </View>
-                    ) : null}
-                  </View>
+                  </Pressable>
                 </View>
               ))
             ) : (
               <View style={styles.emptyCard}>
-                <AppText style={styles.emptyText}>No transport operators found</AppText>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* FARE RULES TAB */}
-        {activeSegment === 'fares' && (
-          <View style={styles.sectionContainer}>
-            {fareRules.length > 0 ? (
-              fareRules.map((rule: any) => (
-                <View key={rule.id} style={styles.fareCard}>
-                  <View style={styles.fareHeader}>
-                    <AppText style={styles.fareTitle}>{rule.name || 'Standard Transit Fare'}</AppText>
-                    <View style={styles.farePill}>
-                      <AppText style={styles.farePillText}>{rule.type || 'Flat / Zone'}</AppText>
-                    </View>
-                  </View>
-                  <AppText style={styles.fareDesc}>
-                    {rule.description || 'Applicable to passenger tap-in and tap-out validation.'}
-                  </AppText>
-                </View>
-              ))
-            ) : (
-              <View style={styles.emptyCard}>
-                <AppText style={styles.emptyText}>Standard government rate cards apply</AppText>
+                <AppText style={styles.emptyTitle}>No Saved Routes</AppText>
+                <AppText style={styles.emptyText}>
+                  Save a route from the Routes section to find it here later.
+                </AppText>
+                <Pressable onPress={() => setActiveSegment('routes')} style={styles.plannerSearchButton}>
+                  <AppText style={styles.plannerSearchButtonText}>Explore routes</AppText>
+                </Pressable>
               </View>
             )}
           </View>
@@ -1031,6 +1059,26 @@ const styles = StyleSheet.create({
   },
   segmentTextActive: {
     color: Monochrome.textPrimary,
+    fontWeight: '700',
+  },
+  exploreQuickActions: {
+    gap: Spacing.two,
+  },
+  travelHistoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderColor: Monochrome.border,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.three,
+    gap: 8,
+  },
+  travelHistoryButtonText: {
+    color: Monochrome.textPrimary,
+    fontSize: 14,
     fontWeight: '700',
   },
   scrollContent: {

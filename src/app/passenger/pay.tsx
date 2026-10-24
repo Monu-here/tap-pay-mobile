@@ -2,7 +2,7 @@ import { AppText, AppTextInput } from '@/components/typography/app-text';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -26,6 +26,7 @@ import {
   type TransitFareQuote,
   type TransitFareTicket,
 } from '@/features/passenger/services/passengerApi';
+import { isConfirmedTransitFare } from '@/features/passenger/services/transitFeedback';
 import { createIdempotencyKey } from '@/features/auth/services/apiClient';
 
 export default function PassengerPayScreen() {
@@ -47,6 +48,28 @@ export default function PassengerPayScreen() {
 
   const lastScannedTimeRef = useRef<number>(0);
   const isScanningRef = useRef<boolean>(false);
+  const feedbackNavigationHandledRef = useRef(false);
+
+  const openFeedback = useCallback(() => {
+    if (!ticket || feedbackNavigationHandledRef.current) return;
+    feedbackNavigationHandledRef.current = true;
+    router.replace({
+      pathname: '/passenger/feedback/[travelUid]',
+      params: {
+        travelUid: ticket.travel_uid,
+        busNumber: ticket.bus_number,
+        routeName: ticket.route_name,
+        fare: ticket.fare_formatted,
+        ticketNumber: ticket.ticket_number,
+      },
+    } as never);
+  }, [ticket]);
+
+  useEffect(() => {
+    if (!ticket) return;
+    const timeout = setTimeout(openFeedback, 2500);
+    return () => clearTimeout(timeout);
+  }, [ticket, openFeedback]);
 
   const insufficientBalance =
     quote !== null && quote.wallet.balance_minor < quote.fare.amount_minor;
@@ -128,7 +151,7 @@ export default function PassengerPayScreen() {
         return;
       }
       const result = await payTransitFare(qrPayload, mpinInput, quote.driver.id, idempotencyKey);
-      if (result.ok && result.data?.ticket) {
+      if (result.ok && isConfirmedTransitFare(result.data?.ticket)) {
         setTicket(result.data.ticket);
         setMpinModalVisible(false);
         setMpinInput('');
@@ -145,6 +168,7 @@ export default function PassengerPayScreen() {
   };
 
   const reset = () => {
+    feedbackNavigationHandledRef.current = false;
     lastScannedTimeRef.current = 0;
     isScanningRef.current = false;
     setQrPayload(null);
@@ -498,10 +522,20 @@ export default function PassengerPayScreen() {
             </View>
 
             <Pressable
-              onPress={() => router.replace('/travel' as never)}
+              onPress={openFeedback}
               style={styles.primaryButton}
             >
-              <AppText style={styles.primaryText}>View Travel History</AppText>
+              <AppText style={styles.primaryText}>Rate Your Ride</AppText>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                feedbackNavigationHandledRef.current = true;
+                router.replace('/travel' as never);
+              }}
+              style={styles.secondaryButton}
+            >
+              <AppText style={styles.secondaryText}>View Travel History</AppText>
             </Pressable>
 
             <Pressable onPress={reset} style={styles.secondaryButton}>

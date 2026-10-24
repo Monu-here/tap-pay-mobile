@@ -217,6 +217,10 @@ export default function AdminPortalScreen() {
   const [compEmail, setCompEmail] = useState('');
   const [compPhone, setCompPhone] = useState('');
   const [compAddress, setCompAddress] = useState('');
+  const [initialAdminName, setInitialAdminName] = useState('');
+  const [initialAdminEmail, setInitialAdminEmail] = useState('');
+  const [initialAdminPassword, setInitialAdminPassword] = useState('');
+  const [initialAdminPasswordConfirm, setInitialAdminPasswordConfirm] = useState('');
   const [creatingComp, setCreatingComp] = useState(false);
   const [companyDetail, setCompanyDetail] = useState<PlatformCompany | null>(null);
   const [companyStaff, setCompanyStaff] = useState<CompanyStaffMembership[]>([]);
@@ -448,6 +452,18 @@ export default function AdminPortalScreen() {
       Alert.alert('Validation', 'Please fill in company name, code, registration number, email and phone.');
       return;
     }
+    if (!initialAdminName.trim() || !initialAdminEmail.trim() || !initialAdminPassword || !initialAdminPasswordConfirm) {
+      Alert.alert('Validation', 'Create the first company admin with a name, email, and password.');
+      return;
+    }
+    if (initialAdminPassword !== initialAdminPasswordConfirm) {
+      Alert.alert('Validation', 'The initial admin passwords do not match.');
+      return;
+    }
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{10,}$/.test(initialAdminPassword)) {
+      Alert.alert('Validation', 'Use a 10+ character password with uppercase, lowercase, number and symbol.');
+      return;
+    }
 
     setCreatingComp(true);
     try {
@@ -458,6 +474,12 @@ export default function AdminPortalScreen() {
         email: compEmail.trim(),
         phone: compPhone.trim(),
         address: compAddress.trim() || undefined,
+        initial_admin: {
+          name: initialAdminName.trim(),
+          email: initialAdminEmail.trim(),
+          password: initialAdminPassword,
+          password_confirmation: initialAdminPasswordConfirm,
+        },
       });
 
       if (res.ok) {
@@ -467,6 +489,10 @@ export default function AdminPortalScreen() {
         setCompEmail('');
         setCompPhone('');
         setCompAddress('');
+        setInitialAdminName('');
+        setInitialAdminEmail('');
+        setInitialAdminPassword('');
+        setInitialAdminPasswordConfirm('');
         setCompanyModalVisible(false);
         await loadAdminData(true);
       } else {
@@ -614,7 +640,8 @@ export default function AdminPortalScreen() {
     JSON.stringify(settings) !== JSON.stringify(settingsDraft));
   const hasUnsavedCompanyDraft = Boolean(
     compName.trim() || compCode.trim() || compRegistration.trim() ||
-    compEmail.trim() || compPhone.trim() || compAddress.trim(),
+    compEmail.trim() || compPhone.trim() || compAddress.trim() ||
+    initialAdminName.trim() || initialAdminEmail.trim() || initialAdminPassword || initialAdminPasswordConfirm,
   );
   const hasUnsavedStaffDraft = Boolean(
     staffName.trim() || staffEmail.trim() || staffPhone.trim() || staffPassword,
@@ -627,6 +654,10 @@ export default function AdminPortalScreen() {
     setCompEmail('');
     setCompPhone('');
     setCompAddress('');
+    setInitialAdminName('');
+    setInitialAdminEmail('');
+    setInitialAdminPassword('');
+    setInitialAdminPasswordConfirm('');
   }, []);
   const closeCompanyModal = useCallback(() => {
     if (creatingComp) return;
@@ -2051,6 +2082,43 @@ export default function AdminPortalScreen() {
                 onChangeText={setCompAddress}
                 placeholder="Headquarters Address"
                 placeholderTextColor={Brand.textSecondary}
+              />
+
+              <AppText style={[styles.sectionTitle, { marginTop: Spacing.two, marginBottom: Spacing.one }]}>Initial Company Admin</AppText>
+              <AppText style={styles.compSub}>This creates the first login account for the company and gives them Company Admin access.</AppText>
+              <AppTextInput
+                style={styles.modalInput}
+                value={initialAdminName}
+                onChangeText={setInitialAdminName}
+                placeholder="Admin full name"
+                placeholderTextColor={Brand.textSecondary}
+              />
+              <AppTextInput
+                style={styles.modalInput}
+                value={initialAdminEmail}
+                onChangeText={setInitialAdminEmail}
+                placeholder="Admin email"
+                placeholderTextColor={Brand.textSecondary}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <AppTextInput
+                style={styles.modalInput}
+                value={initialAdminPassword}
+                onChangeText={setInitialAdminPassword}
+                placeholder="Admin password (10+ chars)"
+                placeholderTextColor={Brand.textSecondary}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+              <AppTextInput
+                style={styles.modalInput}
+                value={initialAdminPasswordConfirm}
+                onChangeText={setInitialAdminPasswordConfirm}
+                placeholder="Confirm admin password"
+                placeholderTextColor={Brand.textSecondary}
+                secureTextEntry
+                autoCapitalize="none"
               />
 
               <PrimaryButton

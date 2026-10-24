@@ -116,12 +116,12 @@ export default function TravelDetailScreen() {
               </View>
 
               <View style={styles.row}>
-                <AppText style={styles.label}>Boarding Stop</AppText>
+                <AppText style={styles.label}>From</AppText>
                 <AppText style={styles.value}>{record.boarding_stop?.name || record.boarding_stop || 'Stop Origin'}</AppText>
               </View>
 
               <View style={styles.row}>
-                <AppText style={styles.label}>Exit Stop</AppText>
+                <AppText style={styles.label}>To</AppText>
                 <AppText style={styles.value}>{record.exit_stop?.name || record.exit_stop || 'Stop Destination'}</AppText>
               </View>
 

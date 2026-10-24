@@ -517,11 +517,22 @@ export function createPlatformCompany(data: {
   email: string;
   phone: string;
   address?: string;
+  initial_admin?: {
+    name: string;
+    email: string;
+    password: string;
+    password_confirmation: string;
+  };
 }): Promise<ApiResult<{ company: PlatformCompany }>> {
-  const { email, phone, ...company } = data;
+  const { email, phone, initial_admin, ...company } = data;
   return apiRequest('/platform/companies', {
     method: 'POST',
-    body: { ...company, contact_email: email, contact_phone: phone },
+    body: {
+      ...company,
+      contact_email: email,
+      contact_phone: phone,
+      ...(initial_admin ? { initial_admin } : {}),
+    },
   });
 }
 

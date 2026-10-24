@@ -1,17 +1,21 @@
-import {AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppText, AppTextInput } from '@/components/typography/app-text';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   RefreshControl,
   ScrollView,
+  type StyleProp,
   StyleSheet,
+  useWindowDimensions,
   View,
+  type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
@@ -23,7 +27,7 @@ import {
   blockCard,
   deactivateCard,
   getCards,
-  registerCard,
+  issueCard,
   reportLostCard,
   type BlockCardPayload,
   type CardSummary,
@@ -44,6 +48,21 @@ const BLOCK_REASONS: ReasonOption[] = [
   { code: 'other', label: 'Other Reason', desc: 'Specify your own reason' },
 ];
 
+// NFC card colors are fixed so the card always looks like a physical card.
+const CARD = {
+  active: '#0B0B0C',
+  inactive: '#3F3F46',
+  blocked: '#18181B',
+  ring: 'rgba(255,255,255,0.07)',
+  textPrimary: '#FFFFFF',
+  textSecondary: 'rgba(255,255,255,0.62)',
+  textMuted: 'rgba(255,255,255,0.4)',
+  chip: '#D4D4D8',
+  chipBlocked: '#71717A',
+  chipLine: 'rgba(0,0,0,0.28)',
+  pill: 'rgba(255,255,255,0.14)',
+};
+
 function getReasonLabel(code?: string | null, fallbackReason?: string | null): string {
   if (!code && !fallbackReason) return 'Temporarily Blocked';
   const found = BLOCK_REASONS.find((r) => r.code === code);
@@ -52,18 +71,206 @@ function getReasonLabel(code?: string | null, fallbackReason?: string | null): s
   return code ? code.replace(/_/g, ' ').toUpperCase() : 'Blocked';
 }
 
+/* ------------------------------------------------------------------ */
+/* Keyboard-safe bottom sheet                                          */
+/* The body scrolls, the footer is pinned above the keyboard.          */
+/* ------------------------------------------------------------------ */
+type BottomSheetProps = {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  subtitle?: string;
+  busy?: boolean;
+  footer?: ReactNode;
+  children: ReactNode;
+};
+
+function BottomSheet({
+  visible,
+  onClose,
+  title,
+  subtitle,
+  busy = false,
+  footer,
+  children,
+}: BottomSheetProps) {
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+
+  const closeIfIdle = () => {
+    if (!busy) onClose();
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      statusBarTranslucent
+      onRequestClose={closeIfIdle}
+    >
+      <KeyboardAvoidingView
+        style={styles.sheetRoot}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <Pressable style={StyleSheet.absoluteFill} onPress={closeIfIdle}>
+          <View style={styles.backdrop} />
+        </Pressable>
+
+        <View
+          style={[
+            styles.sheet,
+            { maxHeight: height * 0.9, paddingBottom: Math.max(insets.bottom, 16) },
+          ]}
+        >
+          <View style={styles.sheetHandle} />
+
+          <View style={styles.modalHeader}>
+            <View style={styles.modalHeaderText}>
+              <AppText style={styles.modalTitle}>{title}</AppText>
+              {Boolean(subtitle) && (
+                <AppText style={styles.modalSubtitle} numberOfLines={1}>
+                  {subtitle}
+                </AppText>
+              )}
+            </View>
+            <Pressable disabled={busy} onPress={closeIfIdle} hitSlop={10}>
+              <SymbolView
+                name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
+                size={24}
+                tintColor={Monochrome.textMuted}
+              />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            style={styles.sheetScroll}
+            contentContainerStyle={styles.sheetScrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {children}
+          </ScrollView>
+
+          {footer ? <View style={styles.sheetFooter}>{footer}</View> : null}
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* NFC card visual                                                     */
+/* ------------------------------------------------------------------ */
+type CardVisualProps = {
+  card: CardSummary;
+  serial: string;
+  isActive: boolean;
+  isBlocked: boolean;
+};
+
+function CardVisual({ card, serial, isActive, isBlocked }: CardVisualProps) {
+  const bg = isBlocked ? CARD.blocked : isActive ? CARD.active : CARD.inactive;
+  const dotColor = isBlocked ? '#A1A1AA' : isActive ? '#FFFFFF' : '#D4D4D8';
+
+  return (
+    <View style={[styles.nfcCardVisual, { backgroundColor: bg }]}>
+      <View style={[styles.ring, styles.ringOne]} />
+      <View style={[styles.ring, styles.ringTwo]} />
+      <View style={[styles.ring, styles.ringThree]} />
+
+      <View style={styles.cardVisualTop}>
+        <View>
+          <AppText style={styles.cardBrand}>TAP &amp; PAY</AppText>
+          <AppText style={styles.cardType}>TRANSIT CARD</AppText>
+        </View>
+        <SymbolView
+          name={{
+            ios: isBlocked ? 'lock.fill' : 'wave.3.right',
+            android: isBlocked ? 'lock' : 'nfc',
+            web: isBlocked ? 'lock' : 'nfc',
+          }}
+          size={26}
+          tintColor={CARD.textPrimary}
+        />
+      </View>
+
+      <View style={[styles.chip, isBlocked && styles.chipBlocked]}>
+        <View style={styles.chipLineH1} />
+        <View style={styles.chipLineH2} />
+        <View style={styles.chipLineV} />
+      </View>
+
+      <AppText style={[styles.cardVisualNumber, isBlocked && styles.dimText]} numberOfLines={1}>
+        {serial}
+      </AppText>
+
+      <View style={styles.cardVisualBottom}>
+        <View style={styles.cardLabelWrap}>
+          <AppText style={styles.cardVisualLabelSmall}>CARD LABEL</AppText>
+          <AppText style={styles.cardVisualName} numberOfLines={1}>
+            {card.label || 'Tap & Pay Transit'}
+          </AppText>
+        </View>
+        <View style={styles.visualBadge}>
+          <View style={[styles.statusDot, { backgroundColor: dotColor }]} />
+          <AppText style={styles.visualBadgeText}>
+            {card.status === 'inactive'
+              ? 'DEACTIVATED'
+              : (card.status_label || card.status).toUpperCase()}
+          </AppText>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Control button                                                      */
+/* ------------------------------------------------------------------ */
+type ControlButtonProps = {
+  label: string;
+  ios: string;
+  android: string;
+  onPress: () => void;
+  disabled?: boolean;
+  tint?: string;
+  style?: StyleProp<ViewStyle>;
+};
+
+function ControlButton({ label, ios, android, onPress, disabled, tint, style }: ControlButtonProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.controlBtn, style, disabled && styles.buttonDisabled]}
+    >
+      <SymbolView
+        name={{ ios: ios as any, android: android as any, web: android as any }}
+        size={20}
+        tintColor={tint || Monochrome.textPrimary}
+      />
+      <AppText style={styles.controlBtnText}>{label}</AppText>
+    </Pressable>
+  );
+}
+
 export default function CardsScreen() {
   const insets = useSafeAreaInsets();
 
   const [cards, setCards] = useState<CardSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const issueInProgress = useRef(false);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+  const [manageCardVisible, setManageCardVisible] = useState(false);
+  const [cardToManage, setCardToManage] = useState<CardSummary | null>(null);
+  const cardActionInProgress = useRef(false);
+  const blockInProgress = useRef(false);
 
-  // Register Card Modal
+  // Issue Card Modal
   const [registerModalVisible, setRegisterModalVisible] = useState(false);
-  const [cardUidInput, setCardUidInput] = useState('');
-  const [cardLabelInput, setCardLabelInput] = useState('');
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
 
@@ -82,7 +289,7 @@ export default function CardsScreen() {
     try {
       const res = await getCards();
       if (res.ok && res.data) {
-        setCards(res.data.cards || []);
+        setCards((res.data.cards || []).slice(0, 1));
       }
     } catch {
       // Ignored
@@ -100,19 +307,19 @@ export default function CardsScreen() {
   }, [loadCards]);
 
   const handleRegisterSubmit = async () => {
-    if (!cardUidInput.trim()) {
-      setRegisterError('Card UID is required.');
+    if (issueInProgress.current) return;
+    if (cards.length > 0) {
+      setRegisterError('Each passenger can have only one registered transit card.');
       return;
     }
 
     setRegisterError(null);
+    issueInProgress.current = true;
     setRegistering(true);
 
     try {
-      const res = await registerCard(cardUidInput.trim(), cardLabelInput.trim() || undefined);
+      const res = await issueCard();
       if (res.ok) {
-        setCardUidInput('');
-        setCardLabelInput('');
         setRegisterModalVisible(false);
         await loadCards(true);
       } else {
@@ -121,11 +328,14 @@ export default function CardsScreen() {
     } catch {
       setRegisterError('Network failure. Please try again.');
     } finally {
+      issueInProgress.current = false;
       setRegistering(false);
     }
   };
 
   const handleOpenBlockModal = (card: CardSummary) => {
+    setManageCardVisible(false);
+    setCardToManage(null);
     setCardToBlock(card);
     setSelectedReasonCode('temporary');
     setReasonDetailsInput('');
@@ -133,8 +343,13 @@ export default function CardsScreen() {
     setBlockModalVisible(true);
   };
 
+  const handleCloseBlockModal = () => {
+    setBlockModalVisible(false);
+    setCardToBlock(null);
+  };
+
   const handleConfirmBlockSubmit = async () => {
-    if (!cardToBlock) return;
+    if (!cardToBlock || blockInProgress.current) return;
 
     if (selectedReasonCode === 'other' && !reasonDetailsInput.trim()) {
       setBlockError('Please provide an explanation for choosing "Other Reason".');
@@ -142,6 +357,7 @@ export default function CardsScreen() {
     }
 
     setBlockError(null);
+    blockInProgress.current = true;
     setBlocking(true);
 
     try {
@@ -161,11 +377,14 @@ export default function CardsScreen() {
     } catch {
       setBlockError('Connection error while contacting server. Please retry.');
     } finally {
+      blockInProgress.current = false;
       setBlocking(false);
     }
   };
 
   const handleCardAction = async (cardId: number, action: 'activate' | 'deactivate' | 'report-lost') => {
+    if (cardActionInProgress.current) return;
+    cardActionInProgress.current = true;
     setActionLoadingId(cardId);
     try {
       let res;
@@ -174,15 +393,74 @@ export default function CardsScreen() {
       else if (action === 'report-lost') res = await reportLostCard(cardId);
 
       if (res?.ok) {
+        setManageCardVisible(false);
+        setCardToManage(null);
         await loadCards(true);
+        if (action === 'report-lost') {
+          Alert.alert('Card Reported Lost', 'Your card has been reported lost and can no longer be used.');
+        } else if (action === 'deactivate') {
+          Alert.alert('Card Deactivated', 'Your card is deactivated. You can reactivate it later.');
+        } else {
+          Alert.alert('Card Activated', 'Your card is active and ready to use.');
+        }
       } else {
         Alert.alert('Action Failed', res?.message || 'Could not complete action.');
       }
     } catch {
       Alert.alert('Error', 'Connection error performing card action.');
     } finally {
+      cardActionInProgress.current = false;
       setActionLoadingId(null);
     }
+  };
+
+  const handleReportLostPress = (card: CardSummary) => {
+    Alert.alert(
+      'Report Lost Card',
+      'Report this card as lost? It will be blocked immediately and cannot be reactivated. No replacement will be issued automatically.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Report Lost', style: 'destructive', onPress: () => void handleCardAction(card.id, 'report-lost') },
+      ],
+    );
+  };
+
+  const handleDeactivatePress = (card: CardSummary) => {
+    Alert.alert(
+      'Deactivate Transit Card',
+      'This temporarily disables the card. You can reactivate it later from this screen.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Deactivate', style: 'destructive', onPress: () => void handleCardAction(card.id, 'deactivate') },
+      ],
+    );
+  };
+
+  const handleActivatePress = (card: CardSummary) => {
+    const isBlocked = card.status === 'blocked';
+    Alert.alert(
+      isBlocked ? 'Unblock Transit Card' : 'Activate Transit Card',
+      isBlocked
+        ? 'Unblock this card and allow it to be used for transit payments again?'
+        : 'Activate this card for transit payments?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: isBlocked ? 'Unblock' : 'Activate',
+          onPress: () => void handleCardAction(card.id, 'activate'),
+        },
+      ],
+    );
+  };
+
+  const openCardManagement = (card: CardSummary) => {
+    setCardToManage(card);
+    setManageCardVisible(true);
+  };
+
+  const closeCardManagement = () => {
+    setManageCardVisible(false);
+    setCardToManage(null);
   };
 
   return (
@@ -191,19 +469,26 @@ export default function CardsScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <AppText style={styles.headerTitle}>Transit Cards</AppText>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setRegisterModalVisible(true)}
-          style={styles.addCardButton}
-        >
-          <SymbolView
-            name={{ ios: 'plus', android: 'add', web: 'add' }}
-            size={16}
-            tintColor={Monochrome.actionPrimaryText}
-          />
-          <AppText style={styles.addCardButtonText}>Link Card</AppText>
-        </Pressable>
+        <View>
+          <AppText style={styles.headerTitle}>Transit Cards</AppText>
+          <AppText style={styles.headerSubtitle}>
+            {cards.length > 0 ? '1 card registered' : 'No card issued'}
+          </AppText>
+        </View>
+        {!loading && cards.length === 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setRegisterModalVisible(true)}
+            style={styles.addCardButton}
+          >
+            <SymbolView
+              name={{ ios: 'plus', android: 'add', web: 'add' }}
+              size={16}
+              tintColor={Monochrome.actionPrimaryText}
+            />
+            <AppText style={styles.addCardButtonText}>Issue Card</AppText>
+          </Pressable>
+        ) : null}
       </View>
 
       <ScrollView
@@ -224,9 +509,10 @@ export default function CardsScreen() {
           </View>
         ) : cards.length > 0 ? (
           <View style={styles.cardsContainer}>
-            {cards.map((card) => {
+            {cards.slice(0, 1).map((card) => {
               const isActive = card.status === 'active';
               const isBlocked = card.status === 'blocked';
+              const isLost = card.status === 'lost';
               const isBusy = actionLoadingId === card.id;
               const displaySerial =
                 card.masked_code ||
@@ -234,42 +520,12 @@ export default function CardsScreen() {
 
               return (
                 <View key={card.id} style={styles.cardItem}>
-                  {/* Digital Physical Card Design */}
-                  <View
-                    style={[
-                      styles.nfcCardVisual,
-                      isBlocked
-                        ? styles.nfcCardBlocked
-                        : isActive
-                        ? styles.nfcCardActive
-                        : styles.nfcCardInactive,
-                    ]}
-                  >
-                    <View style={styles.cardVisualTop}>
-                      <View style={[styles.chipGraphic, isBlocked && styles.chipGraphicBlocked]} />
-                      <SymbolView
-                        name={{
-                          ios: isBlocked ? 'lock.fill' : 'wave.3.right',
-                          android: isBlocked ? 'lock' : 'nfc',
-                          web: isBlocked ? 'lock' : 'nfc',
-                        }}
-                        size={24}
-                        tintColor={Monochrome.textPrimary}
-                      />
-                    </View>
-
-                    <AppText style={styles.cardVisualNumber}>{displaySerial}</AppText>
-
-                    <View style={styles.cardVisualBottom}>
-                      <View>
-                        <AppText style={styles.cardVisualLabelSmall}>CARD LABEL</AppText>
-                        <AppText style={styles.cardVisualName}>{card.label || 'Tap & Pay Transit'}</AppText>
-                      </View>
-                      <View style={[styles.visualBadge, isBlocked && styles.visualBadgeBlocked]}>
-                        <AppText style={styles.visualBadgeText}>{card.status.toUpperCase()}</AppText>
-                      </View>
-                    </View>
-                  </View>
+                  <CardVisual
+                    card={card}
+                    serial={displaySerial}
+                    isActive={isActive}
+                    isBlocked={isBlocked || isLost}
+                  />
 
                   {/* Blocked Information Banner */}
                   {isBlocked && (
@@ -299,113 +555,74 @@ export default function CardsScreen() {
                         </AppText>
                       )}
                       <AppText style={styles.blockedHelperText}>
-                        This card is disabled from transit taps and fare payments. To unblock this card, please contact an authorized transit operator or admin.
+                        This card is disabled from transit taps and fare payments. Use Manage Card to unblock it if you are authorized.
                       </AppText>
                     </View>
                   )}
 
-                  {/* Card Controls */}
-                  <View style={styles.cardControls}>
-                    {!isBlocked && (
-                      <Pressable
-                        onPress={() => router.push('/passenger/qr' as any)}
-                        style={styles.controlBtn}
-                      >
-                        <SymbolView
-                          name={{ ios: 'qrcode', android: 'qr_code', web: 'qr_code' }}
-                          size={16}
-                          tintColor={Monochrome.textPrimary}
-                        />
-                        <AppText style={styles.controlBtnText}>Show QR</AppText>
-                      </Pressable>
-                    )}
-
-                    {isActive && !isBlocked && (
-                      <Pressable
-                        disabled={isBusy}
-                        onPress={() => handleCardAction(card.id, 'deactivate')}
-                        style={styles.controlBtn}
-                      >
-                        <SymbolView
-                          name={{ ios: 'pause.circle.fill', android: 'pause_circle', web: 'pause_circle' }}
-                          size={16}
-                          tintColor={Monochrome.textSecondary}
-                        />
-                        <AppText style={styles.controlBtnText}>Deactivate</AppText>
-                      </Pressable>
-                    )}
-
-                    {!isActive && !isBlocked && (
-                      <Pressable
-                        disabled={isBusy}
-                        onPress={() => handleCardAction(card.id, 'activate')}
-                        style={styles.controlBtn}
-                      >
-                        <SymbolView
-                          name={{ ios: 'play.circle.fill', android: 'play_circle', web: 'play_circle' }}
-                          size={16}
-                          tintColor={Monochrome.textPrimary}
-                        />
-                        <AppText style={styles.controlBtnText}>Activate</AppText>
-                      </Pressable>
-                    )}
-
-                    {!isBlocked && (
-                      <Pressable
-                        disabled={isBusy}
-                        onPress={() => handleOpenBlockModal(card)}
-                        style={styles.controlBtn}
-                      >
-                        <SymbolView
-                          name={{ ios: 'lock.fill', android: 'lock', web: 'lock' }}
-                          size={16}
-                          tintColor={Monochrome.textSecondary}
-                        />
-                        <AppText style={styles.controlBtnText}>Block</AppText>
-                      </Pressable>
-                    )}
-
-                    {!isBlocked && (
-                      <Pressable
-                        disabled={isBusy}
-                        onPress={() => {
-                          Alert.alert(
-                            'Report Lost Card',
-                            'Are you sure you want to report this card as lost? It will be marked lost and revoked from validators.',
-                            [
-                              { text: 'Cancel', style: 'cancel' },
-                              { text: 'Report Lost', style: 'destructive', onPress: () => handleCardAction(card.id, 'report-lost') },
-                            ],
-                          );
-                        }}
-                        style={styles.controlBtn}
-                      >
+                  {isLost && (
+                    <View style={styles.blockedBanner}>
+                      <View style={styles.blockedBannerHeader}>
                         <SymbolView
                           name={{ ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' }}
                           size={16}
-                          tintColor={Monochrome.textMuted}
+                          tintColor={Monochrome.textPrimary}
                         />
-                        <AppText style={styles.controlBtnText}>Report Lost</AppText>
-                      </Pressable>
-                    )}
-                  </View>
+                        <AppText style={styles.blockedBannerTitle}>Card Reported Lost</AppText>
+                      </View>
+                      <AppText style={styles.blockedHelperText}>
+                        This card is permanently restricted and cannot be reactivated. Contact support to discuss next steps.
+                      </AppText>
+                    </View>
+                  )}
+
+                  {card.status === 'inactive' && (
+                    <View style={styles.blockedBanner}>
+                      <AppText style={styles.blockedBannerTitle}>Card Deactivated</AppText>
+                      <AppText style={styles.blockedHelperText}>
+                        This card cannot be used for transit payments until it is reactivated.
+                      </AppText>
+                    </View>
+                  )}
+
+                  {!isLost && (
+                    <View style={styles.cardControls}>
+                      <ControlButton
+                        label={isBusy ? 'Updating...' : 'Manage Card'}
+                        ios="slider.horizontal.3"
+                        android="settings"
+                        disabled={isBusy}
+                        style={styles.manageCardButton}
+                        onPress={() => openCardManagement(card)}
+                      />
+                    </View>
+                  )}
+
+                  {isBusy && (
+                    <View style={styles.busyRow}>
+                      <ActivityIndicator size="small" color={Monochrome.textPrimary} />
+                      <AppText style={styles.busyText}>Updating card...</AppText>
+                    </View>
+                  )}
                 </View>
               );
             })}
           </View>
         ) : (
           <View style={styles.emptyCardBox}>
-            <SymbolView
-              name={{ ios: 'creditcard', android: 'credit_card', web: 'credit_card' }}
-              size={40}
-              tintColor={Monochrome.textMuted}
-            />
-            <AppText style={styles.emptyTitle}>No Transit Cards Linked</AppText>
+            <View style={styles.emptyIconBox}>
+              <SymbolView
+                name={{ ios: 'wave.3.right', android: 'nfc', web: 'nfc' }}
+                size={30}
+                tintColor={Monochrome.textPrimary}
+              />
+            </View>
+            <AppText style={styles.emptyTitle}>No Transit Card</AppText>
             <AppText style={styles.emptySubtitle}>
-              Link an eligible Tap &amp; Pay transit card to your wallet.
+              Issue a Tap &amp; Pay transit card to your account and activate it to start travelling.
             </AppText>
             <PrimaryButton
-              title="Link Transit Card"
+              title="Issue Transit Card"
               onPress={() => setRegisterModalVisible(true)}
               style={styles.emptyAction}
             />
@@ -413,199 +630,243 @@ export default function CardsScreen() {
         )}
       </ScrollView>
 
-      {/* Block Card Modal with Reason */}
-      <Modal visible={blockModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
-            <View style={styles.modalHeader}>
-              <View>
-                <AppText style={styles.modalTitle}>Block Transit Card</AppText>
-                <AppText style={styles.modalSubtitle}>
-                  {cardToBlock?.masked_code ||
-                    (cardToBlock?.last_four
-                      ? `Card ending in ${cardToBlock.last_four}`
-                      : cardToBlock?.card_uid || cardToBlock?.uid || 'Selected Card')}
-                </AppText>
+      <BottomSheet
+        visible={manageCardVisible}
+        onClose={closeCardManagement}
+        busy={actionLoadingId !== null}
+        title="Manage Transit Card"
+        subtitle={
+          cardToManage?.masked_code ||
+          (cardToManage?.last_four
+            ? `Card ending in ${cardToManage.last_four}`
+            : cardToManage?.card_uid || cardToManage?.uid || 'Selected Card')
+        }
+      >
+        {cardToManage ? (
+          <>
+            <AppText style={styles.manageCardStatus}>
+              Status: {cardToManage.status === 'inactive'
+                ? 'Deactivated'
+                : cardToManage.status_label || cardToManage.status}
+            </AppText>
+            <View style={styles.manageActions}>
+              {cardToManage.status === 'active' && cardToManage.is_usable !== false ? (
+                <ControlButton
+                  label="Show QR"
+                  ios="qrcode"
+                  android="qr_code"
+                  style={styles.manageAction}
+                  onPress={() => {
+                    closeCardManagement();
+                    router.push('/passenger/qr' as never);
+                  }}
+                />
+              ) : null}
+              {cardToManage.status === 'active' ? (
+                <ControlButton
+                  label="Deactivate"
+                  ios="pause.circle.fill"
+                  android="pause_circle"
+                  tint={Monochrome.textSecondary}
+                  disabled={actionLoadingId === cardToManage.id}
+                  style={styles.manageAction}
+                  onPress={() => handleDeactivatePress(cardToManage)}
+                />
+              ) : null}
+              {cardToManage.status === 'inactive' || cardToManage.status === 'pending' ? (
+                <ControlButton
+                  label="Activate"
+                  ios="play.circle.fill"
+                  android="play_circle"
+                  disabled={actionLoadingId === cardToManage.id}
+                  style={styles.manageAction}
+                  onPress={() => handleActivatePress(cardToManage)}
+                />
+              ) : null}
+              {cardToManage.status === 'blocked' ? (
+                <ControlButton
+                  label="Unblock"
+                  ios="lock.open.fill"
+                  android="lock_open"
+                  disabled={actionLoadingId === cardToManage.id}
+                  style={styles.manageAction}
+                  onPress={() => handleActivatePress(cardToManage)}
+                />
+              ) : null}
+              {['active', 'inactive', 'pending'].includes(cardToManage.status) ? (
+                <>
+                  <ControlButton
+                    label="Block"
+                    ios="lock.fill"
+                    android="lock"
+                    tint={Monochrome.textSecondary}
+                    disabled={actionLoadingId === cardToManage.id}
+                    style={styles.manageAction}
+                    onPress={() => handleOpenBlockModal(cardToManage)}
+                  />
+                  <ControlButton
+                    label="Report Lost"
+                    ios="exclamationmark.triangle.fill"
+                    android="warning"
+                    tint={Monochrome.textMuted}
+                    disabled={actionLoadingId === cardToManage.id}
+                    style={styles.manageAction}
+                    onPress={() => handleReportLostPress(cardToManage)}
+                  />
+                </>
+              ) : null}
+            </View>
+            {cardToManage.status === 'lost' || cardToManage.status === 'expired' ? (
+              <AppText style={styles.manageCardNotice}>
+                No card actions are available for this status. Contact support if you need help.
+              </AppText>
+            ) : null}
+            {actionLoadingId === cardToManage.id ? (
+              <View style={styles.busyRow}>
+                <ActivityIndicator size="small" color={Monochrome.textPrimary} />
+                <AppText style={styles.busyText}>Updating card...</AppText>
               </View>
+            ) : null}
+          </>
+        ) : null}
+      </BottomSheet>
+
+      {/* Block Card Sheet */}
+      <BottomSheet
+        visible={blockModalVisible}
+        onClose={handleCloseBlockModal}
+        busy={blocking}
+        title="Block Transit Card"
+        subtitle={
+          cardToBlock?.masked_code ||
+          (cardToBlock?.last_four
+            ? `Card ending in ${cardToBlock.last_four}`
+            : cardToBlock?.card_uid || cardToBlock?.uid || 'Selected Card')
+        }
+        footer={
+          <View style={styles.blockActions}>
+            <Pressable
+              disabled={blocking}
+              onPress={handleCloseBlockModal}
+              style={[styles.modalButton, styles.cancelButton]}
+            >
+              <AppText style={styles.cancelButtonText}>Cancel</AppText>
+            </Pressable>
+
+            <Pressable
+              disabled={blocking}
+              onPress={handleConfirmBlockSubmit}
+              style={[styles.modalButton, styles.confirmBlockButton, blocking && styles.buttonDisabled]}
+            >
+              {blocking ? (
+                <ActivityIndicator size="small" color={Monochrome.actionPrimaryText} />
+              ) : (
+                <AppText style={styles.confirmBlockButtonText}>Confirm Block</AppText>
+              )}
+            </Pressable>
+          </View>
+        }
+      >
+        <AppText style={styles.reasonSectionLabel}>Select reason for blocking:</AppText>
+
+        <View style={styles.reasonsList}>
+          {BLOCK_REASONS.map((reason) => {
+            const isSelected = selectedReasonCode === reason.code;
+            return (
               <Pressable
+                key={reason.code}
                 disabled={blocking}
                 onPress={() => {
-                  if (!blocking) {
-                    setBlockModalVisible(false);
-                    setCardToBlock(null);
-                  }
+                  setSelectedReasonCode(reason.code);
+                  setBlockError(null);
                 }}
-                hitSlop={8}
+                style={[styles.reasonCard, isSelected && styles.reasonCardSelected]}
               >
-                <SymbolView
-                  name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
-                  size={22}
-                  tintColor={Monochrome.textMuted}
-                />
-              </Pressable>
-            </View>
-
-            <ScrollView style={styles.blockModalBody} showsVerticalScrollIndicator={false}>
-              <AppText style={styles.reasonSectionLabel}>Select reason for blocking:</AppText>
-
-              <View style={styles.reasonsList}>
-                {BLOCK_REASONS.map((reason) => {
-                  const isSelected = selectedReasonCode === reason.code;
-                  return (
-                    <Pressable
-                      key={reason.code}
-                      disabled={blocking}
-                      onPress={() => {
-                        setSelectedReasonCode(reason.code);
-                        setBlockError(null);
-                      }}
-                      style={[styles.reasonCard, isSelected && styles.reasonCardSelected]}
-                    >
-                      <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
-                        {isSelected && <View style={styles.radioInner} />}
-                      </View>
-                      <View style={styles.reasonTextWrap}>
-                        <AppText style={[styles.reasonLabelText, isSelected && styles.reasonLabelTextSelected]}>
-                          {reason.label}
-                        </AppText>
-                        <AppText style={styles.reasonDescText}>{reason.desc}</AppText>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <View style={styles.field}>
-                <AppText style={styles.fieldLabel}>
-                  {selectedReasonCode === 'other'
-                    ? 'Reason Explanation (Required)'
-                    : 'Additional Details (Optional)'}
-                </AppText>
-                <AppTextInput
-                  style={[
-                    styles.textArea,
-                    selectedReasonCode === 'other' && !reasonDetailsInput.trim() && styles.inputWarning,
-                  ]}
-                  value={reasonDetailsInput}
-                  onChangeText={(val) => {
-                    setReasonDetailsInput(val);
-                    setBlockError(null);
-                  }}
-                  placeholder={
-                    selectedReasonCode === 'other'
-                      ? 'Please explain why you are blocking this card...'
-                      : 'Provide any additional context or incident details...'
-                  }
-                  placeholderTextColor={Monochrome.textMuted}
-                  multiline
-                  numberOfLines={3}
-                  editable={!blocking}
-                />
-              </View>
-
-              {blockError && (
-                <View style={styles.errorBanner}>
-                  <SymbolView
-                    name={{ ios: 'exclamationmark.circle.fill', android: 'error', web: 'error' }}
-                    size={16}
-                    tintColor={Monochrome.textPrimary}
-                  />
-                  <AppText style={styles.errorText}>{blockError}</AppText>
+                <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
+                  {isSelected && <View style={styles.radioInner} />}
                 </View>
-              )}
-
-              <View style={styles.blockActions}>
-                <Pressable
-                  disabled={blocking}
-                  onPress={() => {
-                    setBlockModalVisible(false);
-                    setCardToBlock(null);
-                  }}
-                  style={[styles.modalButton, styles.cancelButton]}
-                >
-                  <AppText style={styles.cancelButtonText}>Cancel</AppText>
-                </Pressable>
-
-                <Pressable
-                  disabled={blocking}
-                  onPress={handleConfirmBlockSubmit}
-                  style={[styles.modalButton, styles.confirmBlockButton, blocking && styles.buttonDisabled]}
-                >
-                  {blocking ? (
-                    <ActivityIndicator size="small" color={Monochrome.actionPrimaryText} />
-                  ) : (
-                    <AppText style={styles.confirmBlockButtonText}>Confirm Block</AppText>
-                  )}
-                </Pressable>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Link / Register Card Modal */}
-      <Modal visible={registerModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
-            <View style={styles.modalHeader}>
-              <AppText style={styles.modalTitle}>Link New Travel Card</AppText>
-              <Pressable
-                disabled={registering}
-                onPress={() => setRegisterModalVisible(false)}
-                hitSlop={8}
-              >
-                <SymbolView
-                  name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
-                  size={22}
-                  tintColor={Monochrome.textMuted}
-                />
+                <View style={styles.reasonTextWrap}>
+                  <AppText style={[styles.reasonLabelText, isSelected && styles.reasonLabelTextSelected]}>
+                    {reason.label}
+                  </AppText>
+                  <AppText style={styles.reasonDescText}>{reason.desc}</AppText>
+                </View>
               </Pressable>
-            </View>
-
-            <View style={styles.form}>
-              <View style={styles.field}>
-                <AppText style={styles.fieldLabel}>Card serial / UID</AppText>
-                <AppTextInput
-                  style={styles.input}
-                  value={cardUidInput}
-                  onChangeText={(val) => {
-                    setCardUidInput(val);
-                    setRegisterError(null);
-                  }}
-                  placeholder="e.g. 04:A2:3B:18:7C"
-                  placeholderTextColor={Monochrome.textMuted}
-                  autoCapitalize="characters"
-                  editable={!registering}
-                />
-                <AppText style={styles.fieldHelp}>
-                  Enter the unique identifier printed on your Tap &amp; Pay transit card.
-                </AppText>
-              </View>
-
-              <View style={styles.field}>
-                <AppText style={styles.fieldLabel}>Custom Label (Optional)</AppText>
-                <AppTextInput
-                  style={styles.input}
-                  value={cardLabelInput}
-                  onChangeText={setCardLabelInput}
-                  placeholder="e.g. Daily Commute Card"
-                  placeholderTextColor={Monochrome.textMuted}
-                  editable={!registering}
-                />
-              </View>
-
-              {registerError && <AppText style={styles.errorText}>{registerError}</AppText>}
-
-              <PrimaryButton
-                title={registering ? 'Registering...' : 'Register Card'}
-                onPress={handleRegisterSubmit}
-                disabled={registering}
-                style={styles.submitButton}
-              />
-            </View>
-          </View>
+            );
+          })}
         </View>
-      </Modal>
+
+        <View style={styles.field}>
+          <AppText style={styles.fieldLabel}>
+            {selectedReasonCode === 'other'
+              ? 'Reason Explanation (Required)'
+              : 'Additional Details (Optional)'}
+          </AppText>
+          <AppTextInput
+            style={[
+              styles.textArea,
+              selectedReasonCode === 'other' && !reasonDetailsInput.trim() && styles.inputWarning,
+            ]}
+            value={reasonDetailsInput}
+            onChangeText={(val) => {
+              setReasonDetailsInput(val);
+              setBlockError(null);
+            }}
+            placeholder={
+              selectedReasonCode === 'other'
+                ? 'Please explain why you are blocking this card...'
+                : 'Provide any additional context or incident details...'
+            }
+            placeholderTextColor={Monochrome.textMuted}
+            multiline
+            numberOfLines={3}
+            editable={!blocking}
+          />
+        </View>
+
+        {blockError && (
+          <View style={styles.errorBanner}>
+            <SymbolView
+              name={{ ios: 'exclamationmark.circle.fill', android: 'error', web: 'error' }}
+              size={16}
+              tintColor={Monochrome.textPrimary}
+            />
+            <AppText style={styles.errorText}>{blockError}</AppText>
+          </View>
+        )}
+      </BottomSheet>
+
+      {/* Issue Card Sheet */}
+      <BottomSheet
+        visible={registerModalVisible}
+        onClose={() => setRegisterModalVisible(false)}
+        busy={registering}
+        title="Issue Transit Card"
+        footer={
+          <PrimaryButton
+            title={registering ? 'Issuing...' : 'Issue Card'}
+            onPress={handleRegisterSubmit}
+            disabled={registering}
+          />
+        }
+      >
+        <View style={styles.form}>
+          <AppText style={styles.fieldHelp}>
+            Issue a Tap &amp; Pay transit card to your account. You can activate it after it appears here.
+          </AppText>
+
+          {registerError && (
+            <View style={styles.errorBanner}>
+              <SymbolView
+                name={{ ios: 'exclamationmark.circle.fill', android: 'error', web: 'error' }}
+                size={16}
+                tintColor={Monochrome.textPrimary}
+              />
+              <AppText style={styles.errorText}>{registerError}</AppText>
+            </View>
+          )}
+        </View>
+      </BottomSheet>
     </View>
   );
 }
@@ -630,14 +891,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Monochrome.textPrimary,
   },
+  headerSubtitle: {
+    fontSize: 12,
+    color: Monochrome.textMuted,
+    marginTop: 2,
+  },
   addCardButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
     backgroundColor: Monochrome.actionPrimary,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
+    paddingHorizontal: 14,
+    height: 38,
+    borderRadius: 19,
   },
   addCardButtonText: {
     color: Monochrome.actionPrimaryText,
@@ -662,91 +928,145 @@ const styles = StyleSheet.create({
     gap: Spacing.four,
   },
   cardItem: {
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 20,
-    padding: Spacing.three,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
     gap: Spacing.three,
   },
+
+  /* ---------- NFC card ---------- */
   nfcCardVisual: {
-    height: 180,
-    borderRadius: 16,
-    padding: Spacing.four,
+    minHeight: 210,
+    borderRadius: 24,
+    padding: 20,
     justifyContent: 'space-between',
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOpacity: 0.25,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: { elevation: 6 },
+      default: {},
+    }),
+  },
+  ring: {
+    position: 'absolute',
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: Monochrome.border,
+    borderColor: CARD.ring,
   },
-  nfcCardActive: {
-    backgroundColor: Monochrome.surfacePrimary,
-  },
-  nfcCardInactive: {
-    backgroundColor: Monochrome.surfaceElevated,
-  },
-  nfcCardBlocked: {
-    backgroundColor: '#0A0A0A',
-    borderWidth: 1.5,
-    borderColor: Monochrome.borderLight,
-  },
+  ringOne: { width: 180, height: 180, top: -60, right: -50 },
+  ringTwo: { width: 260, height: 260, top: -100, right: -90 },
+  ringThree: { width: 340, height: 340, top: -140, right: -130 },
   cardVisualTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  cardBrand: {
+    color: CARD.textPrimary,
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 1.6,
+  },
+  cardType: {
+    color: CARD.textSecondary,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 1.8,
+    marginTop: 3,
+  },
+  chip: {
+    width: 44,
+    height: 33,
+    borderRadius: 7,
+    backgroundColor: CARD.chip,
+    overflow: 'hidden',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  chipGraphic: {
-    width: 36,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: Monochrome.surfaceElevated,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
+  chipBlocked: {
+    backgroundColor: CARD.chipBlocked,
   },
-  chipGraphicBlocked: {
-    backgroundColor: Monochrome.surfaceSecondary,
+  chipLineH1: {
+    position: 'absolute',
+    top: 11,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: CARD.chipLine,
+  },
+  chipLineH2: {
+    position: 'absolute',
+    top: 22,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: CARD.chipLine,
+  },
+  chipLineV: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: CARD.chipLine,
   },
   cardVisualNumber: {
-    fontSize: 19,
+    fontSize: 18,
     letterSpacing: 2,
-    color: Monochrome.textPrimary,
+    color: CARD.textPrimary,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontWeight: '700',
+  },
+  dimText: {
+    color: CARD.textSecondary,
   },
   cardVisualBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
+    gap: 12,
+  },
+  cardLabelWrap: {
+    flex: 1,
   },
   cardVisualLabelSmall: {
     fontSize: 9,
-    letterSpacing: 1,
-    color: Monochrome.textMuted,
-    fontWeight: '700',
+    letterSpacing: 1.6,
+    color: CARD.textMuted,
+    fontWeight: '600',
   },
   cardVisualName: {
     fontSize: 14,
-    color: Monochrome.textPrimary,
-    fontWeight: '600',
-    marginTop: 2,
+    color: CARD.textPrimary,
+    fontWeight: '700',
+    marginTop: 3,
   },
   visualBadge: {
-    backgroundColor: Monochrome.surfaceElevated,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: CARD.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
   },
-  visualBadgeBlocked: {
-    backgroundColor: Monochrome.border,
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   visualBadgeText: {
-    color: Monochrome.textPrimary,
-    fontSize: 11,
+    color: CARD.textPrimary,
+    fontSize: 10,
     fontWeight: '700',
+    letterSpacing: 0.8,
   },
+
+  /* ---------- Blocked banner ---------- */
   blockedBanner: {
-    backgroundColor: Monochrome.surfaceElevated,
-    borderRadius: 14,
+    backgroundColor: Monochrome.surfaceSecondary,
+    borderRadius: 16,
     padding: Spacing.three,
     borderWidth: 1,
     borderColor: Monochrome.border,
@@ -778,7 +1098,7 @@ const styles = StyleSheet.create({
     color: Monochrome.textPrimary,
   },
   blockedDetailsBox: {
-    backgroundColor: Monochrome.surfaceSecondary,
+    backgroundColor: Monochrome.surfaceElevated,
     padding: 8,
     borderRadius: 8,
     borderLeftWidth: 3,
@@ -799,37 +1119,83 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginTop: 2,
   },
+
+  /* ---------- Controls ---------- */
   cardControls: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  manageCardButton: {
+    flex: 1,
+  },
+  manageCardStatus: {
+    color: Monochrome.textSecondary,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: Spacing.three,
+  },
+  manageCardNotice: {
+    color: Monochrome.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: Spacing.three,
+  },
+  manageActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.two,
   },
+  manageAction: {
+    flex: 1,
+    minWidth: '46%',
+  },
   controlBtn: {
     flex: 1,
-    minWidth: 90,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: Monochrome.surfaceElevated,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: Monochrome.surfaceSecondary,
     borderWidth: 1,
     borderColor: Monochrome.border,
   },
   controlBtnText: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '600',
     color: Monochrome.textPrimary,
+    textAlign: 'center',
   },
+  busyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  busyText: {
+    fontSize: 12,
+    color: Monochrome.textSecondary,
+  },
+
+  /* ---------- Empty state ---------- */
   emptyCardBox: {
     backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 20,
+    borderRadius: 22,
     padding: Spacing.six,
     alignItems: 'center',
     gap: Spacing.three,
     borderWidth: 1,
     borderColor: Monochrome.border,
+  },
+  emptyIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Monochrome.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Monochrome.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyTitle: {
     fontSize: 18,
@@ -846,26 +1212,42 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: Spacing.two,
   },
-  modalOverlay: {
+
+  /* ---------- Bottom sheet ---------- */
+  sheetRoot: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  sheet: {
     backgroundColor: Monochrome.surfacePrimary,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     borderWidth: 1,
     borderColor: Monochrome.border,
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.four,
-    maxHeight: '85%',
+    paddingTop: 10,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Monochrome.borderLight,
+    marginBottom: Spacing.three,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: Spacing.three,
+    gap: 12,
+  },
+  modalHeaderText: {
+    flex: 1,
   },
   modalTitle: {
     fontSize: 19,
@@ -878,9 +1260,17 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  blockModalBody: {
-    gap: Spacing.three,
+  sheetScroll: {
+    flexShrink: 1,
   },
+  sheetScrollContent: {
+    paddingBottom: Spacing.three,
+  },
+  sheetFooter: {
+    paddingTop: Spacing.two,
+  },
+
+  /* ---------- Block reasons ---------- */
   reasonSectionLabel: {
     fontSize: 14,
     fontWeight: '700',
@@ -896,7 +1286,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: Monochrome.surfaceSecondary,
     borderWidth: 1.5,
     borderColor: Monochrome.border,
@@ -940,6 +1330,11 @@ const styles = StyleSheet.create({
     color: Monochrome.textMuted,
     marginTop: 2,
   },
+
+  /* ---------- Form ---------- */
+  form: {
+    gap: Spacing.three,
+  },
   field: {
     gap: 6,
     marginBottom: Spacing.three,
@@ -955,9 +1350,9 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: Spacing.three,
-    height: 48,
+    height: 50,
     fontSize: 15,
     color: Monochrome.textPrimary,
     borderWidth: 1,
@@ -965,10 +1360,10 @@ const styles = StyleSheet.create({
   },
   textArea: {
     backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: Spacing.three,
     paddingVertical: 10,
-    minHeight: 76,
+    minHeight: 80,
     textAlignVertical: 'top',
     fontSize: 14,
     color: Monochrome.textPrimary,
@@ -995,16 +1390,16 @@ const styles = StyleSheet.create({
     color: Monochrome.textPrimary,
     fontWeight: '500',
   },
+
+  /* ---------- Footer buttons ---------- */
   blockActions: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: Spacing.two,
-    marginBottom: Spacing.three,
   },
   modalButton: {
     flex: 1,
-    height: 48,
-    borderRadius: 12,
+    height: 50,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1028,11 +1423,5 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
-  },
-  form: {
-    gap: Spacing.three,
-  },
-  submitButton: {
-    marginTop: Spacing.two,
   },
 });

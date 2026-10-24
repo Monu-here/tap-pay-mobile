@@ -19,6 +19,7 @@ export type PublicNearbyBus = {
   bus_number: string;
   latitude: number;
   longitude: number;
+  distance_km?: number;
   speed: number | null;
   last_seen_at: string | null;
   status: string | null;
@@ -88,6 +89,7 @@ export function getNearbyBuses(latitude: number, longitude: number, radiusKm = 5
           bus_number: String(bus.bus_number ?? ''),
           latitude: Number(bus.latitude),
           longitude: Number(bus.longitude),
+          distance_km: typeof bus.distance_km === 'number' ? bus.distance_km : undefined,
           speed: typeof bus.speed === 'number' ? bus.speed : null,
           last_seen_at: typeof bus.last_seen_at === 'string' ? bus.last_seen_at : null,
           status: typeof bus.status === 'string' ? bus.status : null,
