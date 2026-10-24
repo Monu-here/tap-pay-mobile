@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "tap-pay-mobile",
+    "name": "Gantabya Pay",
     "slug": "tap-pay",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -35,7 +35,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Tap & Pay needs access to your photos so you can upload identity documents during registration."
+          "photosPermission": "Gantabya Pay needs access to your photos so you can upload identity documents during registration."
         }
       ],
       [
@@ -51,7 +51,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Tap & Pay uses your location to find nearby buses and stops and to share a driver's live trip location."
+          "locationWhenInUsePermission": "Gantabya Pay uses your location to find nearby buses and stops and to share a driver's live trip location."
         }
       ]
     ],

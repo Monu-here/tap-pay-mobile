@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 
 /**
- * Base URL of the Tap & Pay API.
+ * Base URL of the Gantabya Pay API.
  *
  * Defaults to the deployed backend. Override per environment with the
  * `EXPO_PUBLIC_API_BASE_URL` env var (e.g. a local `.env`) rather than editing
@@ -14,7 +14,7 @@ import { Platform } from 'react-native';
  *   - Physical device: `http://<your-LAN-IP>:8000/api/v1`. On iOS, Expo Go blocks cleartext HTTP to a bare LAN IP — use the Mac's `.local` name or an HTTPS tunnel.
  */
 
-export const DEFAULT_API_BASE_URL = 'https://tap-pay-production.up.railway.app/api/v1';
+export const DEFAULT_API_BASE_URL = 'https://gantabyapayapi.devnextechnology.com/api/v1';
 
 function resolveApiBaseUrl(): string {
   const configured = process.env?.EXPO_PUBLIC_API_BASE_URL?.trim();
