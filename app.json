@@ -1,14 +1,14 @@
 {
   "expo": {
     "name": "Gantabya Pay",
-    "slug": "tap-pay",
+    "slug": "gantbya-pay",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "tappaymobile",
     "userInterfaceStyle": "dark",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.tappay.mobile",
       "googleServicesFile": "./GoogleService-Info.plist"
     },
@@ -16,9 +16,8 @@
       "package": "com.tappay.mobile",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#111111",
+        "backgroundColor": "#E7FFD0",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
@@ -62,7 +61,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "249829a1-4db6-444c-9c8b-3a8b07e3095d"
+        "projectId": "d5a2c1f0-dfd8-41f1-b3d2-e514ac8a130c"
       }
     },
     "owner": "testafds"
