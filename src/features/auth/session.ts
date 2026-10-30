@@ -249,3 +249,40 @@ export function getRoleDashboardPath(role: AppRole): string {
       return '/(tabs)/home';
   }
 }
+
+const ONBOARDING_COMPLETED_KEY = 'eyatra.onboarding-completed';
+
+export async function hasCompletedOnboarding(): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    try {
+      return typeof localStorage !== 'undefined' && localStorage.getItem(ONBOARDING_COMPLETED_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  }
+  try {
+    const val = await SecureStore.getItemAsync(ONBOARDING_COMPLETED_KEY);
+    return val === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export async function setCompletedOnboarding(completed = true): Promise<void> {
+  if (Platform.OS === 'web') {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(ONBOARDING_COMPLETED_KEY, completed ? 'true' : 'false');
+      }
+    } catch {
+      // ignore
+    }
+    return;
+  }
+  try {
+    await SecureStore.setItemAsync(ONBOARDING_COMPLETED_KEY, completed ? 'true' : 'false');
+  } catch {
+    // ignore
+  }
+}
+

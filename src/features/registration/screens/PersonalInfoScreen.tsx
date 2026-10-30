@@ -10,10 +10,13 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { SymbolView } from 'expo-symbols';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { PrimaryButton } from '@/components/ui/primary-button';
-import { Brand, Spacing } from '@/constants/theme';
+import { Palette, Spacing } from '@/constants/theme';
+import { FontFamilies } from '@/constants/typography';
+import { useTheme } from '@/hooks/use-theme';
 
 import { AdDatePickerModal } from '../components/AdDatePickerModal';
 import { BsDatePickerModal } from '../components/BsDatePickerModal';
@@ -26,6 +29,7 @@ import type { PersonalInfo } from '../types';
 
 export function PersonalInfoScreen() {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const { data, setPersonal } = useRegistration();
   const [personal, setLocalPersonal] = useState<PersonalInfo>(data.personal);
   const [errors, setErrors] = useState<Partial<Record<keyof PersonalInfo, string>>>({});
@@ -46,12 +50,6 @@ export function PersonalInfoScreen() {
     setErrors((prev) => ({ ...prev, dateOfBirthAD: message ?? undefined }));
   };
 
-  /**
-   * Bidirectional sync is done event-driven and one-directional per
-   * interaction — no `useEffect` mirrors one field into the other, so there
-   * is no render feedback loop. Each handler writes both fields in a single
-   * update, and an invalid selection writes nothing.
-   */
   const handleAdDateSelected = (adIso: string) => {
     const outcome = convertAdToBs(adIso, { rejectFuture: true });
     if (!outcome.ok) {
@@ -102,10 +100,12 @@ export function PersonalInfoScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <StatusBar style="dark" />
+      <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+
+      {/* Header with step progress */}
       <View
         style={[
           styles.headerRow,
@@ -114,17 +114,30 @@ export function PersonalInfoScreen() {
       >
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Go back"
+          accessibilityLabel="Go back to login"
           hitSlop={8}
           onPress={goBack}
-          style={styles.backButton}
+          style={[
+            styles.backButton,
+            {
+              backgroundColor: theme.isDark ? '#002235' : '#FAF4EB',
+              borderColor: theme.border,
+            },
+          ]}
         >
-          <AppText style={styles.backIcon}>←</AppText>
+          <SymbolView
+            name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
+            size={18}
+            tintColor={theme.text}
+          />
         </Pressable>
+
         <View style={styles.stepIndicator}>
-          <AppText style={styles.stepLabel}>Step 1 of 7</AppText>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: "14%" }]} />
+          <AppText style={[styles.stepLabel, { color: theme.textSecondary }]}>
+            Step 1 of 5
+          </AppText>
+          <View style={[styles.progressTrack, { backgroundColor: theme.borderLight }]}>
+            <View style={[styles.progressFill, { width: '20%' }]} />
           </View>
         </View>
       </View>
@@ -138,16 +151,27 @@ export function PersonalInfoScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headingBlock}>
-          <AppText style={styles.eyebrow}>TAP &amp; PAY · NEPAL</AppText>
-          <AppText style={styles.title}>Create Account</AppText>
-          <AppText style={styles.subtitle}>Enter your personal details to get started</AppText>
+          <AppText style={styles.eyebrow}>eYATRA · NEPAL TRANSIT</AppText>
+          <AppText style={[styles.title, { color: theme.text }]}>Create Account</AppText>
+          <AppText style={[styles.subtitle, { color: theme.textSecondary }]}>
+            Enter your personal details to begin seamless transit travel
+          </AppText>
         </View>
 
-        <View style={styles.section}>
+        {/* Personal Details Section */}
+        <View
+          style={[
+            styles.section,
+            {
+              backgroundColor: theme.isDark ? '#002235' : Palette.white,
+              borderColor: theme.border,
+            },
+          ]}
+        >
           <AppText style={styles.sectionTitle}>Personal Details</AppText>
           <FormTextField
             label="Full Name (English)"
-            placeholder="Enter your full name"
+            placeholder="e.g. Aarav Sharma"
             value={personal.fullNameEnglish}
             onChangeText={(text) => updateField('fullNameEnglish', text)}
             error={errors.fullNameEnglish}
@@ -165,8 +189,17 @@ export function PersonalInfoScreen() {
           />
         </View>
 
-        <View style={styles.section}>
-          <AppText style={styles.sectionTitle}>Contact Information</AppText>
+        {/* Contact Information Section */}
+        <View
+          style={[
+            styles.section,
+            {
+              backgroundColor: theme.isDark ? '#002235' : Palette.white,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <AppText style={styles.sectionTitle}>Contact &amp; Address</AppText>
           <FormTextField
             label="Email Address"
             placeholder="you@example.com"
@@ -180,8 +213,8 @@ export function PersonalInfoScreen() {
             textContentType="emailAddress"
           />
           <FormTextField
-            label="Phone Number"
-            placeholder="+977 98XXXXXXXX"
+            label="Mobile Phone Number"
+            placeholder="98XXXXXXXX"
             value={personal.phoneNumber}
             onChangeText={(text) => updateField('phoneNumber', text)}
             error={errors.phoneNumber}
@@ -190,24 +223,28 @@ export function PersonalInfoScreen() {
             textContentType="telephoneNumber"
             prefix="+977"
           />
-         
 
-
-           <FormTextField
-            label="Address"
-            placeholder="City, Street, Ward No."
+          <FormTextField
+            label="Home / Work Address"
+            placeholder="e.g. Kathmandu, Ward No. 4"
             value={personal.address}
             onChangeText={(text) => updateField('address', text)}
             error={errors.address}
             required
             autoCapitalize="words"
-            textContentType="name"
           />
-
-
         </View>
 
-        <View style={styles.section}>
+        {/* Date of Birth Section */}
+        <View
+          style={[
+            styles.section,
+            {
+              backgroundColor: theme.isDark ? '#002235' : Palette.white,
+              borderColor: theme.border,
+            },
+          ]}
+        >
           <AppText style={styles.sectionTitle}>Date of Birth</AppText>
           <DatePickerField
             label="Date of Birth (AD)"
@@ -227,17 +264,26 @@ export function PersonalInfoScreen() {
             suffix="BS"
           />
           {personal.dateOfBirthAD && personal.dateOfBirthBS && !errors.dateOfBirthAD && (
-            <AppText style={styles.syncHint}>
-              Filled automatically from your other selection
+            <AppText style={[styles.syncHint, { color: theme.textSecondary }]}>
+              Filled automatically from your other calendar selection
             </AppText>
           )}
         </View>
 
-        <View style={styles.section}>
-          <AppText style={styles.sectionTitle}>Security</AppText>
+        {/* Security Section */}
+        <View
+          style={[
+            styles.section,
+            {
+              backgroundColor: theme.isDark ? '#002235' : Palette.white,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <AppText style={styles.sectionTitle}>Security &amp; Password</AppText>
           <FormTextField
             label="Password"
-            placeholder="Create a password"
+            placeholder="Create password (min. 8 characters)"
             value={personal.password}
             onChangeText={(text) => updateField('password', text)}
             error={errors.password}
@@ -266,14 +312,38 @@ export function PersonalInfoScreen() {
           />
         </View>
 
-        {formError && <AppText style={styles.formError}>{formError}</AppText>}
+        {formError && (
+          <View style={styles.errorBox}>
+            <AppText style={styles.formError}>{formError}</AppText>
+          </View>
+        )}
 
-        <PrimaryButton label="Continue" onPress={handleContinue} />
+        <Pressable
+          accessibilityRole="button"
+          onPress={handleContinue}
+          style={styles.continueButton}
+        >
+          <LinearGradient
+            colors={[Palette.crimsonRed, Palette.deepMaroon]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.continueGradient}
+          >
+            <AppText style={styles.continueText}>Continue to User Type</AppText>
+            <SymbolView
+              name={{ ios: 'arrow.right', android: 'arrow_forward', web: 'arrow_forward' }}
+              size={16}
+              tintColor={Palette.white}
+            />
+          </LinearGradient>
+        </Pressable>
 
         <View style={styles.loginRow}>
-          <AppText style={styles.loginPrompt}>Already have an account?</AppText>
+          <AppText style={[styles.loginPrompt, { color: theme.textSecondary }]}>
+            Already have an account?
+          </AppText>
           <Pressable accessibilityRole="button" hitSlop={8} onPress={goToLogin}>
-            <AppText style={styles.loginLink}>Login</AppText>
+            <AppText style={styles.loginLink}>Login to eYatra</AppText>
           </Pressable>
         </View>
       </ScrollView>
@@ -305,7 +375,6 @@ export function PersonalInfoScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Brand.background,
   },
   headerRow: {
     flexDirection: 'row',
@@ -316,35 +385,28 @@ const styles = StyleSheet.create({
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: Brand.teal.light,
+    borderRadius: 14,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  backIcon: {
-    fontSize: 18,
-    color: Brand.text,
-    fontWeight: '600',
   },
   stepIndicator: {
     flex: 1,
     gap: Spacing.one,
   },
   stepLabel: {
-    color: Brand.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
+    fontFamily: FontFamilies.semiBold,
+    fontSize: 12,
   },
   progressTrack: {
     height: 6,
     borderRadius: 3,
-    backgroundColor: Brand.divider,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     borderRadius: 3,
-    backgroundColor: Brand.teal.primary,
+    backgroundColor: Palette.crimsonRed,
   },
   scrollContent: {
     paddingHorizontal: Spacing.four,
@@ -352,55 +414,82 @@ const styles = StyleSheet.create({
     gap: Spacing.four,
   },
   headingBlock: {
-    gap: Spacing.one,
+    gap: 4,
   },
   eyebrow: {
-    color: Brand.primary,
+    color: Palette.crimsonRed,
+    fontFamily: FontFamilies.extraBold,
     fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.2,
+    letterSpacing: 1,
   },
   title: {
-    color: Brand.text,
-    fontSize: 30,
-    fontWeight: '800',
+    fontFamily: FontFamilies.extraBold,
+    fontSize: 28,
+    lineHeight: 34,
     letterSpacing: -0.4,
   },
   subtitle: {
-    color: Brand.textSecondary,
-    fontSize: 15,
-    lineHeight: 22,
+    fontFamily: FontFamilies.regular,
+    fontSize: 14,
+    lineHeight: 20,
   },
   section: {
     gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: 18,
+    padding: Spacing.four,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: Brand.border,
-    backgroundColor: Brand.white,
+    shadowColor: Palette.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   sectionTitle: {
-    color: Brand.primaryDark,
-    fontSize: 13,
-    fontWeight: '700',
+    color: Palette.crimsonRed,
+    fontFamily: FontFamilies.bold,
+    fontSize: 12,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
-  textArea: {
-    height: 84,
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.two,
-    textAlignVertical: 'top',
-  },
   syncHint: {
-    color: Brand.textSecondary,
+    fontFamily: FontFamilies.regular,
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 16,
+  },
+  errorBox: {
+    backgroundColor: '#FDF0D5',
+    borderColor: Palette.crimsonRed,
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: 12,
   },
   formError: {
-    color: Brand.error,
+    color: Palette.crimsonRed,
+    fontFamily: FontFamilies.medium,
     fontSize: 13,
     textAlign: 'center',
+  },
+  continueButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: Palette.crimsonRed,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+    marginTop: 4,
+  },
+  continueGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+  },
+  continueText: {
+    fontFamily: FontFamilies.bold,
+    fontSize: 15,
+    color: Palette.white,
   },
   loginRow: {
     flexDirection: 'row',
@@ -410,12 +499,12 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
   },
   loginPrompt: {
-    color: Brand.textSecondary,
+    fontFamily: FontFamilies.regular,
     fontSize: 14,
   },
   loginLink: {
-    color: Brand.primary,
+    color: Palette.crimsonRed,
+    fontFamily: FontFamilies.bold,
     fontSize: 14,
-    fontWeight: '700',
   },
 });

@@ -18,7 +18,7 @@ import { canonicalPhoneKey, formatNepalPhone } from '../utils/phone';
 import { validatePhone } from '../validation';
 
 export function PhoneOtpScreen() {
-  const { data, markChannelVerified, isChannelVerified } = useRegistration();
+  const { data, markChannelVerified } = useRegistration();
   const phone = data.personal.phoneNumber.trim();
 
   const handleVerified = useCallback(
@@ -38,13 +38,6 @@ export function PhoneOtpScreen() {
     destination: canonicalPhoneKey(phone),
     onVerified: handleVerified,
   });
-
-  // Guard: the email must be verified before the phone can be. Verified
-  // against the *current* email, so editing it after verifying sends the
-  // user back to the email step.
-  if (!data.personal.email.trim() || !isChannelVerified('email')) {
-    return <Redirect href="/register/email-otp" />;
-  }
 
   if (phoneError || !data.userType || !data.documents) {
     return <Redirect href="/register/personal-info" />;
@@ -72,7 +65,7 @@ export function PhoneOtpScreen() {
       changeLabel="Change Phone Number"
       devHint={MOCK_OTP_CODE_FOR_DISPLAY}
       otpInputRef={verification.inputRef}
-      footerNote="Only your phone number is verified by this step. Your email was verified separately."
+      footerNote="We verify your mobile number to protect your eYatra transit account and payments."
     />
   );
 }

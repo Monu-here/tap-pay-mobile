@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Gantabya Pay",
-    "slug": "gantbya-pay",
+    "name": "eYatra",
+    "slug": "eyatra",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "tappaymobile",
+    "scheme": "eyatra",
     "userInterfaceStyle": "dark",
     "ios": {
       "icon": "./assets/images/icon.png",
@@ -34,7 +34,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Gantabya Pay needs access to your photos so you can upload identity documents during registration."
+          "photosPermission": "eYatra needs access to your photos so you can upload identity documents during registration."
         }
       ],
       [
@@ -50,7 +50,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Gantabya Pay uses your location to find nearby buses and stops and to share a driver's live trip location."
+          "locationWhenInUsePermission": "eYatra uses your location to find nearby buses and stops and to share a driver's live trip location."
         }
       ]
     ],

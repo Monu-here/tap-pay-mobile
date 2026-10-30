@@ -1,6 +1,4 @@
-import {AppText, AppTextInput } from '@/components/typography/app-text';
-import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,18 +9,21 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SymbolView } from 'expo-symbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 
-import { PrimaryButton } from '@/components/ui/primary-button';
-import { Monochrome, Spacing } from '@/constants/theme';
+import { AppText, AppTextInput } from '@/components/typography/app-text';
+import { Palette, Spacing } from '@/constants/theme';
+import { FontFamilies } from '@/constants/typography';
+import { useTheme } from '@/hooks/use-theme';
 import {
   changePassword,
   destroySession,
   getSessions,
   logout,
-  logoutAll,
   type UserSessionItem,
 } from '@/features/auth/services/auth';
 import { getProfile, updateProfile } from '@/features/passenger/services/passengerApi';
@@ -30,6 +31,7 @@ import { getSession } from '@/features/auth/session';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const session = getSession();
 
   const [profileData, setProfileData] = useState<Record<string, unknown> | null>(null);
@@ -53,6 +55,9 @@ export default function ProfileScreen() {
   const [pwdError, setPwdError] = useState<string | null>(null);
   const [pwdSuccess, setPwdSuccess] = useState<string | null>(null);
 
+  // Devices & Sessions Sheet Modal
+  const [sessionsModalVisible, setSessionsModalVisible] = useState(false);
+
   const loadData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
@@ -64,10 +69,10 @@ export default function ProfileScreen() {
       ]);
 
       if (profRes.ok && profRes.data) {
-        const u = (profRes.data as any).user || profRes.data;
+        const u = ((profRes.data as Record<string, unknown>).user || profRes.data) as Record<string, unknown>;
         setProfileData(u);
-        setNameInput(u.name || '');
-        setPhoneInput(u.phone || '');
+        setNameInput((u.name as string) || '');
+        setPhoneInput((u.phone as string) || '');
       }
       if (sessRes.ok && sessRes.data) {
         setSessions(sessRes.data.sessions || []);
@@ -89,7 +94,7 @@ export default function ProfileScreen() {
 
   const handleSaveProfile = async () => {
     if (!nameInput.trim()) {
-      setEditError('Name is required.');
+      setEditError('Full name is required.');
       return;
     }
 
@@ -104,12 +109,12 @@ export default function ProfileScreen() {
       if (res.ok) {
         setEditModalVisible(false);
         await loadData(true);
-        Alert.alert('Success', 'Profile updated successfully.');
+        Alert.alert('Profile Updated', 'Your profile details have been saved.');
       } else {
-        setEditError(res.message || 'Could not update profile.');
+        setEditError(res.message || 'Could not update profile details.');
       }
     } catch {
-      setEditError('Connection failure. Check network.');
+      setEditError('Connection failure. Check your network.');
     } finally {
       setSavingProfile(false);
     }
@@ -140,9 +145,12 @@ export default function ProfileScreen() {
         setCurrentPwd('');
         setNewPwd('');
         setConfirmPwd('');
-        setTimeout(() => setPwdModalVisible(false), 1500);
+        setTimeout(() => {
+          setPwdModalVisible(false);
+          setPwdSuccess(null);
+        }, 1200);
       } else {
-        setPwdError(res.message || 'Unable to change password.');
+        setPwdError(res.message || 'Unable to update password.');
       }
     } catch {
       setPwdError('Connection error. Please try again.');
@@ -153,8 +161,8 @@ export default function ProfileScreen() {
 
   const handleRevokeSession = async (tokenId: number) => {
     Alert.alert(
-      'Revoke Session',
-      'Sign out this device from your account?',
+      'Sign Out Device',
+      'Revoke access and log out this device from eYatra?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -165,7 +173,7 @@ export default function ProfileScreen() {
             if (res.ok) {
               await loadData(true);
             } else {
-              Alert.alert('Revocation Failed', res.message || 'Could not revoke session.');
+              Alert.alert('Action Failed', res.message || 'Could not revoke session.');
             }
           },
         },
@@ -176,7 +184,7 @@ export default function ProfileScreen() {
   const handleLogout = () => {
     Alert.alert(
       'Sign Out',
-      'Are you sure you want to sign out of Tap & Pay?',
+      'Are you sure you want to sign out of eYatra?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -191,49 +199,53 @@ export default function ProfileScreen() {
     );
   };
 
-  const handleLogoutAll = () => {
-    Alert.alert(
-      'Sign Out Everywhere',
-      'Sign out of all devices and active sessions?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out All',
-          style: 'destructive',
-          onPress: async () => {
-            await logoutAll();
-            router.replace('/login' as any);
-          },
-        },
-      ],
-    );
-  };
-
-  const name = (profileData?.name as string) || session.user?.name || 'Passenger';
+  const name = (profileData?.name as string) || session.user?.name || 'eYatra Commuter';
   const email = (profileData?.email as string) || session.user?.email || '';
-  const phone = (profileData?.phone as string) || session.user?.phone || 'No phone registered';
+  const phone = (profileData?.phone as string) || session.user?.phone || 'No phone added';
   const roleType = (profileData?.type as string) || session.user?.type || 'passenger';
 
-  return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="dark" />
+  const avatarInitial = (name.trim().charAt(0) || 'U').toUpperCase();
 
-      {/* Header */}
-      <View style={styles.header}>
-        <AppText style={styles.headerTitle}>Account &amp; Security</AppText>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setEditModalVisible(true)}
-          style={styles.editBtn}
-        >
-          <SymbolView
-            name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
-            size={14}
-            tintColor={Monochrome.textPrimary}
-          />
-          <AppText style={styles.editBtnText}>Edit</AppText>
-        </Pressable>
+  return (
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <StatusBar style="light" />
+
+      {/* Branded Header */}
+      <LinearGradient
+        colors={['#003049', '#001824']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.headerGradient, { paddingTop: insets.top + 8 }]}
+      >
+        <View style={styles.headerRow}>
+          <View>
+            <AppText style={styles.headerSubtitle}>eYatra Account</AppText>
+            <AppText style={styles.headerTitle}>My Profile</AppText>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {loading && !refreshing && (
+              <ActivityIndicator size="small" color={Palette.warmCream} />
+            )}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Edit Profile"
+              onPress={() => setEditModalVisible(true)}
+              style={({ pressed }) => [
+                styles.editHeaderBtn,
+                { opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+            <SymbolView
+              name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
+              size={14}
+              tintColor={Palette.warmCream}
+            />
+            <AppText style={styles.editHeaderText}>Edit</AppText>
+          </Pressable>
+        </View>
       </View>
+    </LinearGradient>
 
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
@@ -241,383 +253,674 @@ export default function ProfileScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => loadData(true)}
-            tintColor={Monochrome.textPrimary}
+            onRefresh={() => void loadData(true)}
+            tintColor={Palette.crimsonRed}
           />
         }
       >
-        {/* Profile Card */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatarWrap}>
-            <AppText style={styles.avatarLetter}>{name.charAt(0).toUpperCase()}</AppText>
+        {/* User Hero Profile Card */}
+        <View
+          style={[
+            styles.heroProfileCard,
+            {
+              backgroundColor: theme.isDark ? '#002235' : Palette.white,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          {/* Avatar with crimson ring */}
+          <View style={styles.avatarOuterRing}>
+            <LinearGradient
+              colors={[Palette.crimsonRed, Palette.deepMaroon]}
+              style={styles.avatarInner}
+            >
+              <AppText style={styles.avatarLetter}>{avatarInitial}</AppText>
+            </LinearGradient>
           </View>
-          <View style={styles.profileTextGroup}>
-            <AppText style={styles.profileName}>{name}</AppText>
-            <AppText style={styles.profileEmail}>{email}</AppText>
-            <AppText style={styles.profilePhone}>{phone}</AppText>
-            <View style={styles.typeBadge}>
-              <AppText style={styles.typeBadgeText}>{roleType.toUpperCase()}</AppText>
+
+          {/* User Details */}
+          <View style={styles.userInfo}>
+            <View style={styles.userNameRow}>
+              <AppText style={[styles.userName, { color: theme.text }]} numberOfLines={1}>
+                {name}
+              </AppText>
+              <View style={styles.roleBadge}>
+                <AppText style={styles.roleBadgeText}>
+                  {roleType.toUpperCase()}
+                </AppText>
+              </View>
+            </View>
+
+            <View style={styles.userMetaItem}>
+              <SymbolView
+                name={{ ios: 'envelope.fill', android: 'mail', web: 'mail' }}
+                size={13}
+                tintColor={Palette.slateBlue}
+              />
+              <AppText style={[styles.userMetaText, { color: theme.textSecondary }]} numberOfLines={1}>
+                {email || 'No email attached'}
+              </AppText>
+            </View>
+
+            <View style={styles.userMetaItem}>
+              <SymbolView
+                name={{ ios: 'phone.fill', android: 'phone', web: 'phone' }}
+                size={13}
+                tintColor={Palette.slateBlue}
+              />
+              <AppText style={[styles.userMetaText, { color: theme.textSecondary }]}>
+                {phone}
+              </AppText>
             </View>
           </View>
         </View>
 
-        {/* Portal Switching Section if User is Authorized */}
+        {/* Portal Switching if authorized */}
         {(roleType === 'super_admin' || roleType === 'company_admin' || roleType === 'driver') && (
           <View style={styles.section}>
-            <AppText style={styles.sectionHeading}>Management Portal</AppText>
-            <View style={styles.portalCard}>
+            <AppText style={[styles.sectionHeading, { color: theme.textSecondary }]}>
+              Management Portal
+            </AppText>
+            <View
+              style={[
+                styles.optionsGroup,
+                {
+                  backgroundColor: theme.isDark ? '#002235' : Palette.white,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
               <Pressable
                 onPress={() => {
                   if (roleType === 'super_admin') router.push('/portal/admin' as any);
                   else if (roleType === 'company_admin') router.push('/portal/company' as any);
                   else if (roleType === 'driver') router.push('/portal/driver' as any);
                 }}
-                style={styles.portalRow}
+                style={styles.optionRow}
               >
-                <View style={styles.portalIcon}>
-                  <SymbolView
-                    name={{ ios: 'shield.fill', android: 'admin_panel_settings', web: 'admin_panel_settings' }}
-                    size={22}
-                    tintColor={Monochrome.textPrimary}
-                  />
-                </View>
-                <View style={styles.portalInfo}>
-                  <AppText style={styles.portalTitle}>
-                    {roleType === 'super_admin' ? 'Super Admin Console' : roleType === 'company_admin' ? 'Company Fleet Portal' : 'Driver Console'}
-                  </AppText>
-                  <AppText style={styles.portalSubtitle}>Switch workspace</AppText>
+                <View style={styles.optionLeft}>
+                  <View style={[styles.optionIconBox, { backgroundColor: 'rgba(0, 48, 73, 0.1)' }]}>
+                    <SymbolView
+                      name={{ ios: 'shield.fill', android: 'admin_panel_settings', web: 'admin_panel_settings' }}
+                      size={18}
+                      tintColor={Palette.prussianNavy}
+                    />
+                  </View>
+                  <View>
+                    <AppText style={[styles.optionTitle, { color: theme.text }]}>
+                      {roleType === 'super_admin'
+                        ? 'Super Admin Console'
+                        : roleType === 'company_admin'
+                        ? 'Company Fleet Portal'
+                        : 'Driver Trip Console'}
+                    </AppText>
+                    <AppText style={[styles.optionSubtitle, { color: theme.textSecondary }]}>
+                      Open management workspace
+                    </AppText>
+                  </View>
                 </View>
                 <SymbolView
                   name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                  size={16}
-                  tintColor={Monochrome.textMuted}
+                  size={14}
+                  tintColor={theme.border}
                 />
               </Pressable>
             </View>
           </View>
         )}
 
-        {/* Security & Preferences */}
+        {/* Security & Authentication Settings */}
         <View style={styles.section}>
-          <AppText style={styles.sectionHeading}>Security &amp; Preferences</AppText>
-          <View style={styles.optionsCard}>
-            {(roleType === 'passenger' || roleType === 'driver') ? (
-              <Pressable onPress={() => router.push('/security/mpin' as any)} style={styles.optionRow}>
-                <View style={styles.optionLeft}>
-                  <SymbolView
-                    name={{ ios: 'lock.shield.fill', android: 'security', web: 'security' }}
-                    size={18}
-                    tintColor={Monochrome.textPrimary}
-                  />
-                  <AppText style={styles.optionText}>Security &amp; MPIN</AppText>
-                </View>
-                <SymbolView
-                  name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                  size={14}
-                  tintColor={Monochrome.textMuted}
-                />
-              </Pressable>
-            ) : null}
-            <Pressable onPress={() => setPwdModalVisible(true)} style={styles.optionRow}>
-              <View style={styles.optionLeft}>
-                <SymbolView
-                  name={{ ios: 'lock.fill', android: 'lock', web: 'lock' }}
-                  size={18}
-                  tintColor={Monochrome.textPrimary}
-                />
-                <AppText style={styles.optionText}>Change Password</AppText>
-              </View>
-              <SymbolView
-                name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                size={14}
-                tintColor={Monochrome.textMuted}
-              />
-            </Pressable>
-
-            <Pressable onPress={() => router.push('/notifications' as any)} style={[styles.optionRow, styles.rowBorder]}>
-              <View style={styles.optionLeft}>
-                <SymbolView
-                  name={{ ios: 'bell.fill', android: 'notifications', web: 'notifications' }}
-                  size={18}
-                  tintColor={Monochrome.textPrimary}
-                />
-                <AppText style={styles.optionText}>Notification Preferences</AppText>
-              </View>
-              <SymbolView
-                name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                size={14}
-                tintColor={Monochrome.textMuted}
-              />
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.push('/(tabs)/cards' as any)}
-              style={[styles.optionRow, styles.rowBorder]}
-            >
-              <View style={styles.optionLeft}>
-                <SymbolView
-                  name={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }}
-                  size={18}
-                  tintColor={Monochrome.textPrimary}
-                />
-                <AppText style={styles.optionText}>My cards</AppText>
-              </View>
-              <SymbolView
-                name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                size={14}
-                tintColor={Monochrome.textMuted}
-              />
-            </Pressable>
-
-            <Pressable onPress={() => router.push('/travel' as any)} style={[styles.optionRow, styles.rowBorder]}>
-              <View style={styles.optionLeft}>
-                <SymbolView
-                  name={{ ios: 'ticket.fill', android: 'confirmation_number', web: 'confirmation_number' }}
-                  size={18}
-                  tintColor={Monochrome.textPrimary}
-                />
-                <AppText style={styles.optionText}>My Travel History</AppText>
-              </View>
-              <SymbolView
-                name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                size={14}
-                tintColor={Monochrome.textMuted}
-              />
-            </Pressable>
-
-            {roleType === 'passenger' ? (
+          <AppText style={[styles.sectionHeading, { color: theme.textSecondary }]}>
+            Security &amp; Passwords
+          </AppText>
+          <View
+            style={[
+              styles.optionsGroup,
+              {
+                backgroundColor: theme.isDark ? '#002235' : Palette.white,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            {/* MPIN Setting */}
+            {(roleType === 'passenger' || roleType === 'driver') && (
               <Pressable
-                onPress={() => router.push('/portal/concession' as any)}
-                style={[styles.optionRow, styles.rowBorder]}
+                onPress={() => router.push('/security/mpin' as any)}
+                style={[styles.optionRow, styles.divider, { borderBottomColor: theme.borderLight }]}
               >
                 <View style={styles.optionLeft}>
-                  <SymbolView
-                    name={{ ios: 'person.text.rectangle', android: 'badge', web: 'badge' }}
-                    size={18}
-                    tintColor={Monochrome.textPrimary}
-                  />
-                  <AppText style={styles.optionText}>Fare concession application</AppText>
+                  <View style={[styles.optionIconBox, { backgroundColor: 'rgba(193, 18, 31, 0.1)' }]}>
+                    <SymbolView
+                      name={{ ios: 'lock.shield.fill', android: 'security', web: 'security' }}
+                      size={18}
+                      tintColor={Palette.crimsonRed}
+                    />
+                  </View>
+                  <View>
+                    <AppText style={[styles.optionTitle, { color: theme.text }]}>
+                      Payment Security &amp; MPIN
+                    </AppText>
+                    <AppText style={[styles.optionSubtitle, { color: theme.textSecondary }]}>
+                      Protect contactless bus payments
+                    </AppText>
+                  </View>
                 </View>
                 <SymbolView
                   name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
                   size={14}
-                  tintColor={Monochrome.textMuted}
+                  tintColor={theme.border}
                 />
               </Pressable>
-            ) : null}
+            )}
 
-            <Pressable onPress={() => router.push('/support' as any)} style={[styles.optionRow, styles.rowBorder]}>
+            {/* Change Password */}
+            <Pressable
+              onPress={() => setPwdModalVisible(true)}
+              style={[styles.optionRow, styles.divider, { borderBottomColor: theme.borderLight }]}
+            >
               <View style={styles.optionLeft}>
-                <SymbolView
-                  name={{ ios: 'questionmark.circle.fill', android: 'help_outline', web: 'help_outline' }}
-                  size={18}
-                  tintColor={Monochrome.textPrimary}
-                />
-                <AppText style={styles.optionText}>Help, payments &amp; disputes</AppText>
+                <View style={[styles.optionIconBox, { backgroundColor: 'rgba(102, 155, 188, 0.12)' }]}>
+                  <SymbolView
+                    name={{ ios: 'key.fill', android: 'vpn_key', web: 'vpn_key' }}
+                    size={18}
+                    tintColor={Palette.slateBlue}
+                  />
+                </View>
+                <View>
+                  <AppText style={[styles.optionTitle, { color: theme.text }]}>
+                    Change Password
+                  </AppText>
+                  <AppText style={[styles.optionSubtitle, { color: theme.textSecondary }]}>
+                    Update your account login password
+                  </AppText>
+                </View>
               </View>
               <SymbolView
                 name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
                 size={14}
-                tintColor={Monochrome.textMuted}
+                tintColor={theme.border}
+              />
+            </Pressable>
+
+            {/* Active Sessions */}
+            <Pressable
+              onPress={() => setSessionsModalVisible(true)}
+              style={styles.optionRow}
+            >
+              <View style={styles.optionLeft}>
+                <View style={[styles.optionIconBox, { backgroundColor: 'rgba(0, 48, 73, 0.08)' }]}>
+                  <SymbolView
+                    name={{ ios: 'laptopcomputer.and.iphone', android: 'devices', web: 'devices' }}
+                    size={18}
+                    tintColor={theme.isDark ? Palette.warmCream : Palette.prussianNavy}
+                  />
+                </View>
+                <View>
+                  <AppText style={[styles.optionTitle, { color: theme.text }]}>
+                    Logged-in Devices
+                  </AppText>
+                  <AppText style={[styles.optionSubtitle, { color: theme.textSecondary }]}>
+                    {sessions.length > 0 ? `${sessions.length} active sessions` : 'Manage signed-in devices'}
+                  </AppText>
+                </View>
+              </View>
+              <SymbolView
+                name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                size={14}
+                tintColor={theme.border}
               />
             </Pressable>
           </View>
         </View>
 
-        {/* Active Authorized Sessions */}
+        {/* Transit & Concession Services */}
         <View style={styles.section}>
-          <AppText style={styles.sectionHeading}>Active Sessions ({sessions.length})</AppText>
-          <View style={styles.optionsCard}>
-            {loading && !refreshing ? (
-              <ActivityIndicator size="small" color={Monochrome.textPrimary} style={{ padding: Spacing.four }} />
-            ) : sessions.length > 0 ? (
-              sessions.map((sess, idx) => (
-                <View key={sess.id} style={[styles.sessionRow, idx > 0 && styles.rowBorder]}>
-                  <View style={styles.sessionLeft}>
-                    <SymbolView
-                      name={{
-                        ios: sess.is_current ? 'laptopcomputer.and.iphone' : 'iphone',
-                        android: sess.is_current ? 'devices' : 'smartphone',
-                        web: sess.is_current ? 'devices' : 'smartphone',
-                      }}
-                      size={20}
-                      tintColor={Monochrome.textPrimary}
-                    />
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.sessionTitleRow}>
-                        <AppText style={styles.sessionDeviceName}>
-                          {sess.name || 'Mobile App / Browser'}
-                        </AppText>
-                        {sess.is_current ? (
-                          <View style={styles.currentBadge}>
-                            <AppText style={styles.currentBadgeText}>THIS DEVICE</AppText>
-                          </View>
-                        ) : null}
-                      </View>
-                      <AppText style={styles.sessionMeta}>
-                        {sess.last_used_at ? new Date(sess.last_used_at).toLocaleDateString() : 'Active'}
-                      </AppText>
-                    </View>
-                  </View>
-                  {!sess.is_current && (
-                    <Pressable
-                      onPress={() => handleRevokeSession(sess.id)}
-                      style={styles.revokeBtn}
-                    >
-                      <AppText style={styles.revokeBtnText}>Revoke</AppText>
-                    </Pressable>
-                  )}
+          <AppText style={[styles.sectionHeading, { color: theme.textSecondary }]}>
+            Commuter Preferences
+          </AppText>
+          <View
+            style={[
+              styles.optionsGroup,
+              {
+                backgroundColor: theme.isDark ? '#002235' : Palette.white,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            {/* Notifications */}
+            <Pressable
+              onPress={() => router.push('/notifications' as any)}
+              style={[styles.optionRow, styles.divider, { borderBottomColor: theme.borderLight }]}
+            >
+              <View style={styles.optionLeft}>
+                <View style={[styles.optionIconBox, { backgroundColor: 'rgba(233, 185, 110, 0.2)' }]}>
+                  <SymbolView
+                    name={{ ios: 'bell.fill', android: 'notifications', web: 'notifications' }}
+                    size={18}
+                    tintColor="#C27803"
+                  />
                 </View>
-              ))
-            ) : (
-              <AppText style={{ padding: Spacing.four, color: Monochrome.textMuted, fontSize: 13 }}>
-                No active remote sessions found.
-              </AppText>
+                <View>
+                  <AppText style={[styles.optionTitle, { color: theme.text }]}>
+                    Notification Settings
+                  </AppText>
+                  <AppText style={[styles.optionSubtitle, { color: theme.textSecondary }]}>
+                    Fare receipts &amp; ride alerts
+                  </AppText>
+                </View>
+              </View>
+              <SymbolView
+                name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                size={14}
+                tintColor={theme.border}
+              />
+            </Pressable>
+
+            {/* Student/Senior Concession */}
+            {roleType === 'passenger' && (
+              <Pressable
+                onPress={() => router.push('/portal/concession' as any)}
+                style={[styles.optionRow, styles.divider, { borderBottomColor: theme.borderLight }]}
+              >
+                <View style={styles.optionLeft}>
+                  <View style={[styles.optionIconBox, { backgroundColor: 'rgba(27, 138, 90, 0.12)' }]}>
+                    <SymbolView
+                      name={{ ios: 'person.text.rectangle', android: 'badge', web: 'badge' }}
+                      size={18}
+                      tintColor="#1B8A5A"
+                    />
+                  </View>
+                  <View>
+                    <AppText style={[styles.optionTitle, { color: theme.text }]}>
+                      Fare Concession (Student / Senior)
+                    </AppText>
+                    <AppText style={[styles.optionSubtitle, { color: theme.textSecondary }]}>
+                      Apply for subsidized bus fares
+                    </AppText>
+                  </View>
+                </View>
+                <SymbolView
+                  name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                  size={14}
+                  tintColor={theme.border}
+                />
+              </Pressable>
             )}
+
+            {/* Help & Support */}
+            <Pressable
+              onPress={() => router.push('/support' as any)}
+              style={styles.optionRow}
+            >
+              <View style={styles.optionLeft}>
+                <View style={[styles.optionIconBox, { backgroundColor: 'rgba(102, 155, 188, 0.12)' }]}>
+                  <SymbolView
+                    name={{ ios: 'questionmark.circle.fill', android: 'help_outline', web: 'help_outline' }}
+                    size={18}
+                    tintColor={Palette.slateBlue}
+                  />
+                </View>
+                <View>
+                  <AppText style={[styles.optionTitle, { color: theme.text }]}>
+                    Help &amp; Support Center
+                  </AppText>
+                  <AppText style={[styles.optionSubtitle, { color: theme.textSecondary }]}>
+                    Payment disputes &amp; FAQs
+                  </AppText>
+                </View>
+              </View>
+              <SymbolView
+                name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                size={14}
+                tintColor={theme.border}
+              />
+            </Pressable>
           </View>
         </View>
 
-        {/* Logout Actions */}
-        <Pressable onPress={handleLogout} style={styles.logoutButton}>
+        {/* Clean Sign Out Action Button */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Sign Out of eYatra"
+          onPress={handleLogout}
+          style={({ pressed }) => [
+            styles.signOutButton,
+            {
+              backgroundColor: theme.isDark ? 'rgba(193, 18, 31, 0.15)' : '#FFF1F2',
+              borderColor: Palette.crimsonRed,
+              opacity: pressed ? 0.75 : 1,
+            },
+          ]}
+        >
           <SymbolView
-            name={{ ios: 'arrow.right.square.fill', android: 'logout', web: 'logout' }}
+            name={{ ios: 'rectangle.portrait.and.arrow.right', android: 'logout', web: 'logout' }}
             size={18}
-            tintColor={Monochrome.textPrimary}
+            tintColor={Palette.crimsonRed}
           />
-          <AppText style={styles.logoutButtonText}>Sign Out</AppText>
+          <AppText style={styles.signOutText}>Sign Out of eYatra</AppText>
         </Pressable>
 
-        <Pressable onPress={handleLogoutAll} style={styles.logoutAllButton}>
-          <AppText style={styles.logoutAllButtonText}>Sign Out Everywhere</AppText>
-        </Pressable>
+        {/* App Version Tag */}
+        <View style={styles.versionWrap}>
+          <AppText style={[styles.versionText, { color: theme.textMuted }]}>
+            eYatra v1.0.0 • Digital Transit Nepal
+          </AppText>
+        </View>
       </ScrollView>
 
       {/* Edit Profile Modal */}
       <Modal visible={editModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
-            <View style={styles.modalHeader}>
-              <AppText style={styles.modalTitle}>Edit Account Details</AppText>
+        <View style={styles.modalBackdrop}>
+          <View
+            style={[
+              styles.modalSheet,
+              {
+                backgroundColor: theme.isDark ? '#002235' : Palette.white,
+                paddingBottom: insets.bottom + 20,
+              },
+            ]}
+          >
+            <View style={styles.modalHeaderRow}>
+              <AppText style={[styles.modalTitle, { color: theme.text }]}>
+                Edit Account Details
+              </AppText>
               <Pressable onPress={() => setEditModalVisible(false)} hitSlop={8}>
                 <SymbolView
                   name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
-                  size={22}
-                  tintColor={Monochrome.textMuted}
+                  size={24}
+                  tintColor={theme.textMuted}
                 />
               </Pressable>
             </View>
 
-            <View style={styles.modalForm}>
-              <View style={styles.field}>
-                <AppText style={styles.fieldLabel}>Full Name</AppText>
-                <AppTextInput
-                  style={styles.input}
-                  value={nameInput}
-                  onChangeText={(val) => {
-                    setNameInput(val);
-                    setEditError(null);
-                  }}
-                  placeholder="Enter full name"
-                  placeholderTextColor={Monochrome.textMuted}
-                />
+            {editError && (
+              <View style={styles.modalAlertError}>
+                <AppText style={styles.modalAlertText}>{editError}</AppText>
               </View>
+            )}
 
-              <View style={styles.field}>
-                <AppText style={styles.fieldLabel}>Phone Number</AppText>
-                <AppTextInput
-                  style={styles.input}
-                  value={phoneInput}
-                  onChangeText={setPhoneInput}
-                  placeholder="98XXXXXXXX"
-                  placeholderTextColor={Monochrome.textMuted}
-                  keyboardType="phone-pad"
-                />
-              </View>
-
-              {editError && <AppText style={styles.errorText}>{editError}</AppText>}
-
-              <PrimaryButton
-                title={savingProfile ? 'Saving...' : 'Save Profile'}
-                onPress={handleSaveProfile}
-                disabled={savingProfile}
-                style={styles.modalActionBtn}
+            <View style={styles.modalField}>
+              <AppText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+                Full Name
+              </AppText>
+              <AppTextInput
+                style={[
+                  styles.fieldInput,
+                  {
+                    backgroundColor: theme.isDark ? '#001824' : '#FAF4EB',
+                    color: theme.text,
+                    borderColor: theme.border,
+                  },
+                ]}
+                value={nameInput}
+                onChangeText={(val) => {
+                  setNameInput(val);
+                  setEditError(null);
+                }}
+                placeholder="Enter full name"
+                placeholderTextColor={theme.textMuted}
               />
             </View>
+
+            <View style={styles.modalField}>
+              <AppText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+                Mobile Phone
+              </AppText>
+              <AppTextInput
+                style={[
+                  styles.fieldInput,
+                  {
+                    backgroundColor: theme.isDark ? '#001824' : '#FAF4EB',
+                    color: theme.text,
+                    borderColor: theme.border,
+                  },
+                ]}
+                value={phoneInput}
+                onChangeText={setPhoneInput}
+                placeholder="98XXXXXXXX"
+                placeholderTextColor={theme.textMuted}
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <Pressable
+              onPress={() => void handleSaveProfile()}
+              disabled={savingProfile}
+              style={[
+                styles.modalSubmitButton,
+                { opacity: savingProfile ? 0.7 : 1 },
+              ]}
+            >
+              <LinearGradient
+                colors={[Palette.crimsonRed, Palette.deepMaroon]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.modalSubmitGradient}
+              >
+                {savingProfile ? (
+                  <ActivityIndicator size="small" color={Palette.white} />
+                ) : (
+                  <AppText style={styles.modalSubmitText}>Save Changes</AppText>
+                )}
+              </LinearGradient>
+            </Pressable>
           </View>
         </View>
       </Modal>
 
       {/* Change Password Modal */}
       <Modal visible={pwdModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
-            <View style={styles.modalHeader}>
-              <AppText style={styles.modalTitle}>Change Password</AppText>
+        <View style={styles.modalBackdrop}>
+          <View
+            style={[
+              styles.modalSheet,
+              {
+                backgroundColor: theme.isDark ? '#002235' : Palette.white,
+                paddingBottom: insets.bottom + 20,
+              },
+            ]}
+          >
+            <View style={styles.modalHeaderRow}>
+              <AppText style={[styles.modalTitle, { color: theme.text }]}>
+                Change Password
+              </AppText>
               <Pressable onPress={() => setPwdModalVisible(false)} hitSlop={8}>
                 <SymbolView
                   name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
-                  size={22}
-                  tintColor={Monochrome.textMuted}
+                  size={24}
+                  tintColor={theme.textMuted}
                 />
               </Pressable>
             </View>
 
-            <View style={styles.modalForm}>
-              <View style={styles.field}>
-                <AppText style={styles.fieldLabel}>Current Password</AppText>
-                <AppTextInput
-                  style={styles.input}
-                  value={currentPwd}
-                  onChangeText={(val) => {
-                    setCurrentPwd(val);
-                    setPwdError(null);
-                  }}
-                  placeholder="Enter current password"
-                  placeholderTextColor={Monochrome.textMuted}
-                  secureTextEntry
-                />
+            {pwdError && (
+              <View style={styles.modalAlertError}>
+                <AppText style={styles.modalAlertText}>{pwdError}</AppText>
               </View>
+            )}
 
-              <View style={styles.field}>
-                <AppText style={styles.fieldLabel}>New Password</AppText>
-                <AppTextInput
-                  style={styles.input}
-                  value={newPwd}
-                  onChangeText={(val) => {
-                    setNewPwd(val);
-                    setPwdError(null);
-                  }}
-                  placeholder="At least 8 characters"
-                  placeholderTextColor={Monochrome.textMuted}
-                  secureTextEntry
-                />
+            {pwdSuccess && (
+              <View style={styles.modalAlertSuccess}>
+                <AppText style={styles.modalAlertSuccessText}>{pwdSuccess}</AppText>
               </View>
+            )}
 
-              <View style={styles.field}>
-                <AppText style={styles.fieldLabel}>Confirm New Password</AppText>
-                <AppTextInput
-                  style={styles.input}
-                  value={confirmPwd}
-                  onChangeText={(val) => {
-                    setConfirmPwd(val);
-                    setPwdError(null);
-                  }}
-                  placeholder="Repeat new password"
-                  placeholderTextColor={Monochrome.textMuted}
-                  secureTextEntry
-                />
-              </View>
-
-              {pwdError && <AppText style={styles.errorText}>{pwdError}</AppText>}
-              {pwdSuccess && <AppText style={styles.successText}>{pwdSuccess}</AppText>}
-
-              <PrimaryButton
-                title={changingPwd ? 'Updating...' : 'Update Password'}
-                onPress={handleChangePassword}
-                disabled={changingPwd}
-                style={styles.modalActionBtn}
+            <View style={styles.modalField}>
+              <AppText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+                Current Password
+              </AppText>
+              <AppTextInput
+                style={[
+                  styles.fieldInput,
+                  {
+                    backgroundColor: theme.isDark ? '#001824' : '#FAF4EB',
+                    color: theme.text,
+                    borderColor: theme.border,
+                  },
+                ]}
+                value={currentPwd}
+                onChangeText={setCurrentPwd}
+                placeholder="Enter current password"
+                placeholderTextColor={theme.textMuted}
+                secureTextEntry
               />
             </View>
+
+            <View style={styles.modalField}>
+              <AppText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+                New Password
+              </AppText>
+              <AppTextInput
+                style={[
+                  styles.fieldInput,
+                  {
+                    backgroundColor: theme.isDark ? '#001824' : '#FAF4EB',
+                    color: theme.text,
+                    borderColor: theme.border,
+                  },
+                ]}
+                value={newPwd}
+                onChangeText={setNewPwd}
+                placeholder="Min. 8 characters"
+                placeholderTextColor={theme.textMuted}
+                secureTextEntry
+              />
+            </View>
+
+            <View style={styles.modalField}>
+              <AppText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+                Confirm New Password
+              </AppText>
+              <AppTextInput
+                style={[
+                  styles.fieldInput,
+                  {
+                    backgroundColor: theme.isDark ? '#001824' : '#FAF4EB',
+                    color: theme.text,
+                    borderColor: theme.border,
+                  },
+                ]}
+                value={confirmPwd}
+                onChangeText={setConfirmPwd}
+                placeholder="Re-enter new password"
+                placeholderTextColor={theme.textMuted}
+                secureTextEntry
+              />
+            </View>
+
+            <Pressable
+              onPress={() => void handleChangePassword()}
+              disabled={changingPwd}
+              style={[
+                styles.modalSubmitButton,
+                { opacity: changingPwd ? 0.7 : 1 },
+              ]}
+            >
+              <LinearGradient
+                colors={[Palette.crimsonRed, Palette.deepMaroon]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.modalSubmitGradient}
+              >
+                {changingPwd ? (
+                  <ActivityIndicator size="small" color={Palette.white} />
+                ) : (
+                  <AppText style={styles.modalSubmitText}>Update Password</AppText>
+                )}
+              </LinearGradient>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Logged-in Devices Sheet Modal */}
+      <Modal visible={sessionsModalVisible} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View
+            style={[
+              styles.modalSheet,
+              {
+                backgroundColor: theme.isDark ? '#002235' : Palette.white,
+                paddingBottom: insets.bottom + 20,
+                maxHeight: '80%',
+              },
+            ]}
+          >
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <AppText style={[styles.modalTitle, { color: theme.text }]}>
+                  Active Devices ({sessions.length})
+                </AppText>
+                <AppText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
+                  Devices currently authorized on your eYatra account
+                </AppText>
+              </View>
+              <Pressable onPress={() => setSessionsModalVisible(false)} hitSlop={8}>
+                <SymbolView
+                  name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
+                  size={24}
+                  tintColor={theme.textMuted}
+                />
+              </Pressable>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 12 }}>
+              {sessions.length > 0 ? (
+                sessions.map((sess) => (
+                  <View
+                    key={sess.id}
+                    style={[
+                      styles.deviceSessionCard,
+                      {
+                        backgroundColor: theme.isDark ? '#001A29' : '#FAF4EB',
+                        borderColor: theme.border,
+                      },
+                    ]}
+                  >
+                    <View style={styles.deviceSessionLeft}>
+                      <SymbolView
+                        name={{
+                          ios: sess.is_current ? 'laptopcomputer.and.iphone' : 'iphone',
+                          android: sess.is_current ? 'devices' : 'smartphone',
+                          web: sess.is_current ? 'devices' : 'smartphone',
+                        }}
+                        size={20}
+                        tintColor={sess.is_current ? Palette.crimsonRed : theme.textSecondary}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.deviceTitleRow}>
+                          <AppText style={[styles.deviceName, { color: theme.text }]} numberOfLines={1}>
+                            {sess.name || 'Mobile App / Browser'}
+                          </AppText>
+                          {sess.is_current && (
+                            <View style={styles.currentDeviceBadge}>
+                              <AppText style={styles.currentDeviceText}>THIS DEVICE</AppText>
+                            </View>
+                          )}
+                        </View>
+                        <AppText style={[styles.deviceMeta, { color: theme.textMuted }]}>
+                          Last active: {sess.last_used_at ? new Date(sess.last_used_at).toLocaleDateString() : 'Now'}
+                        </AppText>
+                      </View>
+                    </View>
+
+                    {!sess.is_current && (
+                      <Pressable
+                        onPress={() => void handleRevokeSession(sess.id)}
+                        style={styles.revokeButton}
+                      >
+                        <AppText style={styles.revokeButtonText}>Sign Out</AppText>
+                      </Pressable>
+                    )}
+                  </View>
+                ))
+              ) : (
+                <AppText style={[styles.noDevicesText, { color: theme.textMuted }]}>
+                  No active remote sessions found.
+                </AppText>
+              )}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -628,310 +931,334 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Monochrome.background,
   },
-  header: {
+  headerGradient: {
+    paddingHorizontal: Spacing.four,
+    paddingBottom: Spacing.three,
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
-    backgroundColor: Monochrome.surfacePrimary,
-    borderBottomWidth: 1,
-    borderBottomColor: Monochrome.border,
+  },
+  headerSubtitle: {
+    color: Palette.slateBlue,
+    fontFamily: FontFamilies.medium,
+    fontSize: 12,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Monochrome.textPrimary,
+    color: Palette.warmCream,
+    fontFamily: FontFamilies.extraBold,
+    fontSize: 22,
+    lineHeight: 28,
+    letterSpacing: -0.3,
   },
-  editBtn: {
+  editHeaderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
-  editBtnText: {
+  editHeaderText: {
+    fontFamily: FontFamilies.bold,
     fontSize: 13,
-    fontWeight: '700',
-    color: Monochrome.textPrimary,
+    color: Palette.warmCream,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.four,
-    gap: Spacing.four,
-  },
-  profileCard: {
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 20,
     padding: Spacing.four,
+    gap: 18,
+  },
+  heroProfileCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
+    padding: 18,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: Monochrome.border,
+    gap: 16,
+    shadowColor: Palette.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  avatarWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Monochrome.surfaceElevated,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
+  avatarOuterRing: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    padding: 2.5,
+    borderWidth: 2,
+    borderColor: Palette.crimsonRed,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarLetter: {
+    fontFamily: FontFamilies.extraBold,
     fontSize: 24,
-    fontWeight: '800',
-    color: Monochrome.textPrimary,
+    color: Palette.white,
   },
-  profileTextGroup: {
+  userInfo: {
     flex: 1,
+    gap: 4,
   },
-  profileName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Monochrome.textPrimary,
-  },
-  profileEmail: {
-    fontSize: 13,
-    color: Monochrome.textSecondary,
-    marginTop: 2,
-  },
-  profilePhone: {
-    fontSize: 12,
-    color: Monochrome.textMuted,
-    marginTop: 2,
-  },
-  typeBadge: {
-    backgroundColor: Monochrome.surfaceElevated,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-    marginTop: 6,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-  },
-  typeBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: Monochrome.textSecondary,
-  },
-  section: {
-    gap: Spacing.two,
-  },
-  sectionHeading: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Monochrome.textPrimary,
-  },
-  portalCard: {
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-    overflow: 'hidden',
-  },
-  portalRow: {
+  userNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.four,
-    gap: Spacing.three,
+    gap: 8,
+    flexWrap: 'wrap',
   },
-  portalIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: Monochrome.surfaceElevated,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
+  userName: {
+    fontFamily: FontFamilies.extraBold,
+    fontSize: 18,
+    lineHeight: 23,
+    letterSpacing: -0.2,
+  },
+  roleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    backgroundColor: 'rgba(193, 18, 31, 0.12)',
+  },
+  roleBadgeText: {
+    fontFamily: FontFamilies.bold,
+    fontSize: 10,
+    color: Palette.crimsonRed,
+    letterSpacing: 0.5,
+  },
+  userMetaItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
   },
-  portalInfo: {
-    flex: 1,
-  },
-  portalTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Monochrome.textPrimary,
-  },
-  portalSubtitle: {
+  userMetaText: {
+    fontFamily: FontFamilies.regular,
     fontSize: 12,
-    color: Monochrome.textMuted,
-    marginTop: 2,
+    lineHeight: 16,
   },
-  optionsCard: {
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 16,
+  section: {
+    gap: 8,
+  },
+  sectionHeading: {
+    fontFamily: FontFamilies.bold,
+    fontSize: 12,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    paddingHorizontal: 4,
+  },
+  optionsGroup: {
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: Monochrome.border,
     overflow: 'hidden',
+    shadowColor: Palette.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: Spacing.four,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  divider: {
+    borderBottomWidth: 1,
   },
   optionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
+    gap: 12,
+    flex: 1,
   },
-  optionText: {
+  optionIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionTitle: {
+    fontFamily: FontFamilies.bold,
     fontSize: 14,
-    fontWeight: '600',
-    color: Monochrome.textPrimary,
+    lineHeight: 18,
   },
-  rowBorder: {
-    borderTopWidth: 1,
-    borderTopColor: Monochrome.surfaceElevated,
+  optionSubtitle: {
+    fontFamily: FontFamilies.regular,
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 1,
   },
-  sessionRow: {
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  signOutText: {
+    fontFamily: FontFamilies.bold,
+    fontSize: 14,
+    color: Palette.crimsonRed,
+  },
+  versionWrap: {
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  versionText: {
+    fontFamily: FontFamilies.medium,
+    fontSize: 11,
+    letterSpacing: 0.2,
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+  },
+  modalSheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    gap: 16,
+  },
+  modalHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: Spacing.three,
   },
-  sessionLeft: {
+  modalTitle: {
+    fontFamily: FontFamilies.extraBold,
+    fontSize: 19,
+    letterSpacing: -0.3,
+  },
+  modalSubtitle: {
+    fontFamily: FontFamilies.regular,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  modalAlertError: {
+    backgroundColor: '#FDF0D5',
+    borderColor: Palette.crimsonRed,
+    borderWidth: 1,
+    padding: 10,
+    borderRadius: 12,
+  },
+  modalAlertText: {
+    color: Palette.crimsonRed,
+    fontFamily: FontFamilies.medium,
+    fontSize: 12,
+  },
+  modalAlertSuccess: {
+    backgroundColor: '#E7F6ED',
+    borderColor: '#1B8A5A',
+    borderWidth: 1,
+    padding: 10,
+    borderRadius: 12,
+  },
+  modalAlertSuccessText: {
+    color: '#1B8A5A',
+    fontFamily: FontFamilies.bold,
+    fontSize: 12,
+  },
+  modalField: {
+    gap: 6,
+  },
+  fieldLabel: {
+    fontFamily: FontFamilies.bold,
+    fontSize: 12,
+  },
+  fieldInput: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+  },
+  modalSubmitButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginTop: 6,
+  },
+  modalSubmitGradient: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSubmitText: {
+    fontFamily: FontFamilies.bold,
+    fontSize: 15,
+    color: Palette.white,
+  },
+  deviceSessionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  deviceSessionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     flex: 1,
   },
-  sessionTitleRow: {
+  deviceTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  sessionDeviceName: {
+  deviceName: {
+    fontFamily: FontFamilies.bold,
     fontSize: 13,
-    fontWeight: '600',
-    color: Monochrome.textPrimary,
   },
-  currentBadge: {
-    backgroundColor: Monochrome.surfaceElevated,
+  currentDeviceBadge: {
     paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(27, 138, 90, 0.12)',
   },
-  currentBadgeText: {
+  currentDeviceText: {
+    fontFamily: FontFamilies.extraBold,
     fontSize: 9,
-    fontWeight: '800',
-    color: Monochrome.textPrimary,
+    color: '#1B8A5A',
+    letterSpacing: 0.4,
   },
-  sessionMeta: {
+  deviceMeta: {
+    fontFamily: FontFamilies.regular,
     fontSize: 11,
-    color: Monochrome.textMuted,
     marginTop: 2,
   },
-  revokeBtn: {
+  revokeButton: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: Monochrome.surfaceElevated,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(193, 18, 31, 0.1)',
   },
-  revokeBtnText: {
+  revokeButtonText: {
+    fontFamily: FontFamilies.bold,
     fontSize: 11,
-    color: Monochrome.textSecondary,
-    fontWeight: '600',
+    color: Palette.crimsonRed,
   },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-    borderRadius: 14,
-    paddingVertical: 14,
-    marginTop: Spacing.two,
-  },
-  logoutButtonText: {
-    color: Monochrome.textPrimary,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  logoutAllButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-  },
-  logoutAllButtonText: {
-    color: Monochrome.textMuted,
+  noDevicesText: {
+    fontFamily: FontFamilies.regular,
     fontSize: 13,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: Monochrome.surfacePrimary,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.four,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.four,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Monochrome.textPrimary,
-  },
-  modalForm: {
-    gap: Spacing.three,
-  },
-  field: {
-    gap: 4,
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Monochrome.textSecondary,
-  },
-  input: {
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 12,
-    paddingHorizontal: Spacing.three,
-    height: 48,
-    fontSize: 15,
-    color: Monochrome.textPrimary,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-  },
-  errorText: {
-    fontSize: 13,
-    color: Monochrome.textPrimary,
-    fontWeight: '500',
-  },
-  successText: {
-    fontSize: 13,
-    color: Monochrome.textPrimary,
-    fontWeight: '600',
-  },
-  modalActionBtn: {
-    marginTop: Spacing.two,
+    textAlign: 'center',
+    paddingVertical: 16,
   },
 });

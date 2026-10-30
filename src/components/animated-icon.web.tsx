@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
 import Animated, { Keyframe, Easing } from 'react-native-reanimated';
+import { Palette } from '@/constants/theme';
 
 import classes from './animated-icon.module.css';
 const DURATION = 300;
@@ -66,7 +67,11 @@ export function AnimatedIcon() {
       </Animated.View>
 
       <Animated.View style={styles.imageContainer} entering={logoKeyframe.duration(DURATION)}>
-        <Image style={styles.image} source={require('@/assets/images/expo-logo.png')} />
+        <Image
+          style={styles.image}
+          source={require('@/assets/images/eyatra-logo.png')}
+          contentFit="contain"
+        />
       </Animated.View>
     </View>
   );
@@ -97,12 +102,14 @@ const styles = StyleSheet.create({
   },
   image: {
     position: 'absolute',
-    width: 76,
-    height: 71,
+    width: 80,
+    height: 80,
   },
   background: {
     width: 128,
     height: 128,
     position: 'absolute',
+    backgroundColor: Palette.prussianNavy,
+    borderRadius: 32,
   },
 });

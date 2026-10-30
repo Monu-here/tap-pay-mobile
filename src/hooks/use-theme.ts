@@ -1,14 +1,23 @@
 /**
- * Learn more about light and dark modes:
- * https://docs.expo.dev/guides/color-schemes/
+ * Hook to access active theme tokens dynamically based on the current color scheme.
+ * Supports both light and dark modes with the 5-color palette:
+ * Maroon, Crimson, Warm Cream, Prussian Navy, Slate Blue.
  */
 
-import { Colors } from '@/constants/theme';
+import { Colors, getThemeTokens } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export function useTheme() {
   const scheme = useColorScheme();
-  const theme = scheme === 'unspecified' ? 'light' : scheme;
+  const activeScheme = scheme === 'dark' ? 'dark' : 'light';
+  const tokens = getThemeTokens(activeScheme);
 
-  return Colors[theme];
+  return {
+    ...Colors[activeScheme],
+    isDark: activeScheme === 'dark',
+    scheme: activeScheme,
+    tokens,
+  };
 }
+
+export const useAppTheme = useTheme;

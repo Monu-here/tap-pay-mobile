@@ -84,10 +84,8 @@ export function ReviewScreen() {
       return;
     }
 
-    // 2) Registration succeeded and the backend has issued verification
-    //    codes for the email and phone on file. Move to the email OTP
-    //    step; the form state is preserved in the registration context.
-    router.replace('/register/email-otp');
+    // 2) Registration succeeded: proceed directly to phone OTP verification.
+    router.replace('/register/phone-otp');
   };
 
   const goEditPersonal = () => router.push('/register/personal-info');

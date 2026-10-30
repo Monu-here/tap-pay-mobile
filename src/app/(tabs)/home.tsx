@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
+  Image,
   Linking,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -16,17 +16,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import * as Location from "expo-location";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { AddMoneyModal } from "@/features/passenger/components/AddMoneyModal";
-import { JourneyPlanner } from "@/features/passenger/components/JourneyPlanner";
-import { Monochrome, Spacing } from "@/constants/theme";
+import { Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import {
   getDashboard,
   getUnreadNotificationCount,
-  getRoutes,
-  getPassengerFavorites,
   type DashboardData,
-  type RouteInfo,
 } from "@/features/passenger/services/passengerApi";
 import { getSession } from "@/features/auth/session";
 import {
@@ -35,38 +33,13 @@ import {
 } from "@/features/transit/services/transitApi";
 
 const NEARBY_REFRESH_INTERVAL_MS = 30_000;
-const LIVE_LOCATION_MAX_AGE_MS = 120_000;
-
-function getBusLocationFreshness(lastSeenAt: string | null, status: string | null): { isLive: boolean; label: string } {
-  if (!lastSeenAt) return { isLive: false, label: "Location time unavailable" };
-  const timestamp = Date.parse(lastSeenAt);
-  if (!Number.isFinite(timestamp)) return { isLive: false, label: "Location time unavailable" };
-  const ageMs = Date.now() - timestamp;
-  const label = `Updated ${Math.max(0, Math.floor(ageMs / 60_000))} min ago`;
-  return { isLive: status === "active" && ageMs <= LIVE_LOCATION_MAX_AGE_MS, label };
-}
-
-// NFC card colors are fixed so the card always looks like a physical card.
-const CARD = {
-  bg: "#0B0B0C",
-  ring: "rgba(255,255,255,0.07)",
-  textPrimary: "#FFFFFF",
-  textSecondary: "rgba(255,255,255,0.62)",
-  textMuted: "rgba(255,255,255,0.4)",
-  chip: "#D4D4D8",
-  chipLine: "rgba(0,0,0,0.28)",
-  pill: "rgba(255,255,255,0.12)",
-  button: "#FFFFFF",
-  buttonText: "#0B0B0C",
-};
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const session = getSession();
 
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [routes, setRoutes] = useState<RouteInfo[]>([]);
-  const [savedRouteIds, setSavedRouteIds] = useState<number[]>([]);
   const [nearbyBuses, setNearbyBuses] = useState<PublicNearbyBus[]>([]);
   const [nearbyLoading, setNearbyLoading] = useState(true);
   const [nearbyError, setNearbyError] = useState<string | null>(null);
@@ -77,7 +50,6 @@ export default function HomeScreen() {
   const [busSearchQuery, setBusSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [addMoneyVisible, setAddMoneyVisible] = useState(false);
 
@@ -131,55 +103,27 @@ export default function HomeScreen() {
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
-    setError(null);
 
     try {
-      const [dashRes, routesRes, notifRes, favoritesRes] = await Promise.allSettled([
+      const [dashRes, notifRes] = await Promise.allSettled([
         getDashboard(),
-        getRoutes(),
         getUnreadNotificationCount(),
-        getPassengerFavorites(),
       ]);
 
-      if (
-        dashRes.status === "fulfilled" &&
-        dashRes.value.ok &&
-        dashRes.value.data
-      ) {
+      if (dashRes.status === "fulfilled" && dashRes.value.ok && dashRes.value.data) {
         setDashboard(dashRes.value.data);
-      } else if (dashRes.status === "fulfilled" && !dashRes.value.ok) {
-        setError(dashRes.value.message || "Unable to sync dashboard data.");
       }
-
-      if (
-        routesRes.status === "fulfilled" &&
-        routesRes.value.ok &&
-        routesRes.value.data?.routes
-      ) {
-        setRoutes(routesRes.value.data.routes);
-      }
-      if (
-        favoritesRes.status === "fulfilled" &&
-        favoritesRes.value.ok &&
-        favoritesRes.value.data
-      ) {
-        setSavedRouteIds(favoritesRes.value.data.route_ids);
-      }
-
-      if (
-        notifRes.status === "fulfilled" &&
-        notifRes.value.ok &&
-        notifRes.value.data
-      ) {
+      if (notifRes.status === "fulfilled" && notifRes.value.ok && notifRes.value.data) {
         setUnreadNotifications(notifRes.value.data.unread_count);
       }
     } catch {
-      setError("Connection failure. Please check your internet connection.");
+      // Silently fail — content will stay empty/stale
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
+
   const refreshAfterPayment = useCallback(() => fetchData(true), [fetchData]);
 
   useEffect(() => {
@@ -192,8 +136,10 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") void fetchData(true);
-      if (state === "active") void loadNearbyBuses();
+      if (state === "active") {
+        void fetchData(true);
+        void loadNearbyBuses();
+      }
     });
     return () => subscription.remove();
   }, [fetchData, loadNearbyBuses]);
@@ -210,6 +156,8 @@ export default function HomeScreen() {
     userType === "super_admin" ||
     userType === "company_admin" ||
     userType === "driver";
+
+  const firstName = userName.split(" ")[0];
 
   const formatNpr = (formatted?: string | null, minor?: number): string => {
     if (formatted) {
@@ -232,47 +180,78 @@ export default function HomeScreen() {
     } as any);
   };
 
-  return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="dark" />
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good Morning";
+    if (hour < 17) return "Good Afternoon";
+    return "Good Evening";
+  };
 
-      {/* Header Section */}
-      <View style={styles.header}>
+  return (
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <StatusBar style="light" />
+
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={["#003049", "#001824"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.gradientHeader, { paddingTop: insets.top + 12 }]}
+      >
+        {/* Top row: logo + greeting + notifications */}
         <View style={styles.headerTopRow}>
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="eYatra profile"
             onPress={() => router.push("/(tabs)/profile" as any)}
-            style={styles.profileButton}
+            style={styles.brandButton}
           >
-            <View style={styles.avatar}>
-              <AppText style={styles.avatarText}>
-                {userName.charAt(0).toUpperCase()}
-              </AppText>
+            <Image
+              source={require("@/assets/images/eyatra-logo.png")}
+              style={styles.headerLogo}
+              resizeMode="contain"
+            />
+            <View style={styles.brandTextWrap}>
+              <AppText style={styles.greetingText}>{getGreeting()}</AppText>
+              <AppText style={styles.userNameText} numberOfLines={1}>{firstName} 👋</AppText>
             </View>
-            {/* <View style={styles.greetingWrap}>
-              <View style={styles.brandRow}>
-                <AppText style={styles.brandName}>TAP &amp; PAY</AppText>
-                <View style={styles.brandBadge}>
-                  <AppText style={styles.brandBadgeText}>TRANSIT</AppText>
-                </View>
-              </View>
-              <AppText style={styles.userName} numberOfLines={1}>
-                {userName}
-              </AppText>
-            </View> */}
           </Pressable>
 
-          <View style={styles.busSearchBox}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+            onPress={() => router.push("/notifications" as any)}
+            style={styles.notifButton}
+            hitSlop={8}
+          >
+            <SymbolView
+              name={{ ios: "bell.fill", android: "notifications", web: "notifications" }}
+              size={20}
+              tintColor="#FDF0D5"
+            />
+            {unreadNotifications > 0 && (
+              <View style={styles.notifBadge}>
+                <AppText style={styles.notifBadgeText}>
+                  {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                </AppText>
+              </View>
+            )}
+          </Pressable>
+        </View>
+
+        {/* Search bar */}
+        <View style={styles.searchWrapper}>
+          <View style={styles.searchBox}>
             <SymbolView
               name={{ ios: "magnifyingglass", android: "search", web: "search" }}
-              size={17}
-              tintColor={Monochrome.textMuted}
+              size={16}
+              tintColor="rgba(253,240,213,0.5)"
             />
             <AppTextInput
               accessibilityLabel="Search buses and routes"
-              style={styles.busSearchInput}
-              placeholder="Search buses and routes..."
-              placeholderTextColor={Monochrome.textMuted}
+              style={styles.searchInput}
+              placeholder="Search buses & routes..."
+              placeholderTextColor="rgba(253,240,213,0.45)"
               value={busSearchQuery}
               onChangeText={setBusSearchQuery}
               onSubmitEditing={searchBuses}
@@ -283,59 +262,32 @@ export default function HomeScreen() {
             {busSearchQuery.length > 0 && (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Clear bus search"
+                accessibilityLabel="Clear search"
                 onPress={() => setBusSearchQuery("")}
                 hitSlop={6}
               >
                 <SymbolView
                   name={{ ios: "xmark.circle.fill", android: "cancel", web: "cancel" }}
                   size={16}
-                  tintColor={Monochrome.textMuted}
+                  tintColor="rgba(253,240,213,0.5)"
                 />
               </Pressable>
             )}
           </View>
-
-          <View style={styles.headerRightActions}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Notifications"
-              onPress={() => router.push("/notifications" as any)}
-              style={styles.headerIconButton}
-              hitSlop={8}
-            >
-              <SymbolView
-                name={{
-                  ios: "bell.fill",
-                  android: "notifications",
-                  web: "notifications",
-                }}
-                size={18}
-                tintColor={Monochrome.textPrimary}
-              />
-              {unreadNotifications > 0 && (
-                <View style={styles.unreadBadge}>
-                  <AppText style={styles.unreadBadgeText}>
-                    {unreadNotifications > 9 ? "9+" : unreadNotifications}
-                  </AppText>
-                </View>
-              )}
-            </Pressable>
-          </View>
         </View>
-      </View>
+      </LinearGradient>
 
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 90 },
+          { paddingBottom: insets.bottom + 100 },
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Monochrome.textPrimary}
+            tintColor="#C1121F"
           />
         }
       >
@@ -343,99 +295,63 @@ export default function HomeScreen() {
         {isPrivileged && (
           <Pressable
             onPress={() => {
-              if (userType === "super_admin")
-                router.push("/portal/admin" as any);
-              else if (userType === "company_admin")
-                router.push("/portal/company" as any);
-              else if (userType === "driver")
-                router.push("/portal/driver" as any);
+              if (userType === "super_admin") router.push("/portal/admin" as any);
+              else if (userType === "company_admin") router.push("/portal/company" as any);
+              else if (userType === "driver") router.push("/portal/driver" as any);
             }}
-            style={styles.portalBanner}
+            style={[styles.portalBanner, { backgroundColor: theme.surfacePrimary, borderColor: theme.border }]}
           >
             <View style={styles.portalBannerLeft}>
               <SymbolView
-                name={{
-                  ios: "shield.fill",
-                  android: "admin_panel_settings",
-                  web: "admin_panel_settings",
-                }}
+                name={{ ios: "shield.fill", android: "admin_panel_settings", web: "admin_panel_settings" }}
                 size={16}
-                tintColor={Monochrome.textPrimary}
+                tintColor={theme.actionPrimary}
               />
-              <AppText style={styles.portalBannerText}>
+              <AppText style={[styles.portalBannerText, { color: theme.text }]}>
                 Access{" "}
-                {userType === "super_admin"
-                  ? "Super Admin"
-                  : userType === "company_admin"
-                    ? "Company Fleet"
-                    : "Driver"}{" "}
+                {userType === "super_admin" ? "Super Admin" : userType === "company_admin" ? "Company Fleet" : "Driver"}{" "}
                 Portal
               </AppText>
             </View>
             <SymbolView
-              name={{
-                ios: "chevron.right",
-                android: "chevron_right",
-                web: "chevron_right",
-              }}
+              name={{ ios: "chevron.right", android: "chevron_right", web: "chevron_right" }}
               size={14}
-              tintColor={Monochrome.textSecondary}
+              tintColor={theme.textSecondary}
             />
           </Pressable>
         )}
 
-        {/* Error State */}
-        {error && !loading && (
-          <View style={styles.errorBox}>
-            <View style={styles.errorTextRow}>
-              <SymbolView
-                name={{
-                  ios: "exclamationmark.circle.fill",
-                  android: "error",
-                  web: "error",
-                }}
-                size={16}
-                tintColor={Monochrome.textPrimary}
-              />
-              <AppText style={styles.errorText}>{error}</AppText>
-            </View>
-            <Pressable onPress={() => fetchData()} style={styles.retryButton}>
-              <AppText style={styles.retryText}>Retry</AppText>
-            </Pressable>
-          </View>
-        )}
-
-        {/* Loading Indicator */}
+        {/* Loading skeleton */}
         {loading && !refreshing && (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="small" color={Monochrome.textPrimary} />
-            <AppText style={styles.loadingText}>
-              Syncing wallet &amp; transit services...
+          <View style={styles.loadingRow}>
+            <ActivityIndicator size="small" color="#C1121F" />
+            <AppText style={[styles.loadingText, { color: theme.textSecondary }]}>
+              Syncing transit data...
             </AppText>
           </View>
         )}
 
-        {/* NFC Wallet Card */}
+        {/* ── Smart Transit Card ── */}
         <View style={styles.nfcCard}>
           {/* Decorative rings */}
           <View style={[styles.ring, styles.ringOne]} />
           <View style={[styles.ring, styles.ringTwo]} />
           <View style={[styles.ring, styles.ringThree]} />
 
-          {/* Top: brand + contactless */}
+          {/* Top: Brand + NFC icon */}
           <View style={styles.nfcTopRow}>
             <View>
-              <AppText style={styles.nfcBrand}>TAP &amp; PAY</AppText>
-              <AppText style={styles.nfcType}>WALLET CARD</AppText>
+              <AppText style={styles.nfcBrand}>eYatra</AppText>
+              <AppText style={styles.nfcType}>SMART TRANSIT PASS</AppText>
             </View>
             <SymbolView
               name={{ ios: "wave.3.right", android: "nfc", web: "nfc" }}
-              size={28}
-              tintColor={CARD.textPrimary}
+              size={26}
+              tintColor="#FDF0D5"
             />
           </View>
 
-          {/* Chip */}
+          {/* EMV Chip */}
           <View style={styles.nfcChip}>
             <View style={styles.chipLineH1} />
             <View style={styles.chipLineH2} />
@@ -444,21 +360,16 @@ export default function HomeScreen() {
 
           {/* Balance */}
           <View>
-            <AppText style={styles.nfcLabel}>AVAILABLE BALANCE</AppText>
+            <AppText style={styles.nfcLabel}>AVAILABLE TRANSIT BALANCE</AppText>
             <View style={styles.nfcBalanceRow}>
               <AppText style={styles.nfcBalance} numberOfLines={1}>
                 {balanceVisible
-                  ? formatNpr(
-                      dashboard?.wallet.balance_formatted,
-                      dashboard?.wallet.balance_minor,
-                    )
-                  : "********"}
+                  ? formatNpr(dashboard?.wallet.balance_formatted, dashboard?.wallet.balance_minor)
+                  : "NPR ••••••"}
               </AppText>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={
-                  balanceVisible ? "Hide balance" : "Show balance"
-                }
+                accessibilityLabel={balanceVisible ? "Hide balance" : "Show balance"}
                 onPress={() => setBalanceVisible((prev) => !prev)}
                 style={styles.nfcEyeButton}
                 hitSlop={10}
@@ -470,16 +381,16 @@ export default function HomeScreen() {
                     web: balanceVisible ? "visibility" : "visibility_off",
                   }}
                   size={16}
-                  tintColor={CARD.textPrimary}
+                  tintColor="#FDF0D5"
                 />
               </Pressable>
             </View>
           </View>
 
-          {/* Bottom: holder + add money */}
+          {/* Bottom: Holder + Top Up */}
           <View style={styles.nfcBottomRow}>
             <View style={styles.nfcHolderWrap}>
-              <AppText style={styles.nfcLabel}>CARD HOLDER</AppText>
+              <AppText style={styles.nfcLabel}>PASSENGER</AppText>
               <AppText style={styles.nfcHolder} numberOfLines={1}>
                 {userName.toUpperCase()}
               </AppText>
@@ -490,79 +401,111 @@ export default function HomeScreen() {
               style={styles.nfcAddButton}
             >
               <SymbolView
-                name={{
-                  ios: "plus.circle.fill",
-                  android: "add_circle",
-                  web: "add_circle",
-                }}
+                name={{ ios: "plus.circle.fill", android: "add_circle", web: "add_circle" }}
                 size={16}
-                tintColor={CARD.buttonText}
+                tintColor="#FFFFFF"
               />
               <AppText style={styles.nfcAddText}>Top Up</AppText>
             </Pressable>
           </View>
         </View>
 
-        {/* Payment Actions Grid */}
-        <View style={styles.actionsGrid}>
-
+        {/* ── Quick Actions ── */}
+        <View style={styles.quickActionsGrid}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push("/travel" as any)}
-            style={styles.actionGridCard}
+            onPress={() => router.push("/passenger/pay" as any)}
+            style={[styles.quickCard, { backgroundColor: theme.actionPrimary }]}
           >
-            <View style={styles.actionIconBox}>
+            <View style={styles.quickCardIconWrap}>
               <SymbolView
-                name={{
-                  ios: "ticket.fill",
-                  android: "confirmation_number",
-                  web: "confirmation_number",
-                }}
-                size={20}
-                tintColor={Monochrome.textPrimary}
+                name={{ ios: "qrcode.viewfinder", android: "qr_code_scanner", web: "qr_code_scanner" }}
+                size={26}
+                tintColor="#FFFFFF"
               />
             </View>
-            <AppText style={styles.actionCardTitle}>My Trips</AppText>
-            <AppText style={styles.actionCardDesc}>Trip receipts</AppText>
+            <AppText style={styles.quickCardLabel}>Pay Fare</AppText>
+            <AppText style={styles.quickCardSub}>Scan & ride</AppText>
           </Pressable>
 
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push("/(tabs)/cards" as any)}
-            style={styles.actionGridCard}
+            onPress={() => setAddMoneyVisible(true)}
+            style={[styles.quickCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border, borderWidth: 1 }]}
           >
-            <View style={styles.actionIconBox}>
+            <View style={styles.quickCardIconWrap}>
               <SymbolView
-                name={{ ios: "wave.3.right", android: "nfc", web: "nfc" }}
-                size={20}
-                tintColor={Monochrome.textPrimary}
+                name={{ ios: "plus.circle.fill", android: "add_circle", web: "add_circle" }}
+                size={26}
+                tintColor={theme.actionPrimary}
               />
             </View>
-            <AppText style={styles.actionCardTitle}>Cards</AppText>
-            <AppText style={styles.actionCardDesc}>Travel cards</AppText>
+            <AppText style={[styles.quickCardLabel, { color: theme.text }]}>Top Up</AppText>
+            <AppText style={[styles.quickCardSub, { color: theme.textSecondary }]}>Add balance</AppText>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/passenger/tracking" as any)}
+            style={[styles.quickCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border, borderWidth: 1 }]}
+          >
+            <View style={styles.quickCardIconWrap}>
+              <SymbolView
+                name={{ ios: "location.north.line.fill", android: "near_me", web: "near_me" }}
+                size={26}
+                tintColor="#669BBC"
+              />
+            </View>
+            <AppText style={[styles.quickCardLabel, { color: theme.text }]}>Live Map</AppText>
+            <AppText style={[styles.quickCardSub, { color: theme.textSecondary }]}>Track buses</AppText>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/(tabs)/history" as any)}
+            style={[styles.quickCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border, borderWidth: 1 }]}
+          >
+            <View style={styles.quickCardIconWrap}>
+              <SymbolView
+                name={{ ios: "ticket.fill", android: "confirmation_number", web: "confirmation_number" }}
+                size={26}
+                tintColor={theme.text}
+              />
+            </View>
+            <AppText style={[styles.quickCardLabel, { color: theme.text }]}>My Trips</AppText>
+            <AppText style={[styles.quickCardSub, { color: theme.textSecondary }]}>Travel history</AppText>
           </Pressable>
         </View>
 
-        <JourneyPlanner />
-
-        {/* Nearby live buses */}
+        {/* ── Nearby Buses ── */}
         <View style={styles.sectionHeader}>
-          <View>
-            <AppText style={styles.sectionTitle}>Nearby Buses</AppText>
-            <AppText style={styles.sectionSubtitle}>
-              Vehicle reports include freshness so stale locations are clear
-            </AppText>
+          <View style={styles.sectionTitleRow}>
+            <AppText style={[styles.sectionTitle, { color: theme.text }]}>Nearby Buses</AppText>
+            <View style={styles.liveIndicatorPill}>
+              <View style={styles.liveDot} />
+              <AppText style={styles.liveIndicatorText}>LIVE</AppText>
+            </View>
           </View>
+          <Pressable onPress={() => router.push("/passenger/tracking" as any)}>
+            <AppText style={[styles.viewAllText, { color: theme.actionPrimary }]}>Full Map</AppText>
+          </Pressable>
         </View>
 
         {nearbyLoading ? (
-          <View style={styles.nearbyStateCard}>
-            <ActivityIndicator size="small" color={Monochrome.textPrimary} />
-            <AppText style={styles.nearbyStateText}>Finding buses near you…</AppText>
+          <View style={[styles.stateCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border }]}>
+            <ActivityIndicator size="small" color={theme.actionPrimary} />
+            <AppText style={[styles.stateText, { color: theme.textSecondary }]}>Finding buses near you…</AppText>
           </View>
         ) : nearbyError ? (
-          <View style={styles.nearbyStateCard}>
-            <AppText style={styles.nearbyStateText}>{nearbyError}</AppText>
+          <View style={[styles.stateCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border }]}>
+            <SymbolView
+              name={{ ios: "location.slash.fill", android: "location_off", web: "location_off" }}
+              size={22}
+              tintColor={theme.textMuted}
+            />
+            <View style={{ flex: 1 }}>
+              <AppText style={[styles.stateText, { color: theme.textSecondary }]}>{nearbyError}</AppText>
+            </View>
             <Pressable
               accessibilityRole="button"
               onPress={() => {
@@ -572,138 +515,94 @@ export default function HomeScreen() {
                   void loadNearbyBuses(true, locationPermissionGranted !== true);
                 }
               }}
-              style={styles.nearbyRetryButton}
+              style={[styles.stateButton, { backgroundColor: theme.actionPrimary }]}
             >
-              <AppText style={styles.nearbyRetryText}>
+              <AppText style={styles.stateButtonText}>
                 {locationPermissionGranted === false && !locationCanAskAgain
-                  ? "Open Settings"
-                  : locationPermissionGranted === true ? "Retry" : "Enable Location"}
+                  ? "Settings"
+                  : locationPermissionGranted === true ? "Retry" : "Enable"}
               </AppText>
             </Pressable>
           </View>
         ) : nearbyBuses.length > 0 ? (
-          <View style={styles.routesContainer}>
-            {nearbyBuses.slice(0, 3).map((bus) => {
-              const freshness = getBusLocationFreshness(bus.last_seen_at, bus.status);
-
-              return (
+          <View style={styles.busListContainer}>
+            {nearbyBuses.slice(0, 4).map((bus) => (
               <Pressable
                 key={bus.bus_id}
                 onPress={() => router.push("/passenger/tracking" as any)}
-                style={styles.routeItemCard}
+                style={[styles.busCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border }]}
               >
-                <View style={styles.routeIconBox}>
+                <View style={[styles.busIconBox, { backgroundColor: "#003049" }]}>
                   <SymbolView
-                    name={{
-                      ios: "bus.fill",
-                      android: "directions_bus",
-                      web: "directions_bus",
-                    }}
+                    name={{ ios: "bus.fill", android: "directions_bus", web: "directions_bus" }}
                     size={18}
-                    tintColor={Monochrome.textPrimary}
+                    tintColor="#FDF0D5"
                   />
                 </View>
-                <View style={styles.routeInfoWrap}>
-                  <View style={styles.routeCodeRow}>
-                    <AppText style={styles.routeCodeBadge}>
+                <View style={styles.busInfoWrap}>
+                  <View style={styles.busTopRow}>
+                    <AppText style={[styles.busNumber, { color: theme.text }]}>
                       Bus {bus.bus_number}
                     </AppText>
                     {typeof bus.distance_km === "number" && (
-                      <AppText style={styles.routeCompanyText}>
-                        {bus.distance_km.toFixed(1)} km away
-                      </AppText>
+                      <View style={[styles.distancePill, { backgroundColor: theme.surfaceSecondary }]}>
+                        <AppText style={[styles.distanceText, { color: theme.textSecondary }]}>
+                          {bus.distance_km.toFixed(1)} km
+                        </AppText>
+                      </View>
                     )}
                   </View>
-                  <AppText style={styles.routeNameText}>
+                  <AppText style={[styles.busRoute, { color: theme.textSecondary }]} numberOfLines={1}>
                     {bus.route.name || "Route unavailable"}
-                  </AppText>
-                  <AppText style={styles.routeStopsText}>
-                    {bus.route.destination
-                      ? `Towards ${bus.route.destination}`
-                      : bus.company.name || "Destination unavailable"}
-                  </AppText>
-                  <AppText style={styles.nearbyFreshnessText}>
-                    {freshness.isLive ? `Live · ${freshness.label}` : `Not live · ${freshness.label}`}
+                    {bus.route.destination ? ` → ${bus.route.destination}` : ""}
                   </AppText>
                 </View>
                 <SymbolView
-                  name={{
-                    ios: "chevron.right",
-                    android: "chevron_right",
-                    web: "chevron_right",
-                  }}
+                  name={{ ios: "chevron.right", android: "chevron_right", web: "chevron_right" }}
                   size={14}
-                  tintColor={Monochrome.textMuted}
+                  tintColor={theme.textMuted}
                 />
-              </Pressable>
-              );
-            })}
-          </View>
-        ) : (
-          <View style={styles.nearbyStateCard}>
-            <AppText style={styles.nearbyStateText}>
-              No buses are reporting a location within 5 km right now.
-            </AppText>
-          </View>
-        )}
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push("/passenger/tracking" as any)}
-          style={styles.liveTrackingBanner}
-        >
-          <SymbolView
-            name={{ ios: "location.north.line.fill", android: "near_me", web: "near_me" }}
-            size={18}
-            tintColor={Monochrome.actionPrimaryText}
-          />
-          <AppText style={styles.liveTrackingText}>Live Bus Tracking</AppText>
-          <SymbolView
-            name={{ ios: "chevron.right", android: "chevron_right", web: "chevron_right" }}
-            size={14}
-            tintColor={Monochrome.actionPrimaryText}
-          />
-        </Pressable>
-
-        <View style={styles.sectionHeader}>
-          <View>
-            <AppText style={styles.sectionTitle}>Saved Routes</AppText>
-            <AppText style={styles.sectionSubtitle}>Your routes, saved to your account</AppText>
-          </View>
-          {/* <Pressable onPress={() => router.push("/(tabs)/transit?section=saved" as any)}>
-            <AppText style={styles.nearbyRetryText}>View all</AppText>
-          </Pressable> */}
-        </View>
-        {routes.filter((route) => savedRouteIds.includes(route.id)).slice(0, 3).length > 0 ? (
-          <View style={styles.routesContainer}>
-            {routes.filter((route) => savedRouteIds.includes(route.id)).slice(0, 3).map((route) => (
-              <Pressable
-                key={route.id}
-                onPress={() => router.push("/(tabs)/transit?section=saved" as any)}
-                style={styles.routeItemCard}
-              >
-                <View style={styles.routeIconBox}>
-                  <SymbolView name={{ ios: "star.fill", android: "star", web: "star" }} size={18} tintColor={Monochrome.textPrimary} />
-                </View>
-                <View style={styles.routeInfoWrap}>
-                  <AppText style={styles.routeNameText}>{route.name}</AppText>
-                  <AppText style={styles.routeStopsText}>
-                    {route.origin_stop && route.destination_stop
-                      ? `${route.origin_stop} ⇄ ${route.destination_stop}`
-                      : route.code}
-                  </AppText>
-                </View>
               </Pressable>
             ))}
           </View>
         ) : (
-          <View style={styles.nearbyStateCard}>
-            <AppText style={styles.nearbyStateText}>No saved routes yet.</AppText>
-            {/* <Pressable onPress={() => router.push("/(tabs)/transit" as any)}>
-              <AppText style={styles.nearbyRetryText}>Explore routes</AppText>
-            </Pressable> */}
+          <View style={[styles.stateCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border }]}>
+            <SymbolView
+              name={{ ios: "bus", android: "directions_bus", web: "directions_bus" }}
+              size={22}
+              tintColor={theme.textMuted}
+            />
+            <AppText style={[styles.stateText, { color: theme.textSecondary }]}>
+              No buses within 5 km right now.
+            </AppText>
           </View>
         )}
+
+        {/* ── Explore Tip Banner ── */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/(tabs)/transit" as any)}
+          style={[styles.tipBanner, { backgroundColor: theme.surfacePrimary, borderColor: theme.border }]}
+        >
+          <View style={[styles.tipIconBox, { backgroundColor: "rgba(193,18,31,0.1)" }]}>
+            <SymbolView
+              name={{ ios: "map.fill", android: "map", web: "map" }}
+              size={20}
+              tintColor="#C1121F"
+            />
+          </View>
+          <View style={styles.tipTextWrap}>
+            <AppText style={[styles.tipTitle, { color: theme.text }]}>Explore Routes</AppText>
+            <AppText style={[styles.tipSub, { color: theme.textSecondary }]}>
+              Browse all bus routes, stops & schedules
+            </AppText>
+          </View>
+          <SymbolView
+            name={{ ios: "arrow.right.circle.fill", android: "arrow_forward", web: "arrow_forward" }}
+            size={22}
+            tintColor={theme.actionPrimary}
+          />
+        </Pressable>
 
       </ScrollView>
 
@@ -720,137 +619,109 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Monochrome.background,
   },
-  header: {
+
+  /* ── Gradient Header ── */
+  gradientHeader: {
     paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
-    backgroundColor: Monochrome.surfacePrimary,
-    borderBottomWidth: 1,
-    borderBottomColor: Monochrome.border,
+    paddingBottom: 20,
+    gap: 14,
   },
   headerTopRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.two,
+    justifyContent: "space-between",
   },
-  profileButton: {
+  brandButton: {
     flexDirection: "row",
     alignItems: "center",
-  },
-  avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Monochrome.surfaceElevated,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    color: Monochrome.textPrimary,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  greetingWrap: {
+    gap: 10,
     flex: 1,
   },
-  brandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+  headerLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
   },
-  brandName: {
-    fontSize: 11,
-    fontWeight: "900",
-    color: Monochrome.textPrimary,
-    letterSpacing: 1.2,
-  },
-  brandBadge: {
-    backgroundColor: Monochrome.surfaceElevated,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  brandBadgeText: {
-    fontSize: 9,
-    fontWeight: "700",
-    color: Monochrome.textSecondary,
-  },
-  userName: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: Monochrome.textPrimary,
-    marginTop: 2,
-  },
-  headerRightActions: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  busSearchBox: {
+  brandTextWrap: {
     flex: 1,
-    minWidth: 0,
-    height: 38,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: Spacing.two,
-    borderRadius: 19,
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
   },
-  busSearchInput: {
-    flex: 1,
-    minWidth: 0,
-    paddingVertical: 0,
+  greetingText: {
     fontSize: 12,
-    color: Monochrome.textPrimary,
+    fontWeight: "500",
+    color: "rgba(253,240,213,0.65)",
+    letterSpacing: 0.3,
   },
-  headerIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
+  userNameText: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#FDF0D5",
+    letterSpacing: -0.2,
+  },
+  notifButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(253,240,213,0.12)",
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
   },
-  unreadBadge: {
+  notifBadge: {
     position: "absolute",
-    top: 4,
-    right: 4,
-    backgroundColor: Monochrome.actionPrimary,
-    borderRadius: 7,
-    minWidth: 14,
-    height: 14,
+    top: 6,
+    right: 6,
+    backgroundColor: "#C1121F",
+    borderRadius: 6,
+    minWidth: 12,
+    height: 12,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 2,
   },
-  unreadBadgeText: {
-    color: Monochrome.actionPrimaryText,
-    fontSize: 8,
+  notifBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 7,
     fontWeight: "800",
   },
+
+  /* ── Search ── */
+  searchWrapper: {},
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(253,240,213,0.1)",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 42,
+    borderWidth: 1,
+    borderColor: "rgba(253,240,213,0.15)",
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "400",
+    color: "#FDF0D5",
+    paddingVertical: 0,
+  },
+
+  /* ── Scroll Content ── */
   scrollContent: {
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.four,
-    gap: Spacing.four,
+    gap: Spacing.three,
   },
+
+  /* ── Portal Banner ── */
   portalBanner: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: Monochrome.surfaceSecondary,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Monochrome.border,
   },
   portalBannerLeft: {
     flexDirection: "row",
@@ -859,81 +730,44 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   portalBannerText: {
-    color: Monochrome.textPrimary,
     fontSize: 13,
     fontWeight: "600",
   },
-  errorBox: {
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-    borderRadius: 14,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  errorTextRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    flex: 1,
-  },
-  errorText: {
-    color: Monochrome.textPrimary,
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  retryButton: {
-    backgroundColor: Monochrome.surfaceElevated,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginLeft: 8,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-  },
-  retryText: {
-    color: Monochrome.textPrimary,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  loadingBox: {
+
+  /* ── Loading ── */
+  loadingRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 6,
+    paddingVertical: 4,
   },
   loadingText: {
-    color: Monochrome.textSecondary,
     fontSize: 13,
+    fontWeight: "400",
   },
 
-  /* ---------- NFC card ---------- */
+  /* ── NFC / Transit Card ── */
   nfcCard: {
-    backgroundColor: CARD.bg,
-    borderRadius: 26,
-    padding: 22,
-    minHeight: 240,
+    backgroundColor: "#002B49",
+    borderRadius: 22,
+    padding: 20,
+    minHeight: 210,
     justifyContent: "space-between",
     overflow: "hidden",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOpacity: 0.28,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 10 },
-      },
-      android: { elevation: 8 },
-      default: {},
-    }),
+    shadowColor: "#001824",
+    shadowOpacity: 0.28,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: "rgba(253, 240, 213, 0.12)",
   },
   ring: {
     position: "absolute",
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: CARD.ring,
+    borderColor: "rgba(253, 240, 213, 0.07)",
   },
   ringOne: { width: 180, height: 180, top: -60, right: -50 },
   ringTwo: { width: 260, height: 260, top: -100, right: -90 },
@@ -944,55 +778,55 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   nfcBrand: {
-    color: CARD.textPrimary,
-    fontSize: 16,
-    fontWeight: "900",
-    letterSpacing: 1.6,
+    color: "#FDF0D5",
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.3,
   },
   nfcType: {
-    color: CARD.textSecondary,
+    color: "#669BBC",
     fontSize: 10,
     fontWeight: "600",
-    letterSpacing: 1.8,
-    marginTop: 3,
+    letterSpacing: 1.5,
+    marginTop: 2,
   },
   nfcChip: {
-    width: 44,
-    height: 33,
-    borderRadius: 7,
-    backgroundColor: CARD.chip,
+    width: 42,
+    height: 30,
+    borderRadius: 6,
+    backgroundColor: "#DFB86C",
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
   },
   chipLineH1: {
     position: "absolute",
-    top: 11,
+    top: 10,
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: CARD.chipLine,
+    backgroundColor: "rgba(0,0,0,0.22)",
   },
   chipLineH2: {
     position: "absolute",
-    top: 22,
+    top: 20,
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: CARD.chipLine,
+    backgroundColor: "rgba(0,0,0,0.22)",
   },
   chipLineV: {
     position: "absolute",
     top: 0,
     bottom: 0,
     width: 1,
-    backgroundColor: CARD.chipLine,
+    backgroundColor: "rgba(0,0,0,0.22)",
   },
   nfcLabel: {
-    color: CARD.textMuted,
+    color: "#8DAEC7",
     fontSize: 9,
     fontWeight: "600",
-    letterSpacing: 1.6,
+    letterSpacing: 1.4,
   },
   nfcBalanceRow: {
     flexDirection: "row",
@@ -1001,17 +835,17 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   nfcBalance: {
-    color: CARD.textPrimary,
+    color: "#FFFFFF",
     fontSize: 30,
     fontWeight: "800",
     letterSpacing: -0.5,
     flexShrink: 1,
   },
   nfcEyeButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: CARD.pill,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(253, 240, 213, 0.14)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1025,318 +859,204 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   nfcHolder: {
-    color: CARD.textPrimary,
+    color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "700",
-    letterSpacing: 1,
+    letterSpacing: 0.8,
     marginTop: 3,
   },
   nfcAddButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: CARD.button,
-    paddingHorizontal: 14,
-    height: 38,
-    borderRadius: 19,
+    backgroundColor: "#C1121F",
+    paddingHorizontal: 16,
+    height: 36,
+    borderRadius: 18,
+    shadowColor: "#C1121F",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 3,
   },
   nfcAddText: {
-    color: CARD.buttonText,
+    color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "700",
   },
 
-  /* ---------- Actions ---------- */
-  actionsGrid: {
+  /* ── Quick Actions 2×2 Grid ── */
+  quickActionsGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
   },
-  actionGridCard: {
-    flex: 1,
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
+  quickCard: {
+    width: "47.5%",
+    borderRadius: 18,
+    padding: 16,
+    gap: 6,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  actionIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: Monochrome.surfaceElevated,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
+  quickCardIconWrap: {
+    marginBottom: 4,
   },
-  actionCardTitle: {
-    fontSize: 14,
+  quickCardLabel: {
+    fontSize: 15,
     fontWeight: "700",
-    color: Monochrome.textPrimary,
+    color: "#FFFFFF",
   },
-  actionCardDesc: {
-    fontSize: 11,
-    color: Monochrome.textMuted,
-    marginTop: 2,
+  quickCardSub: {
+    fontSize: 12,
+    fontWeight: "400",
+    color: "rgba(255,255,255,0.7)",
   },
+
+  /* ── Section Headers ── */
   sectionHeader: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     justifyContent: "space-between",
-    marginTop: Spacing.two,
+    marginTop: 4,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "700",
-    color: Monochrome.textPrimary,
   },
-  sectionSubtitle: {
-    fontSize: 12,
-    color: Monochrome.textMuted,
-    marginTop: 2,
+  liveIndicatorPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(27, 138, 90, 0.12)",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#1B8A5A",
+  },
+  liveIndicatorText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#1B8A5A",
+    letterSpacing: 0.6,
   },
   viewAllText: {
     fontSize: 13,
     fontWeight: "600",
-    color: Monochrome.textSecondary,
   },
-  routesContainer: {
-    gap: 10,
-  },
-  nearbyStateCard: {
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-    minHeight: 68,
-    padding: 14,
+
+  /* ── State Cards ── */
+  stateCard: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    minHeight: 60,
   },
-  nearbyStateText: {
-    color: Monochrome.textSecondary,
+  stateText: {
+    flex: 1,
     fontSize: 13,
-    flex: 1,
+    fontWeight: "400",
   },
-  nearbyRetryButton: {
+  stateButton: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 9,
-    backgroundColor: Monochrome.surfaceElevated,
   },
-  nearbyRetryText: {
-    color: Monochrome.textPrimary,
+  stateButtonText: {
+    color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "700",
   },
-  nearbyFreshnessText: {
-    color: Monochrome.textMuted,
-    fontSize: 11,
-    marginTop: 3,
-  },
-  routeItemCard: {
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 16,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-  },
-  routeIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: Monochrome.surfaceElevated,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  routeInfoWrap: {
-    flex: 1,
-  },
-  routeCodeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  routeCodeBadge: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: Monochrome.textPrimary,
-    backgroundColor: Monochrome.surfaceElevated,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-  },
-  routeCompanyText: {
-    fontSize: 11,
-    color: Monochrome.textMuted,
-  },
-  routeNameText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Monochrome.textPrimary,
-    marginTop: 2,
-  },
-  routeStopsText: {
-    fontSize: 12,
-    color: Monochrome.textSecondary,
-    marginTop: 2,
-  },
-  liveTrackingBanner: {
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+
+  /* ── Bus Cards ── */
+  busListContainer: {
     gap: 8,
   },
-  liveTrackingText: {
-    color: Monochrome.textPrimary,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  emptyCard: {
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-  },
-  emptyCardText: {
-    color: Monochrome.textMuted,
-    fontSize: 13,
-  },
-  segmentedControl: {
-    flexDirection: "row",
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 12,
-    padding: 3,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-  },
-  segmentBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 9,
-  },
-  segmentBtnActive: {
-    backgroundColor: Monochrome.surfaceElevated,
-  },
-  segmentText: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: Monochrome.textMuted,
-  },
-  segmentTextActive: {
-    color: Monochrome.textPrimary,
-    fontWeight: "700",
-  },
-  activityCard: {
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-  },
-  activityRow: {
+  busCard: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
     gap: 12,
-  },
-  rowBorder: {
-    borderTopWidth: 1,
-    borderTopColor: Monochrome.surfaceElevated,
-  },
-  activityIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: Monochrome.surfaceElevated,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: Monochrome.border,
+    padding: 12,
+  },
+  busIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
-  activityInfo: {
+  busInfoWrap: {
     flex: 1,
+    gap: 3,
   },
-  activityTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Monochrome.textPrimary,
+  busTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
-  activitySub: {
-    fontSize: 12,
-    color: Monochrome.textSecondary,
-    marginTop: 2,
-  },
-  activityRef: {
-    fontSize: 11,
-    color: Monochrome.textMuted,
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    marginTop: 2,
-  },
-  activityDate: {
-    fontSize: 11,
-    color: Monochrome.textMuted,
-    marginTop: 2,
-  },
-  activityRight: {
-    alignItems: "flex-end",
-  },
-  tripFareText: {
+  busNumber: {
     fontSize: 14,
     fontWeight: "700",
-    color: Monochrome.textPrimary,
   },
-  statusBadge: {
-    backgroundColor: Monochrome.surfaceElevated,
-    paddingHorizontal: 6,
+  distancePill: {
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
-    marginTop: 3,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
   },
-  statusBadgeText: {
-    fontSize: 10,
+  distanceText: {
+    fontSize: 11,
     fontWeight: "600",
-    color: Monochrome.textSecondary,
-    textTransform: "capitalize",
   },
-  walletAmountText: {
+  busRoute: {
+    fontSize: 12,
+    fontWeight: "400",
+  },
+
+  /* ── Tip Banner ── */
+  tipBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    marginTop: 4,
+  },
+  tipIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tipTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  tipTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: Monochrome.textPrimary,
   },
-  emptyListWrap: {
-    alignItems: "center",
-    paddingVertical: 24,
-    gap: 6,
-  },
-  emptyListText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Monochrome.textPrimary,
-  },
-  emptyListSub: {
+  tipSub: {
     fontSize: 12,
-    color: Monochrome.textMuted,
+    fontWeight: "400",
   },
 });
