@@ -333,6 +333,16 @@ export default function PassengerPayScreen() {
           </Pressable>
         )}
 
+        {!ticket && !quote ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/passenger/journey' as never)}
+            style={styles.secondaryButton}
+          >
+            <AppText style={styles.secondaryText}>Start a journey and pay at your exit</AppText>
+          </Pressable>
+        ) : null}
+
         {/* Fare Quote & Confirmation Card */}
         {quote && !ticket && (
           <View style={styles.quoteCard}>

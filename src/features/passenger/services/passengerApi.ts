@@ -708,10 +708,40 @@ export type TransitFareTicket = {
   company_name: string | null;
   fare_minor: number;
   fare_formatted: string;
+  boarding_stop?: string | null;
+  exit_stop?: string | null;
   balance_remaining_minor: number;
   balance_remaining_formatted: string;
   issued_at: string;
   status: string;
+};
+
+export type PassengerJourney = {
+  travel_uid: string;
+  status: 'in_progress' | 'payment_due';
+  fare_due_minor?: number;
+  boarding_stop_sequence?: number | null;
+  boarded_at?: string | null;
+  exited_at?: string | null;
+  boarding_stop?: string | null;
+  exit_stop?: string | null;
+  bus_number?: string | null;
+  route_name?: string | null;
+  route_id?: number;
+};
+
+export type ExitFarePreview = {
+  travel_uid: string;
+  status: 'payment_due';
+  boarding_stop: { id: number; name: string | null; sequence: number };
+  exit_stop: { id: number; name: string | null; sequence: number };
+  fare: {
+    amount_minor: number;
+    amount_formatted: string;
+    currency: string;
+    rule_snapshot: Record<string, unknown>;
+    breakdown: Record<string, unknown>;
+  };
 };
 
 export type PassengerFeedback = {
@@ -769,6 +799,51 @@ export function payTransitFare(
     },
     idempotencyKey,
   });
+}
+
+export function boardTransitJourney(
+  qrPayload: string,
+  idempotencyKey: string,
+  boardingStopSequence?: number,
+): Promise<ApiResult<{ journey: PassengerJourney }>> {
+  return apiRequest('/passenger/transit/board', {
+    method: 'POST',
+    idempotencyKey,
+    body: {
+      qr_payload: qrPayload,
+      ...(boardingStopSequence !== undefined ? { boarding_stop_sequence: boardingStopSequence } : {}),
+    },
+  });
+}
+
+export function getCurrentTransitJourney(): Promise<ApiResult<{ journey: PassengerJourney | null }>> {
+  return apiRequest('/passenger/transit/current');
+}
+
+export function previewTransitExit(
+  travelUid: string,
+  exitStopSequence: number,
+): Promise<ApiResult<{ fare_due: ExitFarePreview }>> {
+  return apiRequest(`/passenger/travel-history/${encodeURIComponent(travelUid)}/exit-preview`, {
+    method: 'POST',
+    body: { exit_stop_sequence: exitStopSequence },
+  });
+}
+
+export function payTransitExit(
+  travelUid: string,
+  mpin: string,
+  idempotencyKey: string,
+): Promise<ApiResult<{ ticket: TransitFareTicket }>> {
+  return apiRequest(`/passenger/travel-history/${encodeURIComponent(travelUid)}/pay`, {
+    method: 'POST',
+    idempotencyKey,
+    body: { mpin },
+  });
+}
+
+export function getTransitTicket(travelUid: string): Promise<ApiResult<{ ticket: TransitFareTicket }>> {
+  return apiRequest(`/passenger/travel-history/${encodeURIComponent(travelUid)}/ticket`);
 }
 
 function stopName(value: unknown): string | null {
