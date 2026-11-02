@@ -29,10 +29,20 @@ export type ConcessionApplication = {
   id: number;
   category: 'student' | 'senior_citizen';
   details: Record<string, string | null>;
-  status: 'pending' | 'approved' | 'rejected';
+  status:
+    | 'pending'
+    | 'under_review'
+    | 'approved'
+    | 'rejected'
+    | 'additional_documents_requested'
+    | 'expired'
+    | 'suspended'
+    | 'renewal_pending'
+    | 'revoked';
   review_note: string | null;
   submitted_at: string;
   reviewed_at: string | null;
+  expires_at: string | null;
   document: {
     id: number;
     document_type: string;
@@ -46,12 +56,40 @@ export type ConcessionApplication = {
 
 export type ConcessionSubmission = {
   category: 'student' | 'senior_citizen';
+  full_name: string;
+  date_of_birth: string;
   student_id_number?: string;
   college_name?: string;
   college_address?: string;
+  institution_type?: string;
+  course_grade?: string;
+  enrollment_date?: string;
+  expected_graduation_date?: string;
   student_id_expiry_date?: string;
+  citizenship_number?: string;
+  citizenship_issuing_district?: string;
   senior_card_number?: string;
+  consent: boolean;
   document: { uri: string; fileName?: string; mimeType?: string };
+  supportingDocument?: { uri: string; fileName?: string; mimeType?: string };
+  seniorCitizenIdDocument?: { uri: string; fileName?: string; mimeType?: string };
+};
+
+export type PassengerConcessionSummary = {
+  status: ConcessionApplication['status'] | 'not_applied';
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  expires_at: string | null;
+  review_note: string | null;
+  discount_percentage: string | null;
+  policy_version: number | null;
+};
+
+export type ConcessionPolicySummary = {
+  category: 'student' | 'senior_citizen';
+  discount_percentage: string;
+  version: number;
+  applicable: boolean;
 };
 
 export type CardSummary = {
@@ -708,6 +746,11 @@ export type TransitFareTicket = {
   company_name: string | null;
   fare_minor: number;
   fare_formatted: string;
+  fare_breakdown?: {
+    regular_fare_minor: number;
+    discount_minor: number;
+    concession: ExitFarePreview['fare']['concession'];
+  };
   boarding_stop?: string | null;
   exit_stop?: string | null;
   balance_remaining_minor: number;
@@ -735,9 +778,25 @@ export type ExitFarePreview = {
   status: 'payment_due';
   boarding_stop: { id: number; name: string | null; sequence: number };
   exit_stop: { id: number; name: string | null; sequence: number };
+  company_name: string | null;
+  bus_number: string;
+  trip_reference: string;
   fare: {
     amount_minor: number;
     amount_formatted: string;
+    regular_amount_minor: number;
+    discount_minor: number;
+    concession: {
+      category: 'student' | 'senior_citizen';
+      policy_id: number;
+      policy_version: number;
+      discount_percentage: string;
+      discount_minor: number;
+      regular_fare_minor: number;
+      passenger_payable_minor: number;
+      operator_settlement_minor: number;
+      funding_model: string;
+    } | null;
     currency: string;
     rule_snapshot: Record<string, unknown>;
     breakdown: Record<string, unknown>;
@@ -867,22 +926,67 @@ export async function getConcessionApplications(): Promise<
   return apiRequest('/passenger/concession-applications');
 }
 
+export function getPassengerConcessions(): Promise<
+  ApiResult<{ concessions: Record<'student' | 'senior_citizen', PassengerConcessionSummary> }>
+> {
+  return apiRequest('/passenger/concessions');
+}
+
+export function getConcessionPolicies(): Promise<
+  ApiResult<{ policies: ConcessionPolicySummary[] }>
+> {
+  return apiRequest('/passenger/concessions/policies');
+}
+
 export function submitConcessionApplication(
   submission: ConcessionSubmission,
+  renewalApplicationId?: number,
 ): Promise<ApiResult<{ application: ConcessionApplication }>> {
   const form = new FormData();
   form.append('category', submission.category);
+  form.append('full_name', submission.full_name);
+  form.append('date_of_birth', submission.date_of_birth);
   if (submission.student_id_number) form.append('student_id_number', submission.student_id_number);
   if (submission.college_name) form.append('college_name', submission.college_name);
   if (submission.college_address) form.append('college_address', submission.college_address);
+  if (submission.institution_type) form.append('institution_type', submission.institution_type);
+  if (submission.course_grade) form.append('course_grade', submission.course_grade);
+  if (submission.enrollment_date) form.append('enrollment_date', submission.enrollment_date);
+  if (submission.expected_graduation_date) {
+    form.append('expected_graduation_date', submission.expected_graduation_date);
+  }
   if (submission.student_id_expiry_date) {
     form.append('student_id_expiry_date', submission.student_id_expiry_date);
   }
+  if (submission.citizenship_number) form.append('citizenship_number', submission.citizenship_number);
+  if (submission.citizenship_issuing_district) {
+    form.append('citizenship_issuing_district', submission.citizenship_issuing_district);
+  }
   if (submission.senior_card_number) form.append('senior_card_number', submission.senior_card_number);
+  form.append('consent', submission.consent ? '1' : '0');
   form.append('document', {
     uri: submission.document.uri,
-    name: submission.document.fileName ?? 'concession-document.jpg',
-    type: submission.document.mimeType ?? 'image/jpeg',
+    name: submission.document.fileName ?? 'concession-document',
+    type: submission.document.mimeType ?? 'application/octet-stream',
   } as unknown as Blob);
-  return apiRequest('/passenger/concession-applications', { method: 'POST', body: form });
+  if (submission.supportingDocument) {
+    form.append('supporting_document', {
+      uri: submission.supportingDocument.uri,
+      name: submission.supportingDocument.fileName ?? 'supporting-document',
+      type: submission.supportingDocument.mimeType ?? 'application/octet-stream',
+    } as unknown as Blob);
+  }
+  if (submission.seniorCitizenIdDocument) {
+    form.append('senior_id_document', {
+      uri: submission.seniorCitizenIdDocument.uri,
+      name: submission.seniorCitizenIdDocument.fileName ?? 'senior-citizen-id',
+      type: submission.seniorCitizenIdDocument.mimeType ?? 'application/octet-stream',
+    } as unknown as Blob);
+  }
+  return apiRequest(
+    renewalApplicationId
+      ? `/passenger/concessions/${renewalApplicationId}/renew`
+      : '/passenger/concession-applications',
+    { method: 'POST', body: form },
+  );
 }

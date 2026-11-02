@@ -1631,6 +1631,13 @@ export default function CompanyPortalScreen() {
             >
               <AppText style={styles.companyReportStatusButtonText}>Publish &amp; manage passenger service notices</AppText>
             </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/portal/company-concessions' as Href)}
+              style={styles.companyReportStatusButton}
+            >
+              <AppText style={styles.companyReportStatusButtonText}>Concession transactions &amp; settlement report</AppText>
+            </Pressable>
             {/* Sub-tab Switcher */}
             <View style={styles.subTabRow}>
               {(['summary', 'taps', 'settlements', 'driver-reports'] as const).map((tab) => (

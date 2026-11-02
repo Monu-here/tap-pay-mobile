@@ -1,5 +1,5 @@
 import {AppText, AppTextInput } from '@/components/typography/app-text';
-import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { useCallback, useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
@@ -17,6 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Brand, Spacing } from '@/constants/theme';
 import {
   getConcessionApplications,
+  getConcessionPolicies,
+  getPassengerConcessions,
   submitConcessionApplication,
   type ConcessionApplication,
   type ConcessionSubmission,
@@ -27,13 +29,35 @@ type Category = ConcessionSubmission['category'];
 export default function ConcessionScreen() {
   const insets = useSafeAreaInsets();
   const [applications, setApplications] = useState<ConcessionApplication[]>([]);
+  const [concessions, setConcessions] = useState<Record<Category, {
+    status: string;
+    submitted_at: string | null;
+    reviewed_at: string | null;
+    expires_at: string | null;
+    review_note: string | null;
+    discount_percentage: string | null;
+    policy_version: number | null;
+  }> | null>(null);
+  const [policyPercentages, setPolicyPercentages] = useState<Partial<Record<Category, string>>>({});
   const [category, setCategory] = useState<Category>('student');
+  const [renewalApplicationId, setRenewalApplicationId] = useState<number | null>(null);
+  const [fullName, setFullName] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [studentId, setStudentId] = useState('');
   const [collegeName, setCollegeName] = useState('');
   const [collegeAddress, setCollegeAddress] = useState('');
+  const [institutionType, setInstitutionType] = useState('');
+  const [courseGrade, setCourseGrade] = useState('');
+  const [enrollmentDate, setEnrollmentDate] = useState('');
+  const [graduationDate, setGraduationDate] = useState('');
   const [expiry, setExpiry] = useState('');
+  const [citizenshipNumber, setCitizenshipNumber] = useState('');
+  const [citizenshipDistrict, setCitizenshipDistrict] = useState('');
   const [seniorCard, setSeniorCard] = useState('');
+  const [consent, setConsent] = useState(false);
   const [document, setDocument] = useState<{ uri: string; fileName?: string; mimeType?: string } | null>(null);
+  const [supportingDocument, setSupportingDocument] = useState<{ uri: string; fileName?: string; mimeType?: string } | null>(null);
+  const [seniorIdDocument, setSeniorIdDocument] = useState<{ uri: string; fileName?: string; mimeType?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +72,18 @@ export default function ConcessionScreen() {
       } else {
         setApplications(result.data.applications);
       }
+      const [summaryResult, policyResult] = await Promise.all([
+        getPassengerConcessions(),
+        getConcessionPolicies(),
+      ]);
+      if (summaryResult.ok && summaryResult.data) {
+        setConcessions(summaryResult.data.concessions);
+      }
+      if (policyResult.ok && policyResult.data) {
+        setPolicyPercentages(Object.fromEntries(
+          policyResult.data.policies.map((policy) => [policy.category, policy.discount_percentage]),
+        ));
+      }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Unable to load applications.');
     } finally {
@@ -60,33 +96,30 @@ export default function ConcessionScreen() {
     return () => cancelAnimationFrame(frame);
   }, [load]);
 
-  const chooseDocument = async () => {
+  const chooseDocument = async (target: 'primary' | 'supporting' | 'seniorId' = 'primary') => {
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        setError('Allow photo library access to select your supporting document.');
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        quality: 0.8,
-        exif: false,
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/jpeg', 'image/png', 'application/pdf'],
+        copyToCacheDirectory: true,
+        multiple: false,
       });
       if (result.canceled) return;
       const asset = result.assets[0];
       if (!asset?.uri) {
-        setError('No document image was selected.');
+        setError('No supporting document was selected.');
         return;
       }
-      setDocument({
+      const selected = {
         uri: asset.uri,
-        fileName: asset.fileName ?? undefined,
+        fileName: asset.name ?? undefined,
         mimeType: asset.mimeType ?? undefined,
-      });
+      };
+      if (target === 'primary') setDocument(selected);
+      else if (target === 'supporting') setSupportingDocument(selected);
+      else setSeniorIdDocument(selected);
       setError(null);
     } catch (pickerError) {
-      setError(pickerError instanceof Error ? pickerError.message : 'Unable to select an image.');
+      setError(pickerError instanceof Error ? pickerError.message : 'Unable to select a document.');
     }
   };
 
@@ -95,12 +128,19 @@ export default function ConcessionScreen() {
       setError('Select a clear photo of your supporting document.');
       return;
     }
-    if (category === 'student' && (!studentId.trim() || !collegeName.trim())) {
-      setError('Enter your student ID number and college name.');
+    if (!fullName.trim() || !dateOfBirth.trim() || !consent) {
+      setError('Enter your name and date of birth, and confirm the information is accurate.');
       return;
     }
-    if (category === 'senior_citizen' && !seniorCard.trim()) {
-      setError('Enter your senior citizen card number.');
+    if (category === 'student' && (
+      !studentId.trim() || !collegeName.trim() || !institutionType.trim() ||
+      !courseGrade.trim() || !enrollmentDate.trim() || !graduationDate.trim()
+    )) {
+      setError('Complete the student ID, institution, course, and enrollment dates.');
+      return;
+    }
+    if (category === 'senior_citizen' && (!citizenshipNumber.trim() || !citizenshipDistrict.trim())) {
+      setError('Enter your citizenship number and issuing district.');
       return;
     }
 
@@ -109,23 +149,40 @@ export default function ConcessionScreen() {
     try {
       const submission: ConcessionSubmission = {
         category,
+        full_name: fullName.trim(),
+        date_of_birth: dateOfBirth.trim(),
         document,
+        consent,
         ...(category === 'student'
           ? {
               student_id_number: studentId.trim(),
               college_name: collegeName.trim(),
+              institution_type: institutionType.trim(),
+              course_grade: courseGrade.trim(),
+              enrollment_date: enrollmentDate.trim(),
+              expected_graduation_date: graduationDate.trim(),
               ...(collegeAddress.trim() ? { college_address: collegeAddress.trim() } : {}),
               ...(expiry.trim() ? { student_id_expiry_date: expiry.trim() } : {}),
             }
-          : { senior_card_number: seniorCard.trim() }),
+          : {
+              citizenship_number: citizenshipNumber.trim(),
+              citizenship_issuing_district: citizenshipDistrict.trim(),
+              ...(seniorCard.trim() ? { senior_card_number: seniorCard.trim() } : {}),
+              ...(seniorIdDocument ? { seniorCitizenIdDocument: seniorIdDocument } : {}),
+            }),
+        ...(supportingDocument ? { supportingDocument } : {}),
       };
-      const result = await submitConcessionApplication(submission);
+      const result = await submitConcessionApplication(submission, renewalApplicationId ?? undefined);
       if (!result.ok || !result.data) {
         setError(result.message || 'Your application could not be submitted.');
         return;
       }
       setApplications((current) => [result.data.application, ...current]);
       setDocument(null);
+      setSupportingDocument(null);
+      setSeniorIdDocument(null);
+      setConsent(false);
+      setRenewalApplicationId(null);
       Alert.alert('Application submitted', 'Your concession request is awaiting document review.');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Unable to submit your application.');
@@ -146,9 +203,27 @@ export default function ConcessionScreen() {
       </View>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
         <AppText style={styles.intro}>
-          Submit your student or senior citizen card for review. Any fare concession is applied only
-          after the transport operator verifies your information.
+          Apply for a student or senior citizen travel concession. Only approved applications receive
+          the currently active discount, and eligibility is verified by Gantabya Pay administrators.
         </AppText>
+        <AppText style={styles.policyHint}>
+          Active policy: {policyPercentages[category] ? `${policyPercentages[category]}%` : 'Not currently available'}
+        </AppText>
+
+        <AppTextInput
+          accessibilityLabel="Full name"
+          value={fullName}
+          onChangeText={setFullName}
+          placeholder="Full name as shown on your document"
+          style={styles.input}
+        />
+        <AppTextInput
+          accessibilityLabel="Date of birth"
+          value={dateOfBirth}
+          onChangeText={setDateOfBirth}
+          placeholder="Date of birth (YYYY-MM-DD)"
+          style={styles.input}
+        />
 
         <AppText style={styles.label}>Concession category</AppText>
         <View style={styles.categoryRow}>
@@ -187,6 +262,20 @@ export default function ConcessionScreen() {
               style={styles.input}
             />
             <AppTextInput
+              accessibilityLabel="Institution type"
+              value={institutionType}
+              onChangeText={setInstitutionType}
+              placeholder="Institution type (school, college, university)"
+              style={styles.input}
+            />
+            <AppTextInput
+              accessibilityLabel="Course or grade"
+              value={courseGrade}
+              onChangeText={setCourseGrade}
+              placeholder="Course or grade"
+              style={styles.input}
+            />
+            <AppTextInput
               accessibilityLabel="College address"
               value={collegeAddress}
               onChangeText={setCollegeAddress}
@@ -200,31 +289,84 @@ export default function ConcessionScreen() {
               placeholder="Card expiry date (YYYY-MM-DD, optional)"
               style={styles.input}
             />
+            <AppTextInput
+              accessibilityLabel="Enrollment date"
+              value={enrollmentDate}
+              onChangeText={setEnrollmentDate}
+              placeholder="Enrollment date (YYYY-MM-DD)"
+              style={styles.input}
+            />
+            <AppTextInput
+              accessibilityLabel="Expected graduation date"
+              value={graduationDate}
+              onChangeText={setGraduationDate}
+              placeholder="Expected graduation date (YYYY-MM-DD)"
+              style={styles.input}
+            />
           </>
         ) : (
-          <AppTextInput
-            accessibilityLabel="Senior citizen card number"
-            value={seniorCard}
-            onChangeText={setSeniorCard}
-            placeholder="Senior citizen card number"
-            style={styles.input}
-          />
+          <>
+            <AppTextInput
+              accessibilityLabel="Citizenship number"
+              value={citizenshipNumber}
+              onChangeText={setCitizenshipNumber}
+              placeholder="Citizenship number"
+              style={styles.input}
+            />
+            <AppTextInput
+              accessibilityLabel="Citizenship issuing district"
+              value={citizenshipDistrict}
+              onChangeText={setCitizenshipDistrict}
+              placeholder="Citizenship issuing district"
+              style={styles.input}
+            />
+            <AppTextInput
+              accessibilityLabel="Senior citizen ID number"
+              value={seniorCard}
+              onChangeText={setSeniorCard}
+              placeholder="Senior citizen ID number (optional)"
+              style={styles.input}
+            />
+            <AppText style={styles.hint}>
+              Optional senior citizen ID document: {seniorIdDocument?.fileName || 'not selected'}
+            </AppText>
+            <Pressable accessibilityRole="button" onPress={() => void chooseDocument('seniorId')} style={styles.pick}>
+              <AppText style={styles.pickText}>Choose senior citizen ID document</AppText>
+            </Pressable>
+          </>
         )}
 
-        <AppText style={styles.label}>Supporting card photo</AppText>
-        <AppText style={styles.hint}>A clear JPG or PNG image, up to 2 MB.</AppText>
+        <AppText style={styles.label}>Primary verification document</AppText>
+        <AppText style={styles.hint}>JPG, JPEG, PNG, or PDF. Maximum 2 MB.</AppText>
         {document ? (
           <View style={styles.previewWrap}>
-            <Image source={{ uri: document.uri }} style={styles.preview} />
+            {document.mimeType?.startsWith('image/') ? (
+              <Image source={{ uri: document.uri }} style={styles.preview} />
+            ) : <AppText style={styles.hint}>{document.fileName || 'PDF document selected'}</AppText>}
             <Pressable accessibilityRole="button" onPress={() => setDocument(null)}>
-              <AppText style={styles.removeText}>Remove photo</AppText>
+              <AppText style={styles.removeText}>Remove document</AppText>
             </Pressable>
           </View>
         ) : (
           <Pressable accessibilityRole="button" onPress={() => void chooseDocument()} style={styles.pick}>
-            <AppText style={styles.pickText}>Choose card photo</AppText>
+            <AppText style={styles.pickText}>Choose document</AppText>
           </Pressable>
         )}
+        <AppText style={styles.label}>Optional supporting document</AppText>
+        <Pressable accessibilityRole="button" onPress={() => void chooseDocument('supporting')} style={styles.pick}>
+          <AppText style={styles.pickText}>{supportingDocument?.fileName || 'Choose another document'}</AppText>
+        </Pressable>
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: consent }}
+          onPress={() => setConsent((checked) => !checked)}
+          style={styles.consent}
+        >
+          <AppText style={styles.consentCheck}>{consent ? '☑' : '☐'}</AppText>
+          <AppText style={styles.consentText}>
+            I confirm that the information and documents submitted are accurate.
+          </AppText>
+        </Pressable>
 
         {error ? <AppText accessibilityRole="alert" style={styles.error}>{error}</AppText> : null}
         <Pressable
@@ -238,6 +380,40 @@ export default function ConcessionScreen() {
         </Pressable>
 
         <AppText style={styles.sectionTitle}>Your applications</AppText>
+        {concessions?.[category] ? (
+          <View style={styles.application}>
+            <AppText style={styles.applicationTitle}>
+              Current status: {concessions[category].status.replaceAll('_', ' ').toUpperCase()}
+            </AppText>
+            {concessions[category].discount_percentage ? (
+              <AppText style={styles.approved}>
+                Active concession: {concessions[category].discount_percentage}%
+              </AppText>
+            ) : null}
+            {concessions[category].expires_at ? (
+              <AppText style={styles.hint}>
+                Expires {new Date(concessions[category].expires_at!).toLocaleDateString()}
+              </AppText>
+            ) : null}
+            {concessions[category].review_note ? (
+              <AppText style={styles.reviewNote}>{concessions[category].review_note}</AppText>
+            ) : null}
+            {['approved', 'expired', 'rejected'].includes(concessions[category].status) ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  const previous = applications.find((item) => item.category === category);
+                  if (previous) setRenewalApplicationId(previous.id);
+                }}
+                style={styles.pick}
+              >
+                <AppText style={styles.pickText}>
+                  {renewalApplicationId ? 'Renewal selected' : 'Renew / re-verify'}
+                </AppText>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
         {loading ? (
           <ActivityIndicator color={Brand.teal.primary} />
         ) : applications.length === 0 ? (
@@ -278,6 +454,7 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 70 },
   content: { padding: Spacing.three, gap: Spacing.two },
   intro: { color: Brand.textSecondary, lineHeight: 21, marginBottom: Spacing.two },
+  policyHint: { color: Brand.teal.primary, fontWeight: '700' },
   label: { color: Brand.text, fontSize: 14, fontWeight: '700', marginTop: Spacing.one },
   categoryRow: { flexDirection: 'row', gap: Spacing.two },
   category: {
@@ -300,6 +477,9 @@ const styles = StyleSheet.create({
   },
   pickText: { color: Brand.teal.primary, fontWeight: '700' },
   previewWrap: { gap: Spacing.one },
+  consent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.two },
+  consentCheck: { color: Brand.teal.primary, fontSize: 20 },
+  consentText: { flex: 1, color: Brand.text, lineHeight: 20 },
   preview: { height: 180, borderRadius: 12, backgroundColor: '#fff' },
   removeText: { color: Brand.error, fontWeight: '600', paddingVertical: Spacing.one },
   error: { color: Brand.error, lineHeight: 20 },

@@ -138,6 +138,14 @@ export default function PassengerJourneyScreen() {
             <AppText style={styles.heading}>Fare paid · Ticket issued</AppText>
             <AppText style={styles.route}>{ticket.route_name || 'Bus journey'} · Bus {ticket.bus_number || '—'}</AppText>
             <AppText style={styles.detail}>{ticket.boarding_stop || 'Boarding stop'} → {ticket.exit_stop || 'Exit stop'}</AppText>
+            {ticket.fare_breakdown ? (
+              <AppText style={styles.detail}>
+                Regular Rs. {(ticket.fare_breakdown.regular_fare_minor / 100).toFixed(2)}
+                {ticket.fare_breakdown.discount_minor > 0
+                  ? ` · Discount Rs. ${(ticket.fare_breakdown.discount_minor / 100).toFixed(2)}`
+                  : ''}
+              </AppText>
+            ) : null}
             <AppText style={styles.amount}>{ticket.fare_formatted}</AppText>
             <AppText style={styles.detail}>Ticket {ticket.ticket_number}</AppText>
             <Pressable style={styles.primaryButton} onPress={() => router.replace('/(tabs)/history' as never)}>
@@ -170,7 +178,44 @@ export default function PassengerJourneyScreen() {
 
             {preview || journey.status === 'payment_due' ? (
               <View style={styles.dueBox}>
-                <AppText style={styles.sectionTitle}>Fare to pay</AppText>
+                <AppText style={styles.sectionTitle}>Fare breakdown</AppText>
+                {preview ? (
+                  <>
+                    <AppText style={styles.detail}>
+                      {preview.boarding_stop.name || 'Boarding point'} → {preview.exit_stop.name || 'Exit point'}
+                    </AppText>
+                    <AppText style={styles.detail}>
+                      {preview.company_name || 'Transport company'} · Bus {preview.bus_number}
+                    </AppText>
+                    <View style={styles.fareRow}>
+                      <AppText style={styles.detail}>Regular fare</AppText>
+                      <AppText style={styles.detail}>
+                        Rs. {(preview.fare.regular_amount_minor / 100).toFixed(2)}
+                      </AppText>
+                    </View>
+                    {preview.fare.concession ? (
+                      <>
+                        <View style={styles.fareRow}>
+                          <AppText style={styles.detail}>
+                            {preview.fare.concession.category === 'student' ? 'Student' : 'Senior citizen'} concession
+                            {' '}({preview.fare.concession.discount_percentage}%)
+                          </AppText>
+                          <AppText style={styles.discount}>
+                            − Rs. {(preview.fare.discount_minor / 100).toFixed(2)}
+                          </AppText>
+                        </View>
+                        <AppText style={styles.detail}>
+                          Policy version {preview.fare.concession.policy_version}
+                        </AppText>
+                      </>
+                    ) : (
+                      <Pressable accessibilityRole="button" onPress={() => router.push('/portal/concession' as never)}>
+                        <AppText style={styles.applyConcession}>Apply for a travel concession</AppText>
+                      </Pressable>
+                    )}
+                  </>
+                ) : null}
+                <AppText style={styles.sectionTitle}>Final payable amount</AppText>
                 <AppText style={styles.amount}>
                   {preview?.fare.amount_formatted || `Rs. ${((journey.fare_due_minor || 0) / 100).toFixed(2)}`}
                 </AppText>
@@ -248,6 +293,9 @@ const styles = StyleSheet.create({
   stopName: { fontSize: 14, fontWeight: '600', color: Monochrome.textPrimary },
   stopSequence: { fontSize: 12, color: Monochrome.textSecondary },
   dueBox: { marginTop: Spacing.two, gap: Spacing.two },
+  fareRow: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.two },
+  discount: { fontSize: 13, fontWeight: '700', color: '#16803C' },
+  applyConcession: { color: Monochrome.actionPrimary, fontSize: 13, fontWeight: '700', paddingVertical: Spacing.one },
   amount: { fontSize: 26, fontWeight: '800', color: Monochrome.textPrimary },
   mpinInput: {
     height: 48, borderRadius: 10, borderWidth: 1, borderColor: Monochrome.border,

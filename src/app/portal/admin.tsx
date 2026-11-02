@@ -1236,6 +1236,13 @@ export default function AdminPortalScreen() {
             >
               <AppText style={styles.loadMoreText}>Review fare concession applications</AppText>
             </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/portal/concession-policies' as any)}
+              style={styles.loadMoreButton}
+            >
+              <AppText style={styles.loadMoreText}>Configure concession policies</AppText>
+            </Pressable>
             <AppTextInput
               style={styles.searchInput}
               value={searchInput}
