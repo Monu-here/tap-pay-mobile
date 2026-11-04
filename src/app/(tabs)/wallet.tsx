@@ -370,6 +370,42 @@ export default function WalletScreen() {
           </View>
         </View>
 
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open rewards"
+          onPress={() => router.push('/passenger/rewards')}
+          style={({ pressed }) => ({
+            marginTop: 16,
+            marginHorizontal: 2,
+            padding: 16,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: theme.border,
+            backgroundColor: theme.isDark ? '#002235' : '#FFF8EA',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            opacity: pressed ? 0.8 : 1,
+          })}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <SymbolView
+              name={{ ios: 'sparkles', android: 'stars', web: 'stars' }}
+              size={24}
+              tintColor={Palette.crimsonRed}
+            />
+            <View>
+              <AppText style={{ color: theme.text, fontSize: 16, fontWeight: '700' }}>Rewards</AppText>
+              <AppText style={{ color: theme.textSecondary, fontSize: 12 }}>View points and convert them to wallet credit</AppText>
+            </View>
+          </View>
+          <SymbolView
+            name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+            size={18}
+            tintColor={theme.textSecondary}
+          />
+        </Pressable>
+
         {/* Clean Filter Segment Bar */}
         <View style={styles.filterSection}>
           <View

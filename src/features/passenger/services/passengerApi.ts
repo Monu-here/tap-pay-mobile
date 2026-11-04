@@ -189,6 +189,59 @@ export type DashboardData = {
   stats: DashboardStats;
 };
 
+export type RewardsDashboard = {
+  available_points: number;
+  equivalent_npr_minor: number;
+  equivalent_npr_formatted: string;
+  points_per_npr: number;
+  minimum_conversion_points: number;
+  maximum_conversion_points: number;
+  daily_conversion_points_limit: number;
+  rewards_enabled: boolean;
+};
+
+export type RewardTransaction = {
+  id: number;
+  reference: string;
+  type: 'earn' | 'conversion' | 'redeem' | 'adjustment' | 'reversal' | 'expiry';
+  direction: 'credit' | 'debit';
+  points: number;
+  balance_before: number;
+  balance_after: number;
+  reward_value_minor: number;
+  earning_rate_bps: number | null;
+  conversion_points_per_npr: number | null;
+  source: string;
+  source_reference: string | null;
+  reason: string | null;
+  created_at: string;
+};
+
+export type RewardConversionReceipt = {
+  conversion_reference: string;
+  points_converted: number;
+  points_balance_before: number;
+  points_balance_after: number;
+  points_per_npr: number;
+  wallet_credit_minor: number;
+  wallet_credit_formatted: string;
+  wallet_balance_before_minor: number;
+  wallet_balance_after_minor: number;
+  reward_transaction_reference: string;
+  wallet_transaction_reference: string;
+  created_at: string;
+};
+
+export type RewardConversionRecord = {
+  id: number;
+  reference: string;
+  points: number;
+  points_per_npr: number;
+  amount_minor: number;
+  status: string;
+  created_at: string;
+};
+
 export type RouteInfo = {
   id: number;
   code: string;
@@ -310,6 +363,45 @@ export type PaymentCheckout = {
 
 export function getDashboard(): Promise<ApiResult<DashboardData>> {
   return apiRequest<DashboardData>('/passenger/dashboard');
+}
+
+// ---------------------------------------------------------------------------
+// Rewards
+// ---------------------------------------------------------------------------
+
+export function getRewardsDashboard(): Promise<ApiResult<RewardsDashboard>> {
+  return apiRequest<RewardsDashboard>('/passenger/rewards');
+}
+
+export function getRewardTransactions(
+  perPage = 25,
+): Promise<ApiResult<{ transactions: RewardTransaction[] }>> {
+  return apiRequest<unknown>(`/passenger/rewards/transactions?per_page=${perPage}`)
+    .then((result) => normalizeCollection<RewardTransaction, 'transactions'>(result, 'transactions'));
+}
+
+export function getRewardConversions(
+  perPage = 25,
+): Promise<ApiResult<{ conversions: RewardConversionRecord[] }>> {
+  return apiRequest<unknown>(`/passenger/rewards/conversions?per_page=${perPage}`)
+    .then((result) => normalizeCollection<RewardConversionRecord, 'conversions'>(result, 'conversions'));
+}
+
+export function convertRewardPoints(
+  points: number,
+  idempotencyKey: string,
+): Promise<ApiResult<{ conversion: RewardConversionReceipt }>> {
+  return apiRequest<{ conversion: RewardConversionReceipt }>('/passenger/rewards/conversions', {
+    method: 'POST',
+    body: { points },
+    idempotencyKey,
+  });
+}
+
+export function getRewardConversionReceipt(
+  reference: string,
+): Promise<ApiResult<{ conversion: RewardConversionRecord }>> {
+  return apiRequest(`/passenger/rewards/conversions/${encodeURIComponent(reference)}`);
 }
 
 // ---------------------------------------------------------------------------
