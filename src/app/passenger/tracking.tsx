@@ -14,7 +14,12 @@ import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
+import MapView, {
+  Marker,
+  Polyline,
+  PROVIDER_GOOGLE,
+  type Region,
+} from 'react-native-maps';
 
 import { Brand, Spacing } from '@/constants/theme';
 import {
@@ -336,6 +341,7 @@ export default function LiveBusTrackingScreen() {
             <MapView
               key={`${initialRegion.latitude.toFixed(4)}:${initialRegion.longitude.toFixed(4)}`}
               style={styles.map}
+              provider={PROVIDER_GOOGLE}
               initialRegion={initialRegion}
               showsUserLocation={permissionGranted && Boolean(location)}
               showsCompass

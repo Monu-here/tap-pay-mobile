@@ -10,6 +10,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,12 +20,14 @@ import * as Location from "expo-location";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { AddMoneyModal } from "@/features/passenger/components/AddMoneyModal";
-import { Spacing } from "@/constants/theme";
+import { Palette, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import {
   getDashboard,
   getUnreadNotificationCount,
   type DashboardData,
+  type WalletTransaction,
+  type TravelRecord,
 } from "@/features/passenger/services/passengerApi";
 import { getSession } from "@/features/auth/session";
 import {
@@ -54,7 +57,6 @@ export default function HomeScreen() {
   const [addMoneyVisible, setAddMoneyVisible] = useState(false);
 
   const loadNearbyBuses = useCallback(async (force = false, requestPermission = false) => {
-    if (!force && Date.now() - nearbyLastRequestedAt.current < NEARBY_REFRESH_INTERVAL_MS) return;
     nearbyLastRequestedAt.current = Date.now();
     setNearbyLoading(true);
     setNearbyError(null);
@@ -410,71 +412,105 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* ── Quick Actions ── */}
-        <View style={styles.quickActionsGrid}>
+        {/* ── Featured Action: Scan Driver QR ── */}
+        <View style={styles.featuredAction}>
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Scan Driver QR to Pay"
             onPress={() => router.push("/passenger/pay" as any)}
-            style={[styles.quickCard, { backgroundColor: theme.actionPrimary }]}
+            style={[styles.featuredButton, { backgroundColor: theme.actionPrimary }]}
           >
-            <View style={styles.quickCardIconWrap}>
+            <View style={styles.featuredIconWrap}>
               <SymbolView
                 name={{ ios: "qrcode.viewfinder", android: "qr_code_scanner", web: "qr_code_scanner" }}
-                size={26}
+                size={32}
                 tintColor="#FFFFFF"
               />
             </View>
-            <AppText style={styles.quickCardLabel}>Pay Fare</AppText>
-            <AppText style={styles.quickCardSub}>Scan & ride</AppText>
-          </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setAddMoneyVisible(true)}
-            style={[styles.quickCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border, borderWidth: 1 }]}
-          >
-            <View style={styles.quickCardIconWrap}>
-              <SymbolView
-                name={{ ios: "plus.circle.fill", android: "add_circle", web: "add_circle" }}
-                size={26}
-                tintColor={theme.actionPrimary}
-              />
+            <View style={styles.featuredTextWrap}>
+              <AppText style={styles.featuredTitle}>Scan Driver QR to Pay</AppText>
+              <AppText style={styles.featuredSubtitle}>
+                Position your camera to scan the driver&apos;s Tap & Pay QR code
+              </AppText>
             </View>
-            <AppText style={[styles.quickCardLabel, { color: theme.text }]}>Top Up</AppText>
-            <AppText style={[styles.quickCardSub, { color: theme.textSecondary }]}>Add balance</AppText>
+            <SymbolView
+              name={{ ios: "chevron.right", android: "chevron_right", web: "chevron_right" }}
+              size={16}
+              tintColor="#FFFFFF"
+            />
           </Pressable>
+        </View>
 
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push("/passenger/tracking" as any)}
-            style={[styles.quickCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border, borderWidth: 1 }]}
-          >
-            <View style={styles.quickCardIconWrap}>
-              <SymbolView
-                name={{ ios: "location.north.line.fill", android: "near_me", web: "near_me" }}
-                size={26}
-                tintColor="#669BBC"
-              />
-            </View>
-            <AppText style={[styles.quickCardLabel, { color: theme.text }]}>Live Map</AppText>
-            <AppText style={[styles.quickCardSub, { color: theme.textSecondary }]}>Track buses</AppText>
-          </Pressable>
+        {/* ── Quick Actions ── */}
+        <View style={styles.quickActionsSection}>
+          <View style={styles.sectionHeaderCompact}>
+            <AppText style={[styles.sectionTitleCompact, { color: theme.text }]}>Quick Actions</AppText>
+          </View>
+          <View style={styles.quickActionsGrid}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setAddMoneyVisible(true)}
+              style={[styles.quickCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border, borderWidth: 1 }]}
+            >
+              <View style={styles.quickCardIconWrap}>
+                <SymbolView
+                  name={{ ios: "plus.circle.fill", android: "add_circle", web: "add_circle" }}
+                  size={26}
+                  tintColor={theme.actionPrimary}
+                />
+              </View>
+              <AppText style={[styles.quickCardLabel, { color: theme.text }]}>Add Money</AppText>
+              <AppText style={[styles.quickCardSub, { color: theme.textSecondary }]}>Top up wallet</AppText>
+            </Pressable>
 
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push("/(tabs)/history" as any)}
-            style={[styles.quickCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border, borderWidth: 1 }]}
-          >
-            <View style={styles.quickCardIconWrap}>
-              <SymbolView
-                name={{ ios: "ticket.fill", android: "confirmation_number", web: "confirmation_number" }}
-                size={26}
-                tintColor={theme.text}
-              />
-            </View>
-            <AppText style={[styles.quickCardLabel, { color: theme.text }]}>My Trips</AppText>
-            <AppText style={[styles.quickCardSub, { color: theme.textSecondary }]}>Travel history</AppText>
-          </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/passenger/qr" as any)}
+              style={[styles.quickCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border, borderWidth: 1 }]}
+            >
+              <View style={styles.quickCardIconWrap}>
+                <SymbolView
+                  name={{ ios: "qrcode", android: "qr_code", web: "qr_code" }}
+                  size={26}
+                  tintColor={theme.actionPrimary}
+                />
+              </View>
+              <AppText style={[styles.quickCardLabel, { color: theme.text }]}>My QR Code</AppText>
+              <AppText style={[styles.quickCardSub, { color: theme.textSecondary }]}>Driver validation</AppText>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/passenger/tracking" as any)}
+              style={[styles.quickCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border, borderWidth: 1 }]}
+            >
+              <View style={styles.quickCardIconWrap}>
+                <SymbolView
+                  name={{ ios: "location.north.line.fill", android: "near_me", web: "near_me" }}
+                  size={26}
+                  tintColor="#669BBC"
+                />
+              </View>
+              <AppText style={[styles.quickCardLabel, { color: theme.text }]}>Live Tracking</AppText>
+              <AppText style={[styles.quickCardSub, { color: theme.textSecondary }]}>Track buses</AppText>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/(tabs)/history" as any)}
+              style={[styles.quickCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border, borderWidth: 1 }]}
+            >
+              <View style={styles.quickCardIconWrap}>
+                <SymbolView
+                  name={{ ios: "ticket.fill", android: "confirmation_number", web: "confirmation_number" }}
+                  size={26}
+                  tintColor={theme.text}
+                />
+              </View>
+              <AppText style={[styles.quickCardLabel, { color: theme.text }]}>My Tickets</AppText>
+              <AppText style={[styles.quickCardSub, { color: theme.textSecondary }]}>Travel history</AppText>
+            </Pressable>
+          </View>
         </View>
 
         {/* ── Nearby Buses ── */}
@@ -603,6 +639,65 @@ export default function HomeScreen() {
             tintColor={theme.actionPrimary}
           />
         </Pressable>
+
+        {/* ── Recent Activity ── */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleRow}>
+            <AppText style={[styles.sectionTitle, { color: theme.text }]}>Recent Activity</AppText>
+          </View>
+          <Pressable onPress={() => router.push("/(tabs)/wallet" as any)}>
+            <AppText style={[styles.viewAllText, { color: theme.actionPrimary }]}>View All Transactions</AppText>
+          </Pressable>
+        </View>
+
+        {dashboard?.recent_transactions && dashboard.recent_transactions.length > 0 ? (
+          <View style={styles.activityListContainer}>
+            {dashboard.recent_transactions.slice(0, 3).map((txn: WalletTransaction) => {
+              const isCredit = txn.direction === "credit";
+              return (
+                <Pressable
+                  key={txn.reference}
+                  onPress={() => router.push(`/wallet/transaction/${txn.reference}` as any)}
+                  style={styles.activityItem}
+                >
+                  <View style={[styles.activityIconBox, isCredit ? styles.activityIconCredit : styles.activityIconDebit]}>
+                    <SymbolView
+                      name={{
+                        ios: isCredit ? "arrow.down.left" : "arrow.up.right",
+                        android: isCredit ? "arrow_downward" : "arrow_upward",
+                        web: isCredit ? "arrow_downward" : "arrow_upward",
+                      }}
+                      size={16}
+                      tintColor={isCredit ? "#1B8A5A" : "#C1121F"}
+                    />
+                  </View>
+                  <View style={styles.activityInfoWrap}>
+                    <AppText style={[styles.activityTitle, { color: theme.text }]} numberOfLines={1}>
+                      {txn.description || txn.type}
+                    </AppText>
+                    <AppText style={[styles.activitySubtitle, { color: theme.textSecondary }]} numberOfLines={1}>
+                      {txn.reference}
+                    </AppText>
+                  </View>
+                  <AppText style={[styles.activityAmount, isCredit ? styles.activityAmountCredit : styles.activityAmountDebit]}>
+                    {isCredit ? "+" : "-"}NPR {(txn.amount_minor / 100).toFixed(2)}
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={[styles.stateCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border }]}>
+            <SymbolView
+              name={{ ios: "clock", android: "history", web: "history" }}
+              size={20}
+              tintColor={theme.textMuted}
+            />
+            <AppText style={[styles.stateText, { color: theme.textSecondary }]}>
+              No recent activity yet. Your transactions will appear here.
+            </AppText>
+          </View>
+        )}
 
       </ScrollView>
 
@@ -1058,5 +1153,113 @@ const styles = StyleSheet.create({
   tipSub: {
     fontSize: 12,
     fontWeight: "400",
+  },
+
+  /* ── Featured Action ── */
+  featuredAction: {
+    marginTop: Spacing.two,
+    marginBottom: Spacing.two,
+  },
+  featuredButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 18,
+    borderRadius: 18,
+    gap: 14,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  featuredIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: "rgba(253,253,253,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  featuredTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  featuredTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: -0.2,
+  },
+  featuredSubtitle: {
+    fontSize: 12,
+    fontWeight: "400",
+    color: "rgba(255,255,255,0.8)",
+    lineHeight: 18,
+  },
+
+  /* ── Quick Actions Section ── */
+  quickActionsSection: {
+    marginTop: Spacing.two,
+    marginBottom: Spacing.two,
+  },
+  sectionHeaderCompact: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  sectionTitleCompact: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: Palette.prussianNavy,
+  },
+  /* ── Recent Activity ── */
+  activityListContainer: {
+    gap: 8,
+  },
+  activityItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Palette.prussianNavy,
+  },
+  activityIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  activityIconCredit: {
+    backgroundColor: "rgba(27, 138, 90, 0.12)",
+  },
+  activityIconDebit: {
+    backgroundColor: "rgba(193, 18, 31, 0.12)",
+  },
+  activityInfoWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  activityTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  activitySubtitle: {
+    fontSize: 11,
+    fontWeight: "400",
+  },
+  activityAmount: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  activityAmountCredit: {
+    color: "#1B8A5A",
+  },
+  activityAmountDebit: {
+    color: "#C1121F",
   },
 });
