@@ -62,6 +62,19 @@ export const DarkColors = {
 
 export const Monochrome = LightColors;
 
+export const DriverColors = {
+  background: '#001824',
+  surfacePrimary: '#002235',
+  surfaceSecondary: '#003049',
+  surfaceElevated: '#0A3F5E',
+  border: '#154766',
+  textPrimary: '#FDF0D5',
+  textSecondary: '#A3C2D7',
+  textMuted: '#669BBC',
+  actionPrimary: Palette.crimsonRed,
+  actionPrimaryText: '#FFFFFF',
+} as const;
+
 export const Colors = {
   light: {
     ...LightColors,

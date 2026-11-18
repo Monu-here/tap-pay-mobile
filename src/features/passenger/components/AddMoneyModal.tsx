@@ -1,7 +1,8 @@
 import { AppText, AppTextInput } from '@/components/typography/app-text';
 import { PrimaryButton } from '@/components/ui/primary-button';
-import { Monochrome, Spacing } from '@/constants/theme';
+import { DriverColors, Monochrome, Spacing } from '@/constants/theme';
 import { createIdempotencyKey } from '@/features/auth/services/apiClient';
+import { getSession } from '@/features/auth/session';
 import {
   getPayment,
   getPaymentGateways,
@@ -19,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -59,6 +61,7 @@ export function AddMoneyModal({
 }: AddMoneyModalProps) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
+  const isDriver = getSession().user?.type === 'driver';
   const [amountInput, setAmountInput] = useState('500');
   const [gateways, setGateways] = useState<PaymentGateway[]>([]);
   const [selectedGateway, setSelectedGateway] = useState('');
@@ -114,6 +117,7 @@ export function AddMoneyModal({
   }, [visible]);
 
   const handleClose = () => {
+    Keyboard.dismiss();
     setErrorMessage(null);
     setTopUpSuccess(null);
     onClose();
@@ -176,7 +180,7 @@ export function AddMoneyModal({
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       const returnedToApp =
-        /inactive|background/.test(previousAppState.current) && nextState === 'active';
+        /inactive|background/.test(previousAppState.current ?? '') && nextState === 'active';
       previousAppState.current = nextState;
       if (returnedToApp && pendingPayment) {
         void checkPaymentStatus(pendingPayment);
@@ -186,6 +190,7 @@ export function AddMoneyModal({
   }, [checkPaymentStatus, pendingPayment]);
 
   const handleTopUpSubmit = async () => {
+    Keyboard.dismiss();
     if (topUpInProgress.current || isProcessing) return;
     topUpInProgress.current = true;
 
@@ -262,7 +267,7 @@ export function AddMoneyModal({
     >
       <KeyboardAvoidingView
         style={styles.modalOverlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <Pressable
           style={StyleSheet.absoluteFill}
@@ -277,18 +282,20 @@ export function AddMoneyModal({
           style={[
             styles.modalContent,
             {
+              backgroundColor: isDriver ? DriverColors.surfacePrimary : Monochrome.surfacePrimary,
+              borderColor: isDriver ? DriverColors.border : Monochrome.border,
               maxHeight: windowHeight * 0.9,
               paddingBottom: insets.bottom + 20,
             },
           ]}
         >
           <View style={styles.modalHeader}>
-            <AppText style={styles.modalTitle}>Add Money to Wallet</AppText>
+            <AppText style={[styles.modalTitle, isDriver && { color: DriverColors.textPrimary }]}>Add Money to Wallet</AppText>
             <Pressable onPress={handleClose} hitSlop={8}>
               <SymbolView
                 name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
                 size={22}
-                tintColor={Monochrome.textMuted}
+                tintColor={isDriver ? DriverColors.textMuted : Monochrome.textMuted}
               />
             </Pressable>
           </View>
@@ -297,15 +304,17 @@ export function AddMoneyModal({
             style={styles.modalScroll}
             contentContainerStyle={styles.modalScrollContent}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            automaticallyAdjustKeyboardInsets
             showsVerticalScrollIndicator={false}
           >
             {pendingPayment ? (
               <View style={styles.paymentPendingBox}>
-                <ActivityIndicator size="large" color={Monochrome.textPrimary} />
-                <AppText style={styles.paymentPendingText}>
+                <ActivityIndicator size="large" color={isDriver ? DriverColors.actionPrimary : Monochrome.textPrimary} />
+                <AppText style={[styles.paymentPendingText, isDriver && { color: DriverColors.textPrimary }]}>
                   {paymentStatusMessage || 'Awaiting payment confirmation...'}
                 </AppText>
-                <AppText style={styles.paymentReference}>Reference: {pendingPayment.reference}</AppText>
+                <AppText style={[styles.paymentReference, isDriver && { color: DriverColors.textMuted }]}>Reference: {pendingPayment.reference}</AppText>
                 <PrimaryButton
                   title={isProcessing ? 'Verifying...' : 'Check Payment Status'}
                   onPress={() => void checkPaymentStatus(pendingPayment)}
@@ -319,7 +328,7 @@ export function AddMoneyModal({
                   }}
                   accessibilityRole="button"
                 >
-                  <AppText style={styles.closePendingText}>Cancel Check</AppText>
+                  <AppText style={[styles.closePendingText, isDriver && { color: DriverColors.textMuted }]}>Cancel Check</AppText>
                 </Pressable>
               </View>
             ) : topUpSuccess ? (
@@ -327,9 +336,9 @@ export function AddMoneyModal({
                 <SymbolView
                   name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
                   size={52}
-                  tintColor={Monochrome.textPrimary}
+                  tintColor={isDriver ? DriverColors.actionPrimary : Monochrome.textPrimary}
                 />
-                <AppText style={styles.modalSuccessText}>{topUpSuccess}</AppText>
+                <AppText style={[styles.modalSuccessText, isDriver && { color: DriverColors.textPrimary }]}>{topUpSuccess}</AppText>
                 <PrimaryButton
                   title="Done"
                   onPress={() => {
@@ -341,17 +350,17 @@ export function AddMoneyModal({
               </View>
             ) : (
               <View style={styles.modalForm}>
-                <AppText style={styles.inputLabel}>Enter Amount (NPR)</AppText>
-                <View style={styles.amountInputWrap}>
-                  <AppText style={styles.currencyPrefix}>Rs.</AppText>
+                <AppText style={[styles.inputLabel, isDriver && { color: DriverColors.textSecondary }]}>Enter Amount (NPR)</AppText>
+                <View style={[styles.amountInputWrap, isDriver && { backgroundColor: DriverColors.surfaceSecondary, borderColor: DriverColors.border }]}>
+                  <AppText style={[styles.currencyPrefix, isDriver && { color: DriverColors.textPrimary }]}>Rs.</AppText>
                   <AppTextInput
-                    style={styles.amountInput}
+                    style={[styles.amountInput, isDriver && { color: DriverColors.textPrimary }]}
                     keyboardType="decimal-pad"
                     autoFocus
                     value={amountInput}
                     onChangeText={setAmountInput}
                     placeholder="0"
-                    placeholderTextColor={Monochrome.textMuted}
+                    placeholderTextColor={isDriver ? DriverColors.textMuted : Monochrome.textMuted}
                   />
                 </View>
 
@@ -362,12 +371,14 @@ export function AddMoneyModal({
                       onPress={() => setAmountInput(amount.toString())}
                       style={[
                         styles.presetChip,
+                        isDriver && { backgroundColor: DriverColors.surfaceSecondary, borderColor: DriverColors.border },
                         amountInput === amount.toString() && styles.presetChipActive,
                       ]}
                     >
                       <AppText
                         style={[
                           styles.presetChipText,
+                          isDriver && { color: DriverColors.textSecondary },
                           amountInput === amount.toString() && styles.presetChipTextActive,
                         ]}
                       >
@@ -377,12 +388,12 @@ export function AddMoneyModal({
                   ))}
                 </View>
 
-                <AppText style={[styles.inputLabel, { marginTop: Spacing.three }]}>
+                <AppText style={[styles.inputLabel, isDriver && { color: DriverColors.textSecondary }, { marginTop: Spacing.three }]}>
                   Select Payment Gateway
                 </AppText>
                 <View style={styles.gatewaysList}>
                   {gatewayLoading ? (
-                    <ActivityIndicator size="small" color={Monochrome.textPrimary} />
+                    <ActivityIndicator size="small" color={isDriver ? DriverColors.actionPrimary : Monochrome.textPrimary} />
                   ) : gateways.length > 0 ? (
                     gateways.map((gateway) => (
                       <Pressable
@@ -390,13 +401,14 @@ export function AddMoneyModal({
                         onPress={() => setSelectedGateway(gateway.slug)}
                         style={[
                           styles.gatewayItem,
+                          isDriver && { backgroundColor: DriverColors.surfaceSecondary, borderColor: DriverColors.border },
                           selectedGateway === gateway.slug && styles.gatewayItemActive,
                         ]}
                       >
                         <View style={styles.gatewayInfo}>
-                          <AppText style={styles.gatewayName}>{gateway.name}</AppText>
+                          <AppText style={[styles.gatewayName, isDriver && { color: DriverColors.textPrimary }]}>{gateway.name}</AppText>
                           {gateway.currency ? (
-                            <AppText style={styles.gatewayBadge}>{gateway.currency}</AppText>
+                            <AppText style={[styles.gatewayBadge, isDriver && { color: DriverColors.textSecondary, backgroundColor: DriverColors.surfaceElevated }]}>{gateway.currency}</AppText>
                           ) : null}
                         </View>
                         <SymbolView
@@ -406,12 +418,12 @@ export function AddMoneyModal({
                             web: selectedGateway === gateway.slug ? 'check_circle' : 'radio_button_unchecked',
                           }}
                           size={18}
-                          tintColor={Monochrome.textPrimary}
+                          tintColor={isDriver ? DriverColors.actionPrimary : Monochrome.textPrimary}
                         />
                       </Pressable>
                     ))
                   ) : (
-                    <AppText style={styles.gatewayNotice}>
+                    <AppText style={[styles.gatewayNotice, isDriver && { color: DriverColors.textMuted }]}>
                       No online payment gateways are currently configured on this server.
                     </AppText>
                   )}
@@ -436,7 +448,7 @@ export function AddMoneyModal({
                   </AppText>
                 </View> */}
 
-                {errorMessage ? <AppText style={styles.errorBanner}>{errorMessage}</AppText> : null}
+                {errorMessage ? <AppText style={[styles.errorBanner, isDriver && { color: DriverColors.textPrimary }]}>{errorMessage}</AppText> : null}
               </View>
             )}
           </ScrollView>

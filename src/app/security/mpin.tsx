@@ -1,5 +1,5 @@
 import { AppText, AppTextInput } from '@/components/typography/app-text';
-import { Monochrome, Spacing } from '@/constants/theme';
+import { DriverColors as Monochrome, Spacing } from '@/constants/theme';
 import { getSession } from '@/features/auth/session';
 import { changeMpin, getMpinStatus, resetMpin, setMpin } from '@/features/passenger/services/passengerApi';
 import { router } from 'expo-router';
@@ -8,19 +8,23 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
+import { useKeyboardDismissOnBlur } from '@/hooks/use-keyboard-dismiss-on-blur';
 
 type RecoveryMode = 'change' | 'reset';
 
 export default function MpinSettingsScreen() {
   const insets = useSafeAreaInsets();
+  useKeyboardDismissOnBlur();
   const role = getSession().user?.type;
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [recoveryMode, setRecoveryMode] = useState<RecoveryMode>('change');
@@ -59,6 +63,7 @@ export default function MpinSettingsScreen() {
   }, [loadStatus]);
 
   const submit = async () => {
+    Keyboard.dismiss();
     setError(null);
     setSuccess(null);
     if (!/^\d{4}$/.test(newMpin)) {
@@ -121,9 +126,9 @@ export default function MpinSettingsScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       <View style={styles.header}>
         <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backButton}>
           <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={19} tintColor={Monochrome.textPrimary} />
@@ -132,10 +137,13 @@ export default function MpinSettingsScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]}
-        keyboardShouldPersistTaps="handled"
-      >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          automaticallyAdjustKeyboardInsets
+        >
         <View style={styles.hero}>
           <View style={styles.shield}>
             <SymbolView name={{ ios: 'lock.shield.fill', android: 'security', web: 'security' }} size={27} tintColor={Monochrome.textPrimary} />
@@ -218,7 +226,8 @@ export default function MpinSettingsScreen() {
             </View>
           </>
         )}
-      </ScrollView>
+        </ScrollView>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 }
@@ -304,8 +313,8 @@ const styles = StyleSheet.create({
     letterSpacing: 5,
   },
   helper: { color: Monochrome.textMuted, fontSize: 12, lineHeight: 17 },
-  error: { color: '#B42318', fontSize: 13, lineHeight: 18 },
-  success: { color: '#137A54', fontSize: 13, lineHeight: 18 },
+  error: { color: '#FF8A8A', fontSize: 13, lineHeight: 18 },
+  success: { color: '#9FE2C0', fontSize: 13, lineHeight: 18 },
   primaryButton: {
     minHeight: 48,
     borderRadius: 14,

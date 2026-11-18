@@ -3,9 +3,12 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
@@ -14,7 +17,7 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
-import { Monochrome, Spacing } from '@/constants/theme';
+import { DriverColors as Monochrome, Spacing } from '@/constants/theme';
 import {
   collectDriverPayment,
   getCurrentDriverBus,
@@ -22,9 +25,11 @@ import {
   type CollectPaymentResult,
   type DriverBusInfo,
 } from '@/features/driver/services/driverApi';
+import { useKeyboardDismissOnBlur } from '@/hooks/use-keyboard-dismiss-on-blur';
 
 export default function DriverScanScreen() {
   const insets = useSafeAreaInsets();
+  useKeyboardDismissOnBlur();
   const [permission, requestPermission] = useCameraPermissions();
 
   const [bus, setBus] = useState<DriverBusInfo | null>(null);
@@ -120,6 +125,7 @@ export default function DriverScanScreen() {
 
   const handleManualSubmit = () => {
     if (!manualPayloadInput.trim()) return;
+    Keyboard.dismiss();
     setManualInputModal(false);
     setScanned(true);
     processQrPayload(manualPayloadInput.trim());
@@ -127,7 +133,7 @@ export default function DriverScanScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
 
       {/* Header */}
       <View style={styles.header}>
@@ -322,8 +328,28 @@ export default function DriverScanScreen() {
       </Modal>
 
       {/* Manual Input Modal */}
-      <Modal visible={manualInputModal} animationType="fade" transparent>
-        <View style={styles.modalBackdrop}>
+      <Modal
+        visible={manualInputModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => {
+          Keyboard.dismiss();
+          setManualInputModal(false);
+        }}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalKeyboardArea}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.modalBackdrop}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={Keyboard.dismiss} />
+            <ScrollView
+              style={styles.manualModalScroll}
+              contentContainerStyle={styles.manualModalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              automaticallyAdjustKeyboardInsets
+            >
           <View style={styles.manualModalCard}>
             <AppText style={styles.manualModalTitle}>Manual QR Payload Entry</AppText>
             <AppText style={styles.manualModalSub}>
@@ -339,10 +365,15 @@ export default function DriverScanScreen() {
               multiline
               autoCapitalize="none"
               autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={handleManualSubmit}
             />
 
             <View style={styles.manualModalActions}>
-              <Pressable onPress={() => setManualInputModal(false)} style={styles.manualCancelBtn}>
+              <Pressable onPress={() => {
+                Keyboard.dismiss();
+                setManualInputModal(false);
+              }} style={styles.manualCancelBtn}>
                 <AppText style={styles.manualCancelBtnText}>Cancel</AppText>
               </Pressable>
               <Pressable onPress={handleManualSubmit} style={styles.manualSubmitBtn}>
@@ -350,7 +381,9 @@ export default function DriverScanScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -633,6 +666,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Monochrome.border,
     padding: Spacing.lg,
+  },
+  modalKeyboardArea: {
+    flex: 1,
+  },
+  manualModalScroll: {
+    flex: 1,
+  },
+  manualModalScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: Spacing.four,
   },
   manualModalTitle: {
     fontSize: 16,

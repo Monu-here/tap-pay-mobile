@@ -17,9 +17,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 import { AppText } from '@/components/typography/app-text';
-import { Palette, Spacing } from '@/constants/theme';
+import { DriverColors, Palette, Spacing } from '@/constants/theme';
 import { FontFamilies } from '@/constants/typography';
 import { useTheme } from '@/hooks/use-theme';
+import { useKeyboardDismissOnBlur } from '@/hooks/use-keyboard-dismiss-on-blur';
+import { getSession } from '@/features/auth/session';
 import { AddMoneyModal } from '@/features/passenger/components/AddMoneyModal';
 import {
   getDashboard,
@@ -34,7 +36,21 @@ type ActivityFilter = 'all' | 'fare' | 'load';
 
 export default function WalletScreen() {
   const insets = useSafeAreaInsets();
-  const theme = useTheme();
+  useKeyboardDismissOnBlur();
+  const baseTheme = useTheme();
+  const isDriver = getSession().user?.type === 'driver';
+  const theme = isDriver
+    ? {
+        ...baseTheme,
+        ...DriverColors,
+        text: DriverColors.textPrimary,
+        isDark: true,
+      }
+    : baseTheme;
+  const actionColor = isDriver ? DriverColors.actionPrimary : Palette.crimsonRed;
+  const topUpColors: [string, string] = isDriver
+    ? [DriverColors.actionPrimary, Palette.deepMaroon]
+    : [Palette.crimsonRed, Palette.deepMaroon];
 
   const [wallet, setWallet] = useState<WalletSummary | null>(null);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
@@ -260,7 +276,7 @@ export default function WalletScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => void loadWalletData(true)}
-            tintColor={Palette.crimsonRed}
+            tintColor={actionColor}
           />
         }
       >
@@ -271,14 +287,14 @@ export default function WalletScreen() {
               styles.errorCard,
               {
                 backgroundColor: theme.isDark ? '#3D0D11' : '#FDF0D5',
-                borderColor: Palette.crimsonRed,
+                borderColor: actionColor,
               },
             ]}
           >
             <SymbolView
               name={{ ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' }}
               size={18}
-              tintColor={Palette.crimsonRed}
+              tintColor={actionColor}
             />
             <AppText style={[styles.errorText, { color: theme.text }]}>{loadError}</AppText>
             <Pressable onPress={() => void loadWalletData(true)}>
@@ -317,7 +333,7 @@ export default function WalletScreen() {
               ]}
             >
               <LinearGradient
-                colors={[Palette.crimsonRed, Palette.deepMaroon]}
+                colors={topUpColors}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.topUpGradient}
@@ -358,12 +374,12 @@ export default function WalletScreen() {
 
             <View style={styles.statColumn}>
               <View style={styles.statIconRow}>
-                <View style={[styles.statDot, { backgroundColor: Palette.crimsonRed }]} />
+                <View style={[styles.statDot, { backgroundColor: actionColor }]} />
                 <AppText style={[styles.statLabel, { color: theme.textSecondary }]}>
                   Total Fares
                 </AppText>
               </View>
-              <AppText style={[styles.statValue, { color: Palette.crimsonRed }]}>
+              <AppText style={[styles.statValue, { color: actionColor }]}>
                 {statementSummary?.total_debits?.formatted || 'Rs. 0.00'}
               </AppText>
             </View>
@@ -392,7 +408,7 @@ export default function WalletScreen() {
             <SymbolView
               name={{ ios: 'sparkles', android: 'stars', web: 'stars' }}
               size={24}
-              tintColor={Palette.crimsonRed}
+              tintColor={actionColor}
             />
             <View>
               <AppText style={{ color: theme.text, fontSize: 16, fontWeight: '700' }}>Rewards</AppText>
@@ -435,7 +451,7 @@ export default function WalletScreen() {
                       styles.segmentActive,
                       {
                         backgroundColor: theme.isDark ? '#0A3F5E' : Palette.white,
-                        borderColor: active ? Palette.crimsonRed : 'transparent',
+                        borderColor: active ? actionColor : 'transparent',
                       },
                     ],
                   ]}
@@ -445,7 +461,7 @@ export default function WalletScreen() {
                       styles.segmentText,
                       {
                         color: active
-                          ? Palette.crimsonRed
+                          ? actionColor
                           : theme.isDark
                           ? Palette.slateBlue
                           : '#5E7487',
@@ -473,11 +489,11 @@ export default function WalletScreen() {
                 {
                   backgroundColor:
                     rangeFilter === 'all'
-                      ? Palette.prussianNavy
+                      ? isDriver ? DriverColors.actionPrimary : Palette.prussianNavy
                       : theme.isDark
                       ? '#002235'
                       : '#FFFFFF',
-                  borderColor: rangeFilter === 'all' ? Palette.prussianNavy : theme.border,
+                  borderColor: rangeFilter === 'all' ? isDriver ? DriverColors.actionPrimary : Palette.prussianNavy : theme.border,
                 },
               ]}
             >
@@ -485,7 +501,7 @@ export default function WalletScreen() {
                 style={[
                   styles.rangeChipText,
                   {
-                    color: rangeFilter === 'all' ? Palette.warmCream : theme.textSecondary,
+                    color: rangeFilter === 'all' ? isDriver ? '#FFFFFF' : Palette.warmCream : theme.textSecondary,
                   },
                 ]}
               >
@@ -500,11 +516,11 @@ export default function WalletScreen() {
                 {
                   backgroundColor:
                     rangeFilter === '30days'
-                      ? Palette.prussianNavy
+                      ? isDriver ? DriverColors.actionPrimary : Palette.prussianNavy
                       : theme.isDark
                       ? '#002235'
                       : '#FFFFFF',
-                  borderColor: rangeFilter === '30days' ? Palette.prussianNavy : theme.border,
+                  borderColor: rangeFilter === '30days' ? isDriver ? DriverColors.actionPrimary : Palette.prussianNavy : theme.border,
                 },
               ]}
             >
@@ -513,7 +529,7 @@ export default function WalletScreen() {
                   styles.rangeChipText,
                   {
                     color:
-                      rangeFilter === '30days' ? Palette.warmCream : theme.textSecondary,
+                      rangeFilter === '30days' ? isDriver ? '#FFFFFF' : Palette.warmCream : theme.textSecondary,
                   },
                 ]}
               >
@@ -530,13 +546,13 @@ export default function WalletScreen() {
           </AppText>
 
           {statementLoading && (
-            <ActivityIndicator size="small" color={Palette.crimsonRed} />
+            <ActivityIndicator size="small" color={actionColor} />
           )}
         </View>
 
         {loading && !refreshing ? (
           <View style={styles.centerBox}>
-            <ActivityIndicator size="large" color={Palette.crimsonRed} />
+            <ActivityIndicator size="large" color={actionColor} />
             <AppText style={[styles.centerMutedText, { color: theme.textSecondary }]}>
               Loading statement entries...
             </AppText>
@@ -573,7 +589,7 @@ export default function WalletScreen() {
                       backgroundColor: pressed
                         ? theme.isDark
                           ? '#002B42'
-                          : '#FBF5EB'
+                          : isDriver ? DriverColors.surfaceSecondary : '#FBF5EB'
                         : theme.isDark
                         ? '#002235'
                         : Palette.white,
@@ -598,7 +614,7 @@ export default function WalletScreen() {
                           : { ios: 'bus.fill', android: 'directions_bus', web: 'directions_bus' }
                       }
                       size={18}
-                      tintColor={isCredit ? '#1B8A5A' : Palette.crimsonRed}
+                      tintColor={isCredit ? '#1B8A5A' : actionColor}
                     />
                   </View>
 
@@ -627,7 +643,7 @@ export default function WalletScreen() {
                     <AppText
                       style={[
                         styles.txAmount,
-                        { color: isCredit ? '#1B8A5A' : Palette.crimsonRed },
+                        { color: isCredit ? '#1B8A5A' : actionColor },
                       ]}
                     >
                       {sign}Rs. {amountFormatted}
@@ -655,7 +671,7 @@ export default function WalletScreen() {
                                 ? '#1B8A5A'
                                 : tx.status === 'pending'
                                 ? '#C27803'
-                                : Palette.crimsonRed,
+                                : actionColor,
                           },
                         ]}
                       >
@@ -716,7 +732,7 @@ export default function WalletScreen() {
             ]}
           >
             {statementLoading ? (
-              <ActivityIndicator size="small" color={Palette.crimsonRed} />
+              <ActivityIndicator size="small" color={actionColor} />
             ) : (
               <AppText style={[styles.loadMoreText, { color: theme.text }]}>
                 Load Previous Entries

@@ -7,14 +7,20 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
-import { Brand, Spacing } from '@/constants/theme';
+import { Brand as BaseBrand, DriverColors, Palette, Spacing } from '@/constants/theme';
+import { useKeyboardDismissOnBlur } from '@/hooks/use-keyboard-dismiss-on-blur';
 import {
   getConcessionApplications,
   getConcessionPolicies,
@@ -26,8 +32,26 @@ import {
 
 type Category = ConcessionSubmission['category'];
 
+const Brand = {
+  ...BaseBrand,
+  background: DriverColors.background,
+  surfacePrimary: DriverColors.surfacePrimary,
+  surfaceSecondary: DriverColors.surfaceSecondary,
+  surfaceElevated: DriverColors.surfaceElevated,
+  divider: DriverColors.border,
+  text: DriverColors.textPrimary,
+  textSecondary: DriverColors.textSecondary,
+  error: '#FF8A8A',
+  teal: {
+    ...BaseBrand.teal,
+    primary: DriverColors.actionPrimary,
+    primaryDark: Palette.deepMaroon,
+  },
+};
+
 export default function ConcessionScreen() {
   const insets = useSafeAreaInsets();
+  useKeyboardDismissOnBlur();
   const [applications, setApplications] = useState<ConcessionApplication[]>([]);
   const [concessions, setConcessions] = useState<Record<Category, {
     status: string;
@@ -124,6 +148,7 @@ export default function ConcessionScreen() {
   };
 
   const submit = async () => {
+    Keyboard.dismiss();
     if (!document) {
       setError('Select a clear photo of your supporting document.');
       return;
@@ -192,16 +217,31 @@ export default function ConcessionScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="dark" />
-      <View style={styles.header}>
+    <KeyboardAvoidingView
+      style={[styles.container, { paddingTop: insets.top }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <StatusBar style="light" />
+      <LinearGradient
+        colors={['#003049', '#001824']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
         <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.back}>
           <AppText style={styles.backText}>‹  Back</AppText>
         </Pressable>
         <AppText style={styles.title}>Fare concession</AppText>
         <View style={styles.headerSpacer} />
-      </View>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+      </LinearGradient>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <ScrollView
+        style={styles.formScroll}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        automaticallyAdjustKeyboardInsets
+      >
         <AppText style={styles.intro}>
           Apply for a student or senior citizen travel concession. Only approved applications receive
           the currently active discount, and eligibility is verified by Gantabya Pay administrators.
@@ -438,7 +478,8 @@ export default function ConcessionScreen() {
           </View>
         ))}
       </ScrollView>
-    </View>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -446,55 +487,56 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Brand.background },
   header: {
     minHeight: 54, paddingHorizontal: Spacing.three, flexDirection: 'row',
-    alignItems: 'center', justifyContent: 'space-between',
+    alignItems: 'center', justifyContent: 'space-between', paddingTop: Spacing.two,
   },
+  formScroll: { flex: 1 },
   back: { minWidth: 70, paddingVertical: Spacing.two },
-  backText: { color: Brand.teal.primary, fontSize: 16, fontWeight: '600' },
+  backText: { color: Palette.warmCream, fontSize: 16, fontWeight: '600' },
   title: { color: Brand.text, fontSize: 18, fontWeight: '700' },
   headerSpacer: { width: 70 },
   content: { padding: Spacing.three, gap: Spacing.two },
   intro: { color: Brand.textSecondary, lineHeight: 21, marginBottom: Spacing.two },
-  policyHint: { color: Brand.teal.primary, fontWeight: '700' },
+  policyHint: { color: DriverColors.textSecondary, fontWeight: '700' },
   label: { color: Brand.text, fontSize: 14, fontWeight: '700', marginTop: Spacing.one },
   categoryRow: { flexDirection: 'row', gap: Spacing.two },
   category: {
     flex: 1, borderWidth: 1, borderColor: Brand.divider, borderRadius: 12,
-    padding: Spacing.two, alignItems: 'center', backgroundColor: '#fff',
+    padding: Spacing.two, alignItems: 'center', backgroundColor: Brand.surfacePrimary,
   },
-  categorySelected: { borderColor: Brand.teal.primary, backgroundColor: '#EAF7F6' },
+  categorySelected: { borderColor: DriverColors.actionPrimary, backgroundColor: Brand.surfaceElevated },
   categoryText: { color: Brand.textSecondary, fontWeight: '600' },
-  categoryTextSelected: { color: Brand.teal.primary },
+  categoryTextSelected: { color: DriverColors.textPrimary },
   input: {
-    backgroundColor: '#fff', borderWidth: 1, borderColor: Brand.divider,
+    backgroundColor: Brand.surfacePrimary, borderWidth: 1, borderColor: Brand.divider,
     borderRadius: 12, paddingHorizontal: Spacing.two, paddingVertical: 13,
     color: Brand.text,
   },
   hint: { color: Brand.textSecondary, fontSize: 13, lineHeight: 19 },
   pick: {
-    borderStyle: 'dashed', borderWidth: 1, borderColor: Brand.teal.primary,
+    borderStyle: 'dashed', borderWidth: 1, borderColor: DriverColors.border,
     borderRadius: 12, minHeight: 58, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: Brand.surfacePrimary,
   },
-  pickText: { color: Brand.teal.primary, fontWeight: '700' },
+  pickText: { color: DriverColors.textPrimary, fontWeight: '700' },
   previewWrap: { gap: Spacing.one },
   consent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.two },
-  consentCheck: { color: Brand.teal.primary, fontSize: 20 },
+  consentCheck: { color: DriverColors.actionPrimary, fontSize: 20 },
   consentText: { flex: 1, color: Brand.text, lineHeight: 20 },
-  preview: { height: 180, borderRadius: 12, backgroundColor: '#fff' },
+  preview: { height: 180, borderRadius: 12, backgroundColor: Brand.surfacePrimary },
   removeText: { color: Brand.error, fontWeight: '600', paddingVertical: Spacing.one },
   error: { color: Brand.error, lineHeight: 20 },
   submit: {
-    backgroundColor: Brand.teal.primary, minHeight: 52, borderRadius: 14,
+    backgroundColor: DriverColors.actionPrimary, minHeight: 52, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center', marginTop: Spacing.one,
   },
   disabled: { opacity: 0.65 },
-  submitText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  submitText: { color: DriverColors.actionPrimaryText, fontWeight: '700', fontSize: 15 },
   sectionTitle: { color: Brand.text, fontSize: 17, fontWeight: '700', marginTop: Spacing.four },
-  application: { backgroundColor: '#fff', borderWidth: 1, borderColor: Brand.divider, borderRadius: 12, padding: Spacing.two, gap: Spacing.one },
+  application: { backgroundColor: Brand.surfacePrimary, borderWidth: 1, borderColor: Brand.divider, borderRadius: 12, padding: Spacing.two, gap: Spacing.one },
   applicationTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   applicationTitle: { color: Brand.text, fontWeight: '700' },
-  status: { color: '#9A6700', fontSize: 11, fontWeight: '800' },
-  approved: { color: '#16803C' },
+  status: { color: '#F0C878', fontSize: 11, fontWeight: '800' },
+  approved: { color: '#9FE2C0' },
   rejected: { color: Brand.error },
   reviewNote: { color: Brand.text, lineHeight: 19 },
 });

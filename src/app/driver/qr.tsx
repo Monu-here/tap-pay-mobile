@@ -3,15 +3,18 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import QRCode from 'react-native-qrcode-svg';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 
-import { Monochrome, Spacing } from '@/constants/theme';
+import { DriverColors as Monochrome, Palette, Spacing } from '@/constants/theme';
 import { getActiveTripQr, type DriverTripQr } from '@/features/driver/services/driverApi';
+import { useKeyboardDismissOnBlur } from '@/hooks/use-keyboard-dismiss-on-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function DriverTripQrScreen() {
   const insets = useSafeAreaInsets();
+  useKeyboardDismissOnBlur();
   const [qr, setQr] = useState<DriverTripQr | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,31 +48,39 @@ export default function DriverTripQrScreen() {
   }, [refresh]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <StatusBar style="dark" />
-      <View style={styles.header}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
+      <StatusBar style="light" />
+      <LinearGradient
+        colors={['#003049', '#001824']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: insets.top + Spacing.two }]}
+      >
         <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
           <SymbolView
             name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
             size={18}
-            tintColor={Monochrome.textPrimary}
+            tintColor={Palette.warmCream}
           />
         </Pressable>
         <View style={styles.headerTitleContainer}>
           <AppText style={styles.title}>Passenger Fare QR</AppText>
           <AppText style={styles.subtitle}>Active Trip Payment Pass</AppText>
         </View>
-      </View>
+      </LinearGradient>
 
-      <View style={styles.content}>
-        {loading && !qr ? <ActivityIndicator size="large" color={Monochrome.textPrimary} /> : null}
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.four }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {loading && !qr ? <ActivityIndicator size="large" color={Monochrome.actionPrimary} /> : null}
         {qr ? (
           <>
             <View style={styles.qrContainer}>
               <View style={styles.qrCard}>
                 <QRCode
                   value={qr.qr_payload}
-                  size={240}
+                  size={220}
                   backgroundColor="#FFFFFF"
                   color="#000000"
                 />
@@ -113,7 +124,7 @@ export default function DriverTripQrScreen() {
             </Pressable>
           </View>
         ) : null}
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -122,21 +133,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Monochrome.background,
-    paddingHorizontal: Spacing.lg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.four,
+    paddingBottom: Spacing.three,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
+    backgroundColor: 'rgba(253,240,213,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -144,24 +153,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    color: Monochrome.textPrimary,
-    fontSize: 20,
+    color: Palette.warmCream,
+    fontSize: 18,
     fontWeight: '700',
     letterSpacing: -0.3,
   },
   subtitle: {
-    color: Monochrome.textSecondary,
+    color: 'rgba(253,240,213,0.7)',
     fontSize: 13,
     marginTop: 2,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 24,
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.four,
+    gap: Spacing.three,
   },
   qrContainer: {
-    backgroundColor: Monochrome.surfaceSecondary,
+    width: '100%',
+    backgroundColor: Monochrome.surfacePrimary,
     borderWidth: 1,
     borderColor: Monochrome.border,
     borderRadius: 24,
@@ -181,8 +193,8 @@ const styles = StyleSheet.create({
     borderColor: Monochrome.border,
     borderRadius: 16,
     padding: Spacing.md,
-    marginTop: 20,
-    gap: 10,
+    marginTop: Spacing.two,
+    gap: Spacing.three,
   },
   detailRow: {
     flexDirection: 'row',

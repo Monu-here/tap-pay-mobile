@@ -15,9 +15,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 import { AppText } from '@/components/typography/app-text';
-import { Palette, Spacing } from '@/constants/theme';
+import { DriverColors, Palette, Spacing } from '@/constants/theme';
 import { FontFamilies } from '@/constants/typography';
 import { useTheme } from '@/hooks/use-theme';
+import { getSession } from '@/features/auth/session';
 import {
   fcmDestination,
   isFcmAvailable,
@@ -32,7 +33,18 @@ import {
 
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
-  const theme = useTheme();
+  const baseTheme = useTheme();
+  const isDriver = getSession().user?.type === 'driver';
+  const theme = isDriver
+    ? {
+        ...baseTheme,
+        ...DriverColors,
+        text: DriverColors.textPrimary,
+        borderLight: DriverColors.border,
+        isDark: false,
+      }
+    : baseTheme;
+  const actionColor = isDriver ? DriverColors.actionPrimary : Palette.crimsonRed;
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -177,7 +189,7 @@ export default function NotificationsScreen() {
               <View style={styles.headerTitleRow}>
                 <AppText style={styles.headerTitle}>Notifications</AppText>
                 {unreadCount > 0 && (
-                  <View style={styles.unreadBadge}>
+                  <View style={[styles.unreadBadge, { backgroundColor: actionColor }]}>
                     <AppText style={styles.unreadBadgeText}>{unreadCount} New</AppText>
                   </View>
                 )}
@@ -191,6 +203,7 @@ export default function NotificationsScreen() {
               onPress={handleMarkAllRead}
               style={({ pressed }) => [
                 styles.markAllBtn,
+                isDriver && { backgroundColor: 'rgba(253,240,213,0.12)' },
                 { opacity: pressed ? 0.75 : 1 },
               ]}
               hitSlop={8}
@@ -208,7 +221,7 @@ export default function NotificationsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => void loadNotifications(true)}
-            tintColor={Palette.crimsonRed}
+            tintColor={actionColor}
           />
         }
       >
@@ -226,7 +239,7 @@ export default function NotificationsScreen() {
             <SymbolView
               name={{ ios: 'bell.badge.fill', android: 'notifications_active', web: 'notifications_active' }}
               size={20}
-              tintColor={pushEnabled ? '#1B8A5A' : Palette.crimsonRed}
+              tintColor={pushEnabled ? DriverColors.actionPrimary : actionColor}
             />
           </View>
 
@@ -266,8 +279,8 @@ export default function NotificationsScreen() {
             style={[
               styles.errorCard,
               {
-                backgroundColor: theme.isDark ? '#3D0D11' : '#FDF0D5',
-                borderColor: Palette.crimsonRed,
+                backgroundColor: theme.isDark ? '#3D0D11' : isDriver ? DriverColors.surfaceElevated : '#FDF0D5',
+                borderColor: actionColor,
               },
             ]}
           >
@@ -281,7 +294,7 @@ export default function NotificationsScreen() {
         {/* Notifications List */}
         {loading && !refreshing ? (
           <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color={Palette.crimsonRed} />
+            <ActivityIndicator size="large" color={actionColor} />
             <AppText style={[styles.loadingLabel, { color: theme.textSecondary }]}>
               Loading notifications...
             </AppText>
@@ -325,11 +338,11 @@ export default function NotificationsScreen() {
                       backgroundColor: pressed
                         ? theme.isDark
                           ? '#002B42'
-                          : '#FBF5EB'
+                          : isDriver ? DriverColors.surfaceSecondary : '#FBF5EB'
                         : isUnread
                         ? theme.isDark
                           ? 'rgba(193, 18, 31, 0.08)'
-                          : 'rgba(253, 240, 213, 0.45)'
+                          : isDriver ? 'rgba(27, 138, 90, 0.10)' : 'rgba(253, 240, 213, 0.45)'
                         : 'transparent',
                     },
                   ]}
@@ -340,10 +353,10 @@ export default function NotificationsScreen() {
                       styles.iconCircle,
                       {
                         backgroundColor: isUnread
-                          ? 'rgba(193, 18, 31, 0.12)'
+                          ? isDriver ? 'rgba(27, 138, 90, 0.12)' : 'rgba(193, 18, 31, 0.12)'
                           : theme.isDark
                           ? '#001824'
-                          : '#F5EFE6',
+                          : isDriver ? DriverColors.surfaceElevated : '#F5EFE6',
                       },
                     ]}
                   >
@@ -356,7 +369,7 @@ export default function NotificationsScreen() {
                           : { ios: 'bell.fill', android: 'notifications', web: 'notifications' }
                       }
                       size={18}
-                      tintColor={isUnread ? Palette.crimsonRed : Palette.slateBlue}
+                      tintColor={isUnread ? actionColor : theme.textMuted}
                     />
                   </View>
 

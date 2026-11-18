@@ -1,11 +1,12 @@
 import {AppText, AppTextInput } from '@/components/typography/app-text';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -16,8 +17,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useKeyboardDismissOnBlur } from '@/hooks/use-keyboard-dismiss-on-blur';
 
-import { Monochrome, Spacing } from '@/constants/theme';
+import { DriverColors, Monochrome, Spacing } from '@/constants/theme';
+import { getSession } from '@/features/auth/session';
 import {
   createSupportTicket,
   getSupportTicket,
@@ -41,6 +45,10 @@ function statusLabel(status: SupportTicket['status']): string {
 
 export default function SupportScreen() {
   const insets = useSafeAreaInsets();
+  useKeyboardDismissOnBlur();
+  const isDriver = getSession().user?.type === 'driver';
+  const colors = isDriver ? DriverColors : Monochrome;
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [selected, setSelected] = useState<SupportTicket | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,6 +101,7 @@ export default function SupportScreen() {
   };
 
   const submitTicket = async () => {
+    Keyboard.dismiss();
     setFormError(null);
     if (subject.trim().length < 5 || message.trim().length < 10) {
       setFormError('Add a subject and at least 10 characters describing the issue.');
@@ -129,6 +138,7 @@ export default function SupportScreen() {
   };
 
   const submitReply = async () => {
+    Keyboard.dismiss();
     if (!selected || reply.trim().length < 2) {
       Alert.alert('Reply required', 'Enter a message before sending your reply.');
       return;
@@ -152,6 +162,7 @@ export default function SupportScreen() {
 
   const closeCreate = () => {
     if (submitting) return;
+    Keyboard.dismiss();
     if (subject || message || transactionReference) {
       Alert.alert('Discard this request?', 'Your unsent support request will be discarded.', [
         { text: 'Continue editing', style: 'cancel' },
@@ -174,15 +185,20 @@ export default function SupportScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="dark" />
-      <View style={styles.header}>
+      <StatusBar style={isDriver ? 'light' : 'dark'} />
+      <LinearGradient
+        colors={isDriver ? ['#003049', '#001824'] : [colors.surfacePrimary, colors.surfacePrimary]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
         {selected ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Back to support requests" onPress={() => setSelected(null)} style={styles.iconButton}>
-            <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={18} tintColor={Monochrome.textPrimary} />
+            <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={18} tintColor={colors.textPrimary} />
           </Pressable>
         ) : (
           <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/home')} style={styles.iconButton}>
-            <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={18} tintColor={Monochrome.textPrimary} />
+            <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={18} tintColor={colors.textPrimary} />
           </Pressable>
         )}
         <AppText style={styles.headerTitle}>{selected ? 'Support request' : 'Help & support'}</AppText>
@@ -191,10 +207,15 @@ export default function SupportScreen() {
             <AppText style={styles.newButtonText}>New</AppText>
           </Pressable>
         ) : <View style={styles.headerRightPlaceholder} />}
-      </View>
+      </LinearGradient>
 
       {selected ? (
-        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          automaticallyAdjustKeyboardInsets
+        >
           <View style={styles.ticketHeaderCard}>
             <AppText style={styles.ticketSubject}>{selected.subject}</AppText>
             <AppText style={styles.ticketMeta}>#{selected.reference} · {statusLabel(selected.status)}</AppText>
@@ -218,7 +239,7 @@ export default function SupportScreen() {
                 value={reply}
                 onChangeText={setReply}
                 placeholder="Write a reply"
-                placeholderTextColor={Monochrome.textMuted}
+                placeholderTextColor={colors.textMuted}
                 multiline
                 maxLength={2000}
               />
@@ -231,10 +252,36 @@ export default function SupportScreen() {
       ) : (
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadTickets(true)} tintColor={Monochrome.textPrimary} />}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          automaticallyAdjustKeyboardInsets
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadTickets(true)} tintColor={colors.actionPrimary} />}
         >
-          <AppText style={styles.intro}>Track payment disputes and other questions directly with Tap & Pay Support.</AppText>
-          {loading ? <ActivityIndicator color={Monochrome.textPrimary} style={styles.loading} /> : null}
+          {isDriver ? (
+            <LinearGradient
+              colors={['#003049', '#001824']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.driverIntro}
+            >
+              <View style={styles.driverIntroIcon}>
+                <SymbolView
+                  name={{ ios: 'bubble.left.and.bubble.right.fill', android: 'support_agent', web: 'support_agent' }}
+                  size={23}
+                  tintColor="#FDF0D5"
+                />
+              </View>
+              <View style={styles.driverIntroCopy}>
+                <AppText style={styles.driverIntroTitle}>How can we help?</AppText>
+                <AppText style={styles.driverIntroText}>
+                  Track payment disputes and other questions directly with Tap &amp; Pay Support.
+                </AppText>
+              </View>
+            </LinearGradient>
+          ) : (
+            <AppText style={styles.intro}>Track payment disputes and other questions directly with Tap & Pay Support.</AppText>
+          )}
+          {loading ? <ActivityIndicator color={colors.actionPrimary} style={styles.loading} /> : null}
           {loadError ? (
             <View style={styles.errorCard}>
               <AppText style={styles.errorText}>{loadError}</AppText>
@@ -262,17 +309,24 @@ export default function SupportScreen() {
 
       <Modal visible={createVisible} transparent animationType="slide" onRequestClose={closeCreate}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <View style={[styles.modalCard, { paddingBottom: insets.bottom + Spacing.md }]}>
+          <View style={styles.modalOverlayContent}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={Keyboard.dismiss} />
+            <View style={[styles.modalCard, { paddingBottom: insets.bottom + Spacing.md }]}>
             <View style={styles.modalHeader}>
               <View>
                 <AppText style={styles.modalTitle}>New support request</AppText>
                 <AppText style={styles.helperText}>Our team can review the request and reply here.</AppText>
               </View>
               <Pressable accessibilityRole="button" accessibilityLabel="Close support form" onPress={closeCreate} style={styles.iconButton}>
-                <SymbolView name={{ ios: 'xmark', android: 'close', web: 'close' }} size={18} tintColor={Monochrome.textPrimary} />
+                <SymbolView name={{ ios: 'xmark', android: 'close', web: 'close' }} size={18} tintColor={colors.textPrimary} />
               </Pressable>
             </View>
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.formContent}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              automaticallyAdjustKeyboardInsets
+              contentContainerStyle={styles.formContent}
+            >
               <AppText style={styles.fieldLabel}>Issue category</AppText>
               <View style={styles.categoryWrap}>
                 {CATEGORIES.map((item) => (
@@ -284,18 +338,19 @@ export default function SupportScreen() {
               {category === 'payment_dispute' ? (
                 <>
                   <AppText style={styles.fieldLabel}>Tap & Pay transaction reference</AppText>
-                  <AppTextInput accessibilityLabel="Transaction reference" style={styles.input} value={transactionReference} onChangeText={setTransactionReference} placeholder="26-character wallet reference" placeholderTextColor={Monochrome.textMuted} autoCapitalize="characters" maxLength={26} />
+                  <AppTextInput accessibilityLabel="Transaction reference" style={styles.input} value={transactionReference} onChangeText={setTransactionReference} placeholder="26-character wallet reference" placeholderTextColor={colors.textMuted} autoCapitalize="characters" maxLength={26} />
                 </>
               ) : null}
               <AppText style={styles.fieldLabel}>Subject</AppText>
-              <AppTextInput accessibilityLabel="Support request subject" style={styles.input} value={subject} onChangeText={setSubject} placeholder="Briefly describe the issue" placeholderTextColor={Monochrome.textMuted} maxLength={120} />
+              <AppTextInput accessibilityLabel="Support request subject" style={styles.input} value={subject} onChangeText={setSubject} placeholder="Briefly describe the issue" placeholderTextColor={colors.textMuted} maxLength={120} />
               <AppText style={styles.fieldLabel}>Details</AppText>
-              <AppTextInput accessibilityLabel="Support request details" style={[styles.input, styles.messageInput]} value={message} onChangeText={setMessage} placeholder="Include dates and relevant details. Do not include passwords or OTPs." placeholderTextColor={Monochrome.textMuted} multiline maxLength={2000} textAlignVertical="top" />
+              <AppTextInput accessibilityLabel="Support request details" style={[styles.input, styles.messageInput]} value={message} onChangeText={setMessage} placeholder="Include dates and relevant details. Do not include passwords or OTPs." placeholderTextColor={colors.textMuted} multiline maxLength={2000} textAlignVertical="top" />
               {formError ? <AppText accessibilityRole="alert" style={styles.errorText}>{formError}</AppText> : null}
               <Pressable accessibilityRole="button" disabled={submitting} onPress={() => void submitTicket()} style={[styles.submitButton, submitting && styles.disabledButton]}>
                 {submitting ? <ActivityIndicator color={Monochrome.actionPrimaryText} /> : <AppText style={styles.submitText}>Submit request</AppText>}
               </Pressable>
             </ScrollView>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -303,49 +358,70 @@ export default function SupportScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Monochrome.background },
-  header: { minHeight: 58, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, borderBottomWidth: 1, borderBottomColor: Monochrome.border },
-  iconButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 19, backgroundColor: Monochrome.surfaceSecondary, borderWidth: 1, borderColor: Monochrome.border },
-  headerTitle: { color: Monochrome.textPrimary, fontSize: 18, fontWeight: '700' },
+type SupportColors = {
+  background: string;
+  surfacePrimary: string;
+  surfaceSecondary: string;
+  surfaceElevated: string;
+  border: string;
+  textPrimary: string;
+  textSecondary: string;
+  textMuted: string;
+  actionPrimary: string;
+  actionPrimaryText: string;
+};
+
+function createStyles(colors: SupportColors) {
+return StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  header: { minHeight: 58, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border },
+  iconButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 19, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border },
+  headerTitle: { color: colors.textPrimary, fontSize: 18, fontWeight: '700' },
   headerRightPlaceholder: { width: 54 },
-  newButton: { minWidth: 54, paddingVertical: 9, paddingHorizontal: 12, alignItems: 'center', borderRadius: 10, backgroundColor: Monochrome.actionPrimary },
-  newButtonText: { color: Monochrome.actionPrimaryText, fontWeight: '700' },
+  newButton: { minWidth: 54, paddingVertical: 9, paddingHorizontal: 12, alignItems: 'center', borderRadius: 10, backgroundColor: colors.actionPrimary },
+  newButtonText: { color: colors.actionPrimaryText, fontWeight: '700' },
   content: { padding: Spacing.lg, gap: Spacing.md },
-  intro: { color: Monochrome.textSecondary, fontSize: 14, lineHeight: 21, marginBottom: Spacing.sm },
+  intro: { color: colors.textSecondary, fontSize: 14, lineHeight: 21, marginBottom: Spacing.sm },
+  driverIntro: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.lg, borderRadius: 18, borderWidth: 1, borderColor: colors.border },
+  driverIntroIcon: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: 'rgba(253,240,213,0.12)' },
+  driverIntroCopy: { flex: 1, gap: Spacing.one },
+  driverIntroTitle: { color: colors.textPrimary, fontSize: 17, fontWeight: '800' },
+  driverIntroText: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
   loading: { padding: Spacing.xl },
-  ticketRow: { padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1, borderColor: Monochrome.border, borderRadius: 16, backgroundColor: Monochrome.surfaceSecondary },
+  ticketRow: { padding: Spacing.md, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.surfaceSecondary },
   ticketRowMain: { flex: 1, gap: 5 },
-  ticketSubject: { color: Monochrome.textPrimary, fontSize: 15, fontWeight: '700' },
-  ticketMeta: { color: Monochrome.textMuted, fontSize: 12 },
-  statusPill: { paddingHorizontal: 9, paddingVertical: 6, borderRadius: 999, backgroundColor: Monochrome.surfaceElevated },
-  statusText: { color: Monochrome.textSecondary, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
-  emptyCard: { padding: Spacing.xl, alignItems: 'center', gap: Spacing.sm, borderRadius: 16, borderWidth: 1, borderColor: Monochrome.border, backgroundColor: Monochrome.surfaceSecondary },
-  emptyTitle: { color: Monochrome.textPrimary, fontSize: 16, fontWeight: '700' },
-  helperText: { color: Monochrome.textMuted, fontSize: 12, lineHeight: 18 },
-  errorCard: { padding: Spacing.md, gap: Spacing.sm, borderRadius: 12, borderWidth: 1, borderColor: Monochrome.border, backgroundColor: Monochrome.surfaceSecondary },
-  errorText: { color: Monochrome.textPrimary, fontSize: 13 },
-  retryText: { color: Monochrome.textPrimary, fontWeight: '700' },
-  ticketHeaderCard: { padding: Spacing.md, gap: Spacing.sm, borderRadius: 16, borderWidth: 1, borderColor: Monochrome.border, backgroundColor: Monochrome.surfaceSecondary },
-  messageCard: { padding: Spacing.md, gap: Spacing.sm, borderRadius: 14, borderWidth: 1, borderColor: Monochrome.border, backgroundColor: Monochrome.surfaceSecondary },
-  staffMessage: { backgroundColor: Monochrome.surfaceElevated },
-  messageAuthor: { color: Monochrome.textPrimary, fontWeight: '700', fontSize: 13 },
-  messageBody: { color: Monochrome.textSecondary, fontSize: 14, lineHeight: 21 },
+  ticketSubject: { color: colors.textPrimary, fontSize: 15, fontWeight: '700' },
+  ticketMeta: { color: colors.textMuted, fontSize: 12 },
+  statusPill: { paddingHorizontal: 9, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.surfaceElevated },
+  statusText: { color: colors.textSecondary, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
+  emptyCard: { padding: Spacing.xl, alignItems: 'center', gap: Spacing.sm, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
+  emptyTitle: { color: colors.textPrimary, fontSize: 16, fontWeight: '700' },
+  helperText: { color: colors.textMuted, fontSize: 12, lineHeight: 18 },
+  errorCard: { padding: Spacing.md, gap: Spacing.sm, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
+  errorText: { color: colors.textPrimary, fontSize: 13 },
+  retryText: { color: colors.textPrimary, fontWeight: '700' },
+  ticketHeaderCard: { padding: Spacing.md, gap: Spacing.sm, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
+  messageCard: { padding: Spacing.md, gap: Spacing.sm, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
+  staffMessage: { backgroundColor: colors.surfaceElevated },
+  messageAuthor: { color: colors.textPrimary, fontWeight: '700', fontSize: 13 },
+  messageBody: { color: colors.textSecondary, fontSize: 14, lineHeight: 21 },
   replyBox: { gap: Spacing.sm, paddingTop: Spacing.sm },
-  input: { minHeight: 48, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: Monochrome.border, backgroundColor: Monochrome.surfacePrimary, color: Monochrome.textPrimary, fontSize: 14 },
+  input: { minHeight: 48, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfacePrimary, color: colors.textPrimary, fontSize: 14 },
   messageInput: { minHeight: 110 },
-  submitButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: Monochrome.actionPrimary, paddingHorizontal: Spacing.md },
+  submitButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: colors.actionPrimary, paddingHorizontal: Spacing.md },
   disabledButton: { opacity: 0.55 },
-  submitText: { color: Monochrome.actionPrimaryText, fontWeight: '700', fontSize: 14 },
+  submitText: { color: colors.actionPrimaryText, fontWeight: '700', fontSize: 14 },
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.65)' },
-  modalCard: { maxHeight: '92%', paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, borderTopLeftRadius: 22, borderTopRightRadius: 22, backgroundColor: Monochrome.background, borderWidth: 1, borderColor: Monochrome.border },
+  modalOverlayContent: { flex: 1, justifyContent: 'flex-end' },
+  modalCard: { maxHeight: '92%', paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, borderTopLeftRadius: 22, borderTopRightRadius: 22, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.md, paddingBottom: Spacing.md },
-  modalTitle: { color: Monochrome.textPrimary, fontSize: 18, fontWeight: '800', marginBottom: 4 },
+  modalTitle: { color: colors.textPrimary, fontSize: 18, fontWeight: '800', marginBottom: 4 },
   formContent: { gap: Spacing.sm, paddingBottom: Spacing.lg },
-  fieldLabel: { color: Monochrome.textSecondary, fontWeight: '700', fontSize: 13, marginTop: Spacing.sm },
+  fieldLabel: { color: colors.textSecondary, fontWeight: '700', fontSize: 13, marginTop: Spacing.sm },
   categoryWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  categoryChip: { minHeight: 38, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: Monochrome.border, backgroundColor: Monochrome.surfaceSecondary },
-  categoryChipSelected: { backgroundColor: Monochrome.actionPrimary, borderColor: Monochrome.actionPrimary },
-  categoryText: { color: Monochrome.textSecondary, fontSize: 12, fontWeight: '600' },
-  categoryTextSelected: { color: Monochrome.actionPrimaryText },
+  categoryChip: { minHeight: 38, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
+  categoryChipSelected: { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary },
+  categoryText: { color: colors.textSecondary, fontSize: 12, fontWeight: '600' },
+  categoryTextSelected: { color: colors.actionPrimaryText },
 });
+}
