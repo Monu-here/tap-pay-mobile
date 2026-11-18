@@ -1,13 +1,16 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
   Pressable,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   View,
+  type TextInput,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 import { AppText, AppTextInput } from '@/components/typography/app-text';
+import { ProfileSkeleton } from '@/components/skeletons/ScreenSkeletons';
 import { Palette, Spacing } from '@/constants/theme';
 import { FontFamilies } from '@/constants/typography';
 import { useTheme } from '@/hooks/use-theme';
@@ -38,11 +42,13 @@ export default function ProfileScreen() {
   const [sessions, setSessions] = useState<UserSessionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Edit Profile Modal
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
+  const phoneInputRef = useRef<TextInput>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -51,6 +57,8 @@ export default function ProfileScreen() {
   const [currentPwd, setCurrentPwd] = useState('');
   const [newPwd, setNewPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
+  const newPasswordInputRef = useRef<TextInput>(null);
+  const confirmPasswordInputRef = useRef<TextInput>(null);
   const [changingPwd, setChangingPwd] = useState(false);
   const [pwdError, setPwdError] = useState<string | null>(null);
   const [pwdSuccess, setPwdSuccess] = useState<string | null>(null);
@@ -61,6 +69,7 @@ export default function ProfileScreen() {
   const loadData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
+    setLoadError(null);
 
     try {
       const [profRes, sessRes] = await Promise.all([
@@ -73,12 +82,16 @@ export default function ProfileScreen() {
         setProfileData(u);
         setNameInput((u.name as string) || '');
         setPhoneInput((u.phone as string) || '');
+      } else {
+        setLoadError(profRes.message || 'Unable to load your profile.');
       }
       if (sessRes.ok && sessRes.data) {
         setSessions(sessRes.data.sessions || []);
+      } else if (profRes.ok) {
+        setLoadError(sessRes.message || 'Unable to load your active sessions.');
       }
-    } catch {
-      // Ignored
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Unable to load your profile.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -224,9 +237,6 @@ export default function ProfileScreen() {
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {loading && !refreshing && (
-              <ActivityIndicator size="small" color={Palette.warmCream} />
-            )}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Edit Profile"
@@ -258,6 +268,18 @@ export default function ProfileScreen() {
           />
         }
       >
+        {loading && !refreshing && !profileData ? (
+          <ProfileSkeleton />
+        ) : (
+          <>
+        {loadError ? (
+          <View style={{ backgroundColor: theme.surfacePrimary, borderColor: theme.border, borderWidth: 1, borderRadius: 16, padding: 16, gap: 12 }}>
+            <AppText style={{ color: theme.textSecondary }}>{loadError}</AppText>
+            <Pressable accessibilityRole="button" onPress={() => void loadData(true)}>
+              <AppText style={{ color: Palette.crimsonRed, fontWeight: '700' }}>Retry</AppText>
+            </Pressable>
+          </View>
+        ) : null}
         {/* User Hero Profile Card */}
         <View
           style={[
@@ -607,19 +629,31 @@ export default function ProfileScreen() {
             eYatra v1.0.0 • Digital Transit Nepal
           </AppText>
         </View>
+          </>
+        )}
       </ScrollView>
 
       {/* Edit Profile Modal */}
       <Modal visible={editModalVisible} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <ScrollView
             style={[
               styles.modalSheet,
               {
                 backgroundColor: theme.isDark ? '#002235' : Palette.white,
-                paddingBottom: insets.bottom + 20,
+                maxHeight: '90%',
               },
             ]}
+            contentContainerStyle={[
+              styles.modalSheetContent,
+              { paddingBottom: insets.bottom + 20 },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            showsVerticalScrollIndicator={false}
           >
             <View style={styles.modalHeaderRow}>
               <AppText style={[styles.modalTitle, { color: theme.text }]}>
@@ -654,6 +688,9 @@ export default function ProfileScreen() {
                   },
                 ]}
                 value={nameInput}
+                returnKeyType="next"
+                blurOnSubmit={false}
+                onSubmitEditing={() => phoneInputRef.current?.focus()}
                 onChangeText={(val) => {
                   setNameInput(val);
                   setEditError(null);
@@ -668,6 +705,7 @@ export default function ProfileScreen() {
                 Mobile Phone
               </AppText>
               <AppTextInput
+                ref={phoneInputRef}
                 style={[
                   styles.fieldInput,
                   {
@@ -705,21 +743,31 @@ export default function ProfileScreen() {
                 )}
               </LinearGradient>
             </Pressable>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Change Password Modal */}
       <Modal visible={pwdModalVisible} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <ScrollView
             style={[
               styles.modalSheet,
               {
                 backgroundColor: theme.isDark ? '#002235' : Palette.white,
-                paddingBottom: insets.bottom + 20,
+                maxHeight: '90%',
               },
             ]}
+            contentContainerStyle={[
+              styles.modalSheetContent,
+              { paddingBottom: insets.bottom + 20 },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            showsVerticalScrollIndicator={false}
           >
             <View style={styles.modalHeaderRow}>
               <AppText style={[styles.modalTitle, { color: theme.text }]}>
@@ -760,6 +808,9 @@ export default function ProfileScreen() {
                   },
                 ]}
                 value={currentPwd}
+                returnKeyType="next"
+                blurOnSubmit={false}
+                onSubmitEditing={() => newPasswordInputRef.current?.focus()}
                 onChangeText={setCurrentPwd}
                 placeholder="Enter current password"
                 placeholderTextColor={theme.textMuted}
@@ -772,6 +823,7 @@ export default function ProfileScreen() {
                 New Password
               </AppText>
               <AppTextInput
+                ref={newPasswordInputRef}
                 style={[
                   styles.fieldInput,
                   {
@@ -781,6 +833,9 @@ export default function ProfileScreen() {
                   },
                 ]}
                 value={newPwd}
+                returnKeyType="next"
+                blurOnSubmit={false}
+                onSubmitEditing={() => confirmPasswordInputRef.current?.focus()}
                 onChangeText={setNewPwd}
                 placeholder="Min. 8 characters"
                 placeholderTextColor={theme.textMuted}
@@ -793,6 +848,7 @@ export default function ProfileScreen() {
                 Confirm New Password
               </AppText>
               <AppTextInput
+                ref={confirmPasswordInputRef}
                 style={[
                   styles.fieldInput,
                   {
@@ -802,6 +858,8 @@ export default function ProfileScreen() {
                   },
                 ]}
                 value={confirmPwd}
+                returnKeyType="go"
+                onSubmitEditing={() => void handleChangePassword()}
                 onChangeText={setConfirmPwd}
                 placeholder="Re-enter new password"
                 placeholderTextColor={theme.textMuted}
@@ -830,8 +888,8 @@ export default function ProfileScreen() {
                 )}
               </LinearGradient>
             </Pressable>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Logged-in Devices Sheet Modal */}
@@ -1132,6 +1190,8 @@ const styles = StyleSheet.create({
   modalSheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+  },
+  modalSheetContent: {
     padding: 24,
     gap: 16,
   },

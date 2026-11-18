@@ -15,6 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 import { AppText } from '@/components/typography/app-text';
+import { NotificationSkeleton } from '@/components/skeletons/ScreenSkeletons';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { DriverColors, Palette, Spacing } from '@/constants/theme';
 import { FontFamilies } from '@/constants/typography';
 import { useTheme } from '@/hooks/use-theme';
@@ -167,22 +169,7 @@ export default function NotificationsScreen() {
       >
         <View style={styles.headerRow}>
           <View style={styles.headerLeft}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-              onPress={() => router.back()}
-              style={({ pressed }) => [
-                styles.backBtn,
-                { opacity: pressed ? 0.7 : 1 },
-              ]}
-              hitSlop={10}
-            >
-              <SymbolView
-                name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                size={20}
-                tintColor={Palette.warmCream}
-              />
-            </Pressable>
+            <AppBackButton />
 
             <View>
               <AppText style={styles.headerSubtitle}>eYatra</AppText>
@@ -225,6 +212,10 @@ export default function NotificationsScreen() {
           />
         }
       >
+        {loading && !refreshing ? (
+          <NotificationSkeleton />
+        ) : (
+          <>
         {/* Device Push Notifications Banner */}
         <View
           style={[
@@ -292,14 +283,7 @@ export default function NotificationsScreen() {
         )}
 
         {/* Notifications List */}
-        {loading && !refreshing ? (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color={actionColor} />
-            <AppText style={[styles.loadingLabel, { color: theme.textSecondary }]}>
-              Loading notifications...
-            </AppText>
-          </View>
-        ) : notifications.length > 0 ? (
+        {notifications.length > 0 ? (
           <View
             style={[
               styles.listCard,
@@ -434,6 +418,8 @@ export default function NotificationsScreen() {
               You are all caught up! You will receive updates about your bus tickets, wallet top-ups, and security alerts here.
             </AppText>
           </View>
+        )}
+          </>
         )}
       </ScrollView>
     </View>

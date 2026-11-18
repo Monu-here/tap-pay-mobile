@@ -1,16 +1,15 @@
 import { AppText } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
+import { TransactionSkeleton } from '@/components/skeletons/ScreenSkeletons';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 
 import { Palette, SemanticColors, Spacing } from '@/constants/theme';
@@ -59,29 +58,14 @@ export default function TravelDetailScreen() {
         end={{ x: 1, y: 1 }}
         style={[styles.header, { paddingTop: insets.top + 12 }]}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          hitSlop={8}
-        >
-          <SymbolView
-            name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-            size={20}
-            tintColor={Palette.warmCream}
-          />
-        </Pressable>
+        <AppBackButton />
         <AppText style={styles.headerTitle}>Journey Receipt</AppText>
         <View style={styles.headerSpacer} />
       </LinearGradient>
 
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}>
         {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="small" color={theme.actionPrimary} />
-            <AppText style={[styles.loadingText, { color: theme.textSecondary }]}>Loading cryptographic receipt...</AppText>
-          </View>
+          <TransactionSkeleton count={1} />
         ) : error ? (
           <View style={[styles.errorBox, { backgroundColor: theme.surfacePrimary, borderColor: theme.border }]}>
             <AppText style={[styles.errorText, { color: theme.text }]}>{error}</AppText>
@@ -309,7 +293,6 @@ const styles = StyleSheet.create({
     maxWidth: '65%',
   },
   uidText: {
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontSize: 11,
   },
 });

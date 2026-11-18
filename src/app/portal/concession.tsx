@@ -1,10 +1,11 @@
 import {AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppScreenHeader } from '@/components/ui/app-screen-header';
+import { PrimaryButton } from '@/components/ui/primary-button';
+import { TransactionSkeleton } from '@/components/skeletons/ScreenSkeletons';
 import * as DocumentPicker from 'expo-document-picker';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { router } from 'expo-router';
 import {
-  ActivityIndicator,
   Alert,
   Image,
   Keyboard,
@@ -17,9 +18,9 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 
-import { Brand as BaseBrand, DriverColors, Palette, Spacing } from '@/constants/theme';
+import { Palette, Radius, SemanticColors, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { useKeyboardDismissOnBlur } from '@/hooks/use-keyboard-dismiss-on-blur';
 import {
   getConcessionApplications,
@@ -32,25 +33,10 @@ import {
 
 type Category = ConcessionSubmission['category'];
 
-const Brand = {
-  ...BaseBrand,
-  background: DriverColors.background,
-  surfacePrimary: DriverColors.surfacePrimary,
-  surfaceSecondary: DriverColors.surfaceSecondary,
-  surfaceElevated: DriverColors.surfaceElevated,
-  divider: DriverColors.border,
-  text: DriverColors.textPrimary,
-  textSecondary: DriverColors.textSecondary,
-  error: '#FF8A8A',
-  teal: {
-    ...BaseBrand.teal,
-    primary: DriverColors.actionPrimary,
-    primaryDark: Palette.deepMaroon,
-  },
-};
-
 export default function ConcessionScreen() {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const styles = useMemo(() => createStyles(theme.tokens), [theme.tokens]);
   useKeyboardDismissOnBlur();
   const [applications, setApplications] = useState<ConcessionApplication[]>([]);
   const [concessions, setConcessions] = useState<Record<Category, {
@@ -85,14 +71,15 @@ export default function ConcessionScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     try {
       const result = await getConcessionApplications();
       if (!result.ok || !result.data) {
-        setError(result.message || 'Unable to load concession applications.');
+        setLoadError(result.message || 'Unable to load concession applications.');
       } else {
         setApplications(result.data.applications);
       }
@@ -108,8 +95,8 @@ export default function ConcessionScreen() {
           policyResult.data.policies.map((policy) => [policy.category, policy.discount_percentage]),
         ));
       }
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Unable to load applications.');
+    } catch (requestError) {
+      setLoadError(requestError instanceof Error ? requestError.message : 'Unable to load applications.');
     } finally {
       setLoading(false);
     }
@@ -218,208 +205,234 @@ export default function ConcessionScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { paddingTop: insets.top }]}
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar style="light" />
-      <LinearGradient
-        colors={['#003049', '#001824']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.back}>
-          <AppText style={styles.backText}>‹  Back</AppText>
-        </Pressable>
-        <AppText style={styles.title}>Fare concession</AppText>
-        <View style={styles.headerSpacer} />
-      </LinearGradient>
+      <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+      <AppScreenHeader
+        title="Fare concession"
+        subtitle="Student and senior citizen travel support"
+        backButton={{ fallbackHref: '/(tabs)/home' }}
+      />
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <ScrollView
-        style={styles.formScroll}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-        automaticallyAdjustKeyboardInsets
-      >
-        <AppText style={styles.intro}>
-          Apply for a student or senior citizen travel concession. Only approved applications receive
-          the currently active discount, and eligibility is verified by Gantabya Pay administrators.
-        </AppText>
-        <AppText style={styles.policyHint}>
-          Active policy: {policyPercentages[category] ? `${policyPercentages[category]}%` : 'Not currently available'}
-        </AppText>
+        <ScrollView
+          style={styles.formScroll}
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          automaticallyAdjustKeyboardInsets
+        >
+          <View style={styles.introCard}>
+            <AppText style={styles.intro}>
+              Apply for a student or senior citizen travel concession. Only approved applications receive
+              the currently active discount, and eligibility is verified by Gantabya Pay administrators.
+            </AppText>
+            <AppText style={styles.policyHint}>
+              Active policy: {policyPercentages[category] ? `${policyPercentages[category]}%` : 'Not currently available'}
+            </AppText>
+          </View>
 
-        <AppTextInput
-          accessibilityLabel="Full name"
-          value={fullName}
-          onChangeText={setFullName}
-          placeholder="Full name as shown on your document"
-          style={styles.input}
-        />
-        <AppTextInput
-          accessibilityLabel="Date of birth"
-          value={dateOfBirth}
-          onChangeText={setDateOfBirth}
-          placeholder="Date of birth (YYYY-MM-DD)"
-          style={styles.input}
-        />
+          <View style={styles.formCard}>
+            <AppText style={styles.formTitle}>Applicant details</AppText>
+            <AppTextInput
+              accessibilityLabel="Full name"
+              value={fullName}
+              onChangeText={setFullName}
+              placeholder="Full name as shown on your document"
+              style={styles.input}
+            />
+            <AppTextInput
+              accessibilityLabel="Date of birth"
+              value={dateOfBirth}
+              onChangeText={setDateOfBirth}
+              placeholder="Date of birth (YYYY-MM-DD)"
+              style={styles.input}
+            />
 
-        <AppText style={styles.label}>Concession category</AppText>
-        <View style={styles.categoryRow}>
-          {([
-            ['student', 'Student'],
-            ['senior_citizen', 'Senior citizen'],
-          ] as const).map(([value, label]) => (
+            <AppText style={styles.label}>Concession category</AppText>
+            <View style={styles.categoryRow}>
+              {([
+                ['student', 'Student'],
+                ['senior_citizen', 'Senior citizen'],
+              ] as const).map(([value, label]) => (
+                <Pressable
+                  key={value}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: category === value }}
+                  onPress={() => setCategory(value)}
+                  style={[styles.category, category === value && styles.categorySelected]}
+                >
+                  <AppText
+                    style={[
+                      styles.categoryText,
+                      category === value && styles.categoryTextSelected,
+                    ]}
+                  >
+                    {label}
+                  </AppText>
+                </Pressable>
+              ))}
+            </View>
+
+            {category === 'student' ? (
+              <>
+                <AppTextInput
+                  accessibilityLabel="Student ID number"
+                  value={studentId}
+                  onChangeText={setStudentId}
+                  placeholder="Student ID number"
+                  style={styles.input}
+                />
+                <AppTextInput
+                  accessibilityLabel="College name"
+                  value={collegeName}
+                  onChangeText={setCollegeName}
+                  placeholder="College or university"
+                  style={styles.input}
+                />
+                <AppTextInput
+                  accessibilityLabel="Institution type"
+                  value={institutionType}
+                  onChangeText={setInstitutionType}
+                  placeholder="Institution type (school, college, university)"
+                  style={styles.input}
+                />
+                <AppTextInput
+                  accessibilityLabel="Course or grade"
+                  value={courseGrade}
+                  onChangeText={setCourseGrade}
+                  placeholder="Course or grade"
+                  style={styles.input}
+                />
+                <AppTextInput
+                  accessibilityLabel="College address"
+                  value={collegeAddress}
+                  onChangeText={setCollegeAddress}
+                  placeholder="College address (optional)"
+                  style={styles.input}
+                />
+                <AppTextInput
+                  accessibilityLabel="Student ID expiry date"
+                  value={expiry}
+                  onChangeText={setExpiry}
+                  placeholder="Card expiry date (YYYY-MM-DD, optional)"
+                  style={styles.input}
+                />
+                <AppTextInput
+                  accessibilityLabel="Enrollment date"
+                  value={enrollmentDate}
+                  onChangeText={setEnrollmentDate}
+                  placeholder="Enrollment date (YYYY-MM-DD)"
+                  style={styles.input}
+                />
+                <AppTextInput
+                  accessibilityLabel="Expected graduation date"
+                  value={graduationDate}
+                  onChangeText={setGraduationDate}
+                  placeholder="Expected graduation date (YYYY-MM-DD)"
+                  style={styles.input}
+                />
+              </>
+            ) : (
+              <>
+                <AppTextInput
+                  accessibilityLabel="Citizenship number"
+                  value={citizenshipNumber}
+                  onChangeText={setCitizenshipNumber}
+                  placeholder="Citizenship number"
+                  style={styles.input}
+                />
+                <AppTextInput
+                  accessibilityLabel="Citizenship issuing district"
+                  value={citizenshipDistrict}
+                  onChangeText={setCitizenshipDistrict}
+                  placeholder="Citizenship issuing district"
+                  style={styles.input}
+                />
+                <AppTextInput
+                  accessibilityLabel="Senior citizen ID number"
+                  value={seniorCard}
+                  onChangeText={setSeniorCard}
+                  placeholder="Senior citizen ID number (optional)"
+                  style={styles.input}
+                />
+                <AppText style={styles.hint}>
+                  Optional senior citizen ID document: {seniorIdDocument?.fileName || 'not selected'}
+                </AppText>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => void chooseDocument('seniorId')}
+                  style={styles.pick}
+                >
+                  <AppText style={styles.pickText}>Choose senior citizen ID document</AppText>
+                </Pressable>
+              </>
+            )}
+
+            <AppText style={styles.label}>Primary verification document</AppText>
+            <AppText style={styles.hint}>JPG, JPEG, PNG, or PDF. Maximum 2 MB.</AppText>
+            {document ? (
+              <View style={styles.previewWrap}>
+                {document.mimeType?.startsWith('image/') ? (
+                  <Image source={{ uri: document.uri }} style={styles.preview} />
+                ) : (
+                  <AppText style={styles.hint}>
+                    {document.fileName || 'PDF document selected'}
+                  </AppText>
+                )}
+                <Pressable accessibilityRole="button" onPress={() => setDocument(null)}>
+                  <AppText style={styles.removeText}>Remove document</AppText>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void chooseDocument()}
+                style={styles.pick}
+              >
+                <AppText style={styles.pickText}>Choose document</AppText>
+              </Pressable>
+            )}
+            <AppText style={styles.label}>Optional supporting document</AppText>
             <Pressable
-              key={value}
               accessibilityRole="button"
-              accessibilityState={{ selected: category === value }}
-              onPress={() => setCategory(value)}
-              style={[styles.category, category === value && styles.categorySelected]}
+              onPress={() => void chooseDocument('supporting')}
+              style={styles.pick}
             >
-              <AppText style={[styles.categoryText, category === value && styles.categoryTextSelected]}>
-                {label}
+              <AppText style={styles.pickText}>
+                {supportingDocument?.fileName || 'Choose another document'}
               </AppText>
             </Pressable>
-          ))}
-        </View>
-
-        {category === 'student' ? (
-          <>
-            <AppTextInput
-              accessibilityLabel="Student ID number"
-              value={studentId}
-              onChangeText={setStudentId}
-              placeholder="Student ID number"
-              style={styles.input}
-            />
-            <AppTextInput
-              accessibilityLabel="College name"
-              value={collegeName}
-              onChangeText={setCollegeName}
-              placeholder="College or university"
-              style={styles.input}
-            />
-            <AppTextInput
-              accessibilityLabel="Institution type"
-              value={institutionType}
-              onChangeText={setInstitutionType}
-              placeholder="Institution type (school, college, university)"
-              style={styles.input}
-            />
-            <AppTextInput
-              accessibilityLabel="Course or grade"
-              value={courseGrade}
-              onChangeText={setCourseGrade}
-              placeholder="Course or grade"
-              style={styles.input}
-            />
-            <AppTextInput
-              accessibilityLabel="College address"
-              value={collegeAddress}
-              onChangeText={setCollegeAddress}
-              placeholder="College address (optional)"
-              style={styles.input}
-            />
-            <AppTextInput
-              accessibilityLabel="Student ID expiry date"
-              value={expiry}
-              onChangeText={setExpiry}
-              placeholder="Card expiry date (YYYY-MM-DD, optional)"
-              style={styles.input}
-            />
-            <AppTextInput
-              accessibilityLabel="Enrollment date"
-              value={enrollmentDate}
-              onChangeText={setEnrollmentDate}
-              placeholder="Enrollment date (YYYY-MM-DD)"
-              style={styles.input}
-            />
-            <AppTextInput
-              accessibilityLabel="Expected graduation date"
-              value={graduationDate}
-              onChangeText={setGraduationDate}
-              placeholder="Expected graduation date (YYYY-MM-DD)"
-              style={styles.input}
-            />
-          </>
-        ) : (
-          <>
-            <AppTextInput
-              accessibilityLabel="Citizenship number"
-              value={citizenshipNumber}
-              onChangeText={setCitizenshipNumber}
-              placeholder="Citizenship number"
-              style={styles.input}
-            />
-            <AppTextInput
-              accessibilityLabel="Citizenship issuing district"
-              value={citizenshipDistrict}
-              onChangeText={setCitizenshipDistrict}
-              placeholder="Citizenship issuing district"
-              style={styles.input}
-            />
-            <AppTextInput
-              accessibilityLabel="Senior citizen ID number"
-              value={seniorCard}
-              onChangeText={setSeniorCard}
-              placeholder="Senior citizen ID number (optional)"
-              style={styles.input}
-            />
-            <AppText style={styles.hint}>
-              Optional senior citizen ID document: {seniorIdDocument?.fileName || 'not selected'}
-            </AppText>
-            <Pressable accessibilityRole="button" onPress={() => void chooseDocument('seniorId')} style={styles.pick}>
-              <AppText style={styles.pickText}>Choose senior citizen ID document</AppText>
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: consent }}
+              onPress={() => setConsent((checked) => !checked)}
+              style={styles.consent}
+            >
+              <AppText style={styles.consentCheck}>{consent ? '☑' : '☐'}</AppText>
+              <AppText style={styles.consentText}>
+                I confirm that the information and documents submitted are accurate.
+              </AppText>
             </Pressable>
-          </>
-        )}
 
-        <AppText style={styles.label}>Primary verification document</AppText>
-        <AppText style={styles.hint}>JPG, JPEG, PNG, or PDF. Maximum 2 MB.</AppText>
-        {document ? (
-          <View style={styles.previewWrap}>
-            {document.mimeType?.startsWith('image/') ? (
-              <Image source={{ uri: document.uri }} style={styles.preview} />
-            ) : <AppText style={styles.hint}>{document.fileName || 'PDF document selected'}</AppText>}
-            <Pressable accessibilityRole="button" onPress={() => setDocument(null)}>
-              <AppText style={styles.removeText}>Remove document</AppText>
+            {error ? <AppText accessibilityRole="alert" style={styles.error}>{error}</AppText> : null}
+            <PrimaryButton
+              label={saving ? 'Submitting application…' : 'Submit for review'}
+              onPress={() => void submit()}
+              disabled={saving}
+              style={styles.submit}
+            />
+          </View>
+
+          <AppText style={styles.sectionTitle}>Your applications</AppText>
+        {!loading && loadError ? (
+          <View style={styles.application}>
+            <AppText style={styles.error}>{loadError}</AppText>
+            <Pressable accessibilityRole="button" onPress={() => void load()}>
+              <AppText style={styles.pickText}>Retry application history</AppText>
             </Pressable>
           </View>
-        ) : (
-          <Pressable accessibilityRole="button" onPress={() => void chooseDocument()} style={styles.pick}>
-            <AppText style={styles.pickText}>Choose document</AppText>
-          </Pressable>
-        )}
-        <AppText style={styles.label}>Optional supporting document</AppText>
-        <Pressable accessibilityRole="button" onPress={() => void chooseDocument('supporting')} style={styles.pick}>
-          <AppText style={styles.pickText}>{supportingDocument?.fileName || 'Choose another document'}</AppText>
-        </Pressable>
-        <Pressable
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: consent }}
-          onPress={() => setConsent((checked) => !checked)}
-          style={styles.consent}
-        >
-          <AppText style={styles.consentCheck}>{consent ? '☑' : '☐'}</AppText>
-          <AppText style={styles.consentText}>
-            I confirm that the information and documents submitted are accurate.
-          </AppText>
-        </Pressable>
-
-        {error ? <AppText accessibilityRole="alert" style={styles.error}>{error}</AppText> : null}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: saving }}
-          disabled={saving}
-          onPress={() => void submit()}
-          style={[styles.submit, saving && styles.disabled]}
-        >
-          {saving ? <ActivityIndicator color="#fff" /> : <AppText style={styles.submitText}>Submit for review</AppText>}
-        </Pressable>
-
-        <AppText style={styles.sectionTitle}>Your applications</AppText>
+        ) : null}
         {concessions?.[category] ? (
           <View style={styles.application}>
             <AppText style={styles.applicationTitle}>
@@ -455,7 +468,7 @@ export default function ConcessionScreen() {
           </View>
         ) : null}
         {loading ? (
-          <ActivityIndicator color={Brand.teal.primary} />
+          <TransactionSkeleton count={2} />
         ) : applications.length === 0 ? (
           <AppText style={styles.hint}>No concession applications yet.</AppText>
         ) : applications.map((application) => (
@@ -477,66 +490,126 @@ export default function ConcessionScreen() {
             ) : null}
           </View>
         ))}
-      </ScrollView>
+        </ScrollView>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Brand.background },
-  header: {
-    minHeight: 54, paddingHorizontal: Spacing.three, flexDirection: 'row',
-    alignItems: 'center', justifyContent: 'space-between', paddingTop: Spacing.two,
-  },
+function createStyles(tokens: ReturnType<typeof useTheme>['tokens']) {
+const brand = {
+  ...tokens,
+  primary: Palette.crimsonRed,
+  primaryDark: Palette.deepMaroon,
+  text: tokens.textPrimary,
+  error: Palette.crimsonRed,
+  selection: { selectedBackground: tokens.surfaceElevated },
+};
+
+return StyleSheet.create({
+  container: { flex: 1, backgroundColor: brand.background },
   formScroll: { flex: 1 },
-  back: { minWidth: 70, paddingVertical: Spacing.two },
-  backText: { color: Palette.warmCream, fontSize: 16, fontWeight: '600' },
-  title: { color: Brand.text, fontSize: 18, fontWeight: '700' },
-  headerSpacer: { width: 70 },
-  content: { padding: Spacing.three, gap: Spacing.two },
-  intro: { color: Brand.textSecondary, lineHeight: 21, marginBottom: Spacing.two },
-  policyHint: { color: DriverColors.textSecondary, fontWeight: '700' },
-  label: { color: Brand.text, fontSize: 14, fontWeight: '700', marginTop: Spacing.one },
+  content: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.three,
+    gap: Spacing.three,
+  },
+  introCard: {
+    backgroundColor: brand.surfacePrimary,
+    borderWidth: 1,
+    borderColor: brand.border,
+    borderRadius: Radius.card,
+    padding: Spacing.three,
+    gap: Spacing.two,
+  },
+  intro: { color: brand.textSecondary, lineHeight: 22 },
+  policyHint: {
+    color: brand.primaryDark,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  formCard: {
+    backgroundColor: brand.surfacePrimary,
+    borderWidth: 1,
+    borderColor: brand.border,
+    borderRadius: Radius.card,
+    padding: Spacing.three,
+    gap: Spacing.two,
+  },
+  formTitle: {
+    color: brand.text,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: Spacing.one,
+  },
+  label: {
+    color: brand.text,
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: Spacing.two,
+  },
   categoryRow: { flexDirection: 'row', gap: Spacing.two },
   category: {
-    flex: 1, borderWidth: 1, borderColor: Brand.divider, borderRadius: 12,
-    padding: Spacing.two, alignItems: 'center', backgroundColor: Brand.surfacePrimary,
+    flex: 1,
+    borderWidth: 1,
+    borderColor: brand.border,
+    borderRadius: Radius.medium,
+    minHeight: 48,
+    padding: Spacing.two,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: brand.surfaceSecondary,
   },
-  categorySelected: { borderColor: DriverColors.actionPrimary, backgroundColor: Brand.surfaceElevated },
-  categoryText: { color: Brand.textSecondary, fontWeight: '600' },
-  categoryTextSelected: { color: DriverColors.textPrimary },
+  categorySelected: {
+    borderColor: brand.primary,
+    backgroundColor: brand.selection.selectedBackground,
+  },
+  categoryText: { color: brand.textSecondary, fontWeight: '600' },
+  categoryTextSelected: { color: brand.text },
   input: {
-    backgroundColor: Brand.surfacePrimary, borderWidth: 1, borderColor: Brand.divider,
-    borderRadius: 12, paddingHorizontal: Spacing.two, paddingVertical: 13,
-    color: Brand.text,
+    backgroundColor: brand.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: brand.border,
+    borderRadius: Radius.medium,
+    minHeight: 50,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    color: brand.text,
   },
-  hint: { color: Brand.textSecondary, fontSize: 13, lineHeight: 19 },
+  hint: { color: brand.textSecondary, fontSize: 13, lineHeight: 19 },
   pick: {
-    borderStyle: 'dashed', borderWidth: 1, borderColor: DriverColors.border,
-    borderRadius: 12, minHeight: 58, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: Brand.surfacePrimary,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: brand.primary,
+    borderRadius: Radius.medium,
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: brand.surfaceSecondary,
   },
-  pickText: { color: DriverColors.textPrimary, fontWeight: '700' },
+  pickText: { color: brand.text, fontWeight: '700' },
   previewWrap: { gap: Spacing.one },
   consent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.two },
-  consentCheck: { color: DriverColors.actionPrimary, fontSize: 20 },
-  consentText: { flex: 1, color: Brand.text, lineHeight: 20 },
-  preview: { height: 180, borderRadius: 12, backgroundColor: Brand.surfacePrimary },
-  removeText: { color: Brand.error, fontWeight: '600', paddingVertical: Spacing.one },
-  error: { color: Brand.error, lineHeight: 20 },
-  submit: {
-    backgroundColor: DriverColors.actionPrimary, minHeight: 52, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center', marginTop: Spacing.one,
+  consentCheck: { color: brand.primary, fontSize: 20 },
+  consentText: { flex: 1, color: brand.text, lineHeight: 20 },
+  preview: { height: 180, borderRadius: Radius.medium, backgroundColor: brand.surfaceSecondary },
+  removeText: { color: brand.error, fontWeight: '600', paddingVertical: Spacing.one },
+  error: { color: brand.error, lineHeight: 20 },
+  submit: { minHeight: 52, borderRadius: 14, marginTop: Spacing.one },
+  sectionTitle: { color: brand.text, fontSize: 20, fontWeight: '700', marginTop: Spacing.two },
+  application: {
+    backgroundColor: brand.surfacePrimary,
+    borderWidth: 1,
+    borderColor: brand.border,
+    borderRadius: Radius.card,
+    padding: Spacing.three,
+    gap: Spacing.two,
   },
-  disabled: { opacity: 0.65 },
-  submitText: { color: DriverColors.actionPrimaryText, fontWeight: '700', fontSize: 15 },
-  sectionTitle: { color: Brand.text, fontSize: 17, fontWeight: '700', marginTop: Spacing.four },
-  application: { backgroundColor: Brand.surfacePrimary, borderWidth: 1, borderColor: Brand.divider, borderRadius: 12, padding: Spacing.two, gap: Spacing.one },
   applicationTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  applicationTitle: { color: Brand.text, fontWeight: '700' },
-  status: { color: '#F0C878', fontSize: 11, fontWeight: '800' },
-  approved: { color: '#9FE2C0' },
-  rejected: { color: Brand.error },
-  reviewNote: { color: Brand.text, lineHeight: 19 },
+  applicationTitle: { color: brand.text, fontWeight: '700' },
+  status: { color: SemanticColors.warning, fontSize: 11, fontWeight: '800' },
+  approved: { color: SemanticColors.success },
+  rejected: { color: brand.error },
+  reviewNote: { color: brand.text, lineHeight: 19 },
 });
+}

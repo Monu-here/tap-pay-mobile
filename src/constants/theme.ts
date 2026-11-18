@@ -62,18 +62,7 @@ export const DarkColors = {
 
 export const Monochrome = LightColors;
 
-export const DriverColors = {
-  background: '#001824',
-  surfacePrimary: '#002235',
-  surfaceSecondary: '#003049',
-  surfaceElevated: '#0A3F5E',
-  border: '#154766',
-  textPrimary: '#FDF0D5',
-  textSecondary: '#A3C2D7',
-  textMuted: '#669BBC',
-  actionPrimary: Palette.crimsonRed,
-  actionPrimaryText: '#FFFFFF',
-} as const;
+export const DriverColors = LightColors;
 
 export const Colors = {
   light: {
@@ -150,6 +139,36 @@ export const Spacing = {
   md: 16,
   lg: 24,
   xl: 32,
+} as const;
+
+export const Radius = {
+  small: 8,
+  medium: 12,
+  card: 16,
+  large: 20,
+  pill: 999,
+} as const;
+
+export const IconSizes = {
+  small: 16,
+  medium: 20,
+  large: 24,
+} as const;
+
+export const ScreenLayout = {
+  horizontalPadding: Spacing.four,
+  headerMinHeight: 56,
+  contentMaxWidth: 800,
+} as const;
+
+export const Shadows = {
+  card: {
+    shadowColor: Palette.prussianNavy,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+  },
 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;

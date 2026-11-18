@@ -1,7 +1,7 @@
 import { AppText } from '@/components/typography/app-text';
-import { Platform, StyleSheet, type TextProps } from 'react-native';
+import { StyleSheet, type TextProps } from 'react-native';
 
-import { Fonts, Monochrome, ThemeColor } from '@/constants/theme';
+import { Monochrome, ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export type ThemedTextProps = TextProps & {
@@ -73,8 +73,7 @@ const styles = StyleSheet.create({
     color: Monochrome.actionPrimary,
   },
   code: {
-    fontFamily: Fonts.mono,
-    fontWeight: Platform.select({ android: '700' }) ?? '500',
+    fontWeight: '500',
     fontSize: 12,
   },
 });

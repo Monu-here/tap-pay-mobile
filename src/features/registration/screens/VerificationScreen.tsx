@@ -1,4 +1,5 @@
 import { AppText } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { Redirect, router } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
 import {
@@ -143,19 +144,10 @@ export function VerificationScreen() {
       >
         <View style={styles.headerRow}>
           {!REQUIRE_VERIFICATION ? (
-            <Pressable
-              accessibilityRole="button"
+            <AppBackButton
               accessibilityLabel="Back to Home"
               onPress={() => router.replace(dashboardPath as any)}
-              style={styles.backBtn}
-              hitSlop={8}
-            >
-              <SymbolView
-                name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                size={20}
-                tintColor={Palette.warmCream}
-              />
-            </Pressable>
+            />
           ) : (
             <View style={{ width: 38 }} />
           )}
@@ -182,6 +174,8 @@ export function VerificationScreen() {
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Spacing.five }]}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         showsVerticalScrollIndicator={false}
       >
         {/* Verification Card */}

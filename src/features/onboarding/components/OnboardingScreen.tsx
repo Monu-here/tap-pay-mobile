@@ -17,6 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { AppText } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { Palette, Spacing } from '@/constants/theme';
 import { FontFamilies } from '@/constants/typography';
 import { useTheme } from '@/hooks/use-theme';
@@ -349,34 +350,10 @@ export function OnboardingScreen({
           {/* Action Buttons Row */}
           <View style={styles.actionRow}>
             {!isFirstStep && (
-              <Pressable
-                onPress={onBack}
-                accessibilityRole="button"
+              <AppBackButton
                 accessibilityLabel="Go to previous screen"
-                hitSlop={8}
-                style={({ pressed }) => [
-                  styles.backRoundButton,
-                  {
-                    backgroundColor: theme.isDark
-                      ? 'rgba(0, 34, 53, 0.9)'
-                      : 'rgba(255, 255, 255, 0.95)',
-                    borderColor: theme.isDark
-                      ? 'rgba(21, 71, 102, 0.9)'
-                      : 'rgba(229, 213, 186, 0.9)',
-                    opacity: pressed ? 0.75 : 1,
-                  },
-                ]}
-              >
-                <SymbolView
-                  name={{
-                    ios: 'arrow.left',
-                    android: 'arrow_back',
-                    web: 'arrow_back',
-                  }}
-                  size={20}
-                  tintColor={theme.isDark ? Palette.warmCream : Palette.prussianNavy}
-                />
-              </Pressable>
+                onPress={onBack}
+              />
             )}
 
             {/* Primary Action Button */}

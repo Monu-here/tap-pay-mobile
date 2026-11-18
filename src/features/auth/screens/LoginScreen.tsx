@@ -6,7 +6,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import {
   Image,
   Keyboard,
@@ -16,6 +16,7 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  type TextInput,
   type TextInputProps,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,6 +38,7 @@ type LoginTextFieldProps = TextInputProps & {
   error?: string | null;
   trailing?: ReactNode;
   onSubmit?: () => void;
+  inputRef?: Ref<TextInput>;
 };
 
 function LoginTextField({
@@ -45,6 +47,7 @@ function LoginTextField({
   error,
   trailing,
   onSubmit,
+  inputRef,
   style,
   ...rest
 }: LoginTextFieldProps) {
@@ -70,6 +73,7 @@ function LoginTextField({
           tintColor={hasError ? theme.error : isFocused ? theme.actionPrimary : theme.textSecondary}
         />
         <AppTextInput
+          ref={inputRef}
           placeholderTextColor={theme.textSecondary}
           style={[styles.fieldInput, { color: theme.text }, style]}
           onSubmitEditing={onSubmit}
@@ -100,6 +104,7 @@ export function LoginScreen() {
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [generalError, setGeneralError] = useState<string | null>(() => consumePendingAuthMessage());
   const [cooldown, setCooldown] = useState(0);
+  const passwordInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -224,6 +229,8 @@ export function LoginScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           showsVerticalScrollIndicator={false}
         >
           {/* Streamlined Header with eYatra Logo and Name */}
@@ -264,8 +271,10 @@ export function LoginScreen() {
                 autoComplete="email"
                 textContentType="emailAddress"
                 returnKeyType="next"
+                blurOnSubmit={false}
                 error={fieldErrors.email}
                 icon={{ ios: 'envelope.fill', android: 'email', web: 'email' }}
+                onSubmit={() => passwordInputRef.current?.focus()}
               />
 
               <LoginTextField
@@ -278,6 +287,7 @@ export function LoginScreen() {
                 autoCapitalize="none"
                 returnKeyType="go"
                 onSubmit={handleSubmit}
+                inputRef={passwordInputRef}
                 error={fieldErrors.password}
                 icon={{ ios: 'lock.fill', android: 'lock', web: 'lock' }}
                 trailing={

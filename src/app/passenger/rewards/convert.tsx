@@ -1,4 +1,6 @@
 import { AppText, AppTextInput } from '@/components/typography/app-text';
+import { RewardsSkeleton } from '@/components/skeletons/ScreenSkeletons';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { Palette, Spacing } from '@/constants/theme';
 import { createIdempotencyKey } from '@/features/auth/services/apiClient';
@@ -13,7 +15,6 @@ import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Keyboard,
   Modal,
   Pressable,
@@ -129,19 +130,27 @@ export default function ConvertRewardsScreen() {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar style={theme.isDark ? 'light' : 'dark'} />
       <View style={[styles.header, { paddingTop: insets.top + Spacing.md, borderBottomColor: theme.border }]}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Back to rewards" onPress={() => router.back()} style={styles.backButton}>
-          <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={22} tintColor={theme.text} />
-        </Pressable>
+        <AppBackButton
+          accessibilityLabel="Back to rewards"
+          fallbackHref="/passenger/rewards"
+        />
         <View style={styles.headerText}>
           <AppText style={[styles.title, { color: theme.text }]}>Convert to Wallet</AppText>
           <AppText style={{ color: theme.textSecondary }}>Use earned points for Tap & Pay wallet credit</AppText>
         </View>
       </View>
 
-      {loading ? (
-        <View style={styles.loading}><ActivityIndicator color={Palette.crimsonRed} size="large" /></View>
+      {loading && !dashboard ? (
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+          <RewardsSkeleton />
+        </ScrollView>
       ) : (
-        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        >
           {error && <View style={[styles.errorBox, { backgroundColor: theme.surfacePrimary, borderColor: Palette.crimsonRed }]}><AppText style={{ color: theme.text }}>{error}</AppText></View>}
           <View style={[styles.infoCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border }]}>
             <AppText style={[styles.label, { color: theme.textSecondary }]}>Available points</AppText>

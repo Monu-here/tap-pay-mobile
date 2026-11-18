@@ -1,25 +1,27 @@
 import { AppText } from '@/components/typography/app-text';
+import { TransitPassSkeleton } from '@/components/skeletons/ScreenSkeletons';
+import { AppHeaderIconButton, AppScreenHeader } from '@/components/ui/app-screen-header';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import QRCode from 'react-native-qrcode-svg';
 
-import { Monochrome, Spacing } from '@/constants/theme';
+import { Palette, Spacing } from '@/constants/theme';
 import { getPassengerQr, type PassengerQrData } from '@/features/passenger/services/passengerApi';
 import { getSession } from '@/features/auth/session';
+import { useTheme } from '@/hooks/use-theme';
 
 export default function PassengerQrScreen() {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const styles = useMemo(() => createStyles(theme.tokens), [theme.tokens]);
   const session = getSession();
 
   const [qrData, setQrData] = useState<PassengerQrData | null>(null);
@@ -76,32 +78,28 @@ export default function PassengerQrScreen() {
   const isActive = qrData?.status === 'active';
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="dark" />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
-          <SymbolView
-            name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-            size={20}
-            tintColor={Monochrome.textPrimary}
+    <View style={styles.container}>
+      <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+      <AppScreenHeader
+        title="My Transit QR Pass"
+        backButton={{ fallbackHref: '/(tabs)/home' }}
+        rightAction={
+          <AppHeaderIconButton
+            accessibilityLabel="Refresh transit pass"
+            icon={{ ios: 'arrow.clockwise', android: 'refresh', web: 'refresh' }}
+            onPress={() => void fetchQr()}
           />
-        </Pressable>
-        <AppText style={styles.headerTitle}>My Transit QR Pass</AppText>
-        <Pressable onPress={fetchQr} style={styles.refreshIconBtn} hitSlop={10}>
-          <SymbolView
-            name={{ ios: 'arrow.clockwise', android: 'refresh', web: 'refresh' }}
-            size={18}
-            tintColor={Monochrome.textPrimary}
-          />
-        </Pressable>
-      </View>
+        }
+      />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 30 }]}
         showsVerticalScrollIndicator={false}
       >
+        {loading && !qrData ? (
+          <TransitPassSkeleton />
+        ) : (
+          <>
         {/* Pass Card Container */}
         <View style={styles.passCard}>
           {/* Top Brand Banner */}
@@ -111,7 +109,7 @@ export default function PassengerQrScreen() {
                 <SymbolView
                   name={{ ios: 'wave.3.right.circle.fill', android: 'nfc', web: 'nfc' }}
                   size={20}
-                  tintColor={Monochrome.textPrimary}
+                  tintColor={theme.text}
                 />
               </View>
               <View>
@@ -141,17 +139,12 @@ export default function PassengerQrScreen() {
 
           {/* QR Code Presentation Box */}
           <View style={styles.qrContainer}>
-            {loading ? (
-              <View style={styles.qrLoadingBox}>
-                <ActivityIndicator size="small" color={Monochrome.textPrimary} />
-                <AppText style={styles.qrLoadingText}>Generating cryptographic token...</AppText>
-              </View>
-            ) : error ? (
+            {error ? (
               <View style={styles.errorBox}>
                 <SymbolView
                   name={{ ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' }}
                   size={32}
-                  tintColor={Monochrome.textPrimary}
+                  tintColor={Palette.crimsonRed}
                 />
                 <AppText style={styles.errorText}>{error}</AppText>
                 <Pressable onPress={fetchQr} style={styles.retryBtn}>
@@ -184,7 +177,7 @@ export default function PassengerQrScreen() {
               </View>
               <View style={styles.timerDetails}>
                 <AppText style={styles.timerText}>
-                  Refreshes in <AppText style={{ fontWeight: '700', color: Monochrome.textPrimary }}>{secondsRemaining}s</AppText>
+                  Refreshes in                   <AppText style={{ fontWeight: '700', color: theme.text }}>{secondsRemaining}s</AppText>
                 </AppText>
                 <Pressable onPress={fetchQr} hitSlop={6}>
                   <AppText style={styles.manualRefreshText}>Refresh Now</AppText>
@@ -208,7 +201,7 @@ export default function PassengerQrScreen() {
             <SymbolView
               name={{ ios: 'shield.checkerboard', android: 'security', web: 'security' }}
               size={16}
-              tintColor={Monochrome.textPrimary}
+              tintColor={theme.text}
             />
             <AppText style={styles.tipsTitle}>Secure Transit Verification</AppText>
           </View>
@@ -216,61 +209,29 @@ export default function PassengerQrScreen() {
           <AppText style={styles.tipItem}>• Replayed or expired QR codes are rejected by the bus scanner.</AppText>
           <AppText style={styles.tipItem}>• Fare is deducted securely from your linked digital wallet.</AppText>
         </View>
+          </>
+        )}
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof useTheme>['tokens']) {
+return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Monochrome.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
-    backgroundColor: Monochrome.surfacePrimary,
-    borderBottomWidth: 1,
-    borderBottomColor: Monochrome.border,
-  },
-  backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: Monochrome.textPrimary,
-  },
-  refreshIconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: colors.background,
   },
   content: {
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.four,
   },
   passCard: {
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 22,
+    backgroundColor: colors.surfacePrimary,
+    borderRadius: 16,
     padding: Spacing.four,
     borderWidth: 1,
-    borderColor: Monochrome.border,
+    borderColor: colors.border,
   },
   passHeader: {
     flexDirection: 'row',
@@ -287,39 +248,39 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: Monochrome.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: Monochrome.border,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   brandTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: 0.8,
   },
   brandSubtitle: {
     fontSize: 11,
-    color: Monochrome.textMuted,
+    color: colors.textMuted,
   },
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: Monochrome.border,
+    borderColor: colors.border,
   },
   statusActive: {
-    backgroundColor: Monochrome.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
   },
   statusInactive: {
-    backgroundColor: Monochrome.surfacePrimary,
+    backgroundColor: colors.surfacePrimary,
   },
   statusText: {
     fontSize: 10,
     fontWeight: '700',
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: 0.5,
   },
   passengerInfoRow: {
@@ -330,23 +291,23 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: Monochrome.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.6,
     marginBottom: 2,
   },
   infoValue: {
     fontSize: 15,
     fontWeight: '700',
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
   },
   divider: {
     height: 1,
-    backgroundColor: Monochrome.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     marginVertical: Spacing.three,
   },
   qrContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 16,
     padding: Spacing.four,
     alignItems: 'center',
     justifyContent: 'center',
@@ -398,13 +359,13 @@ const styles = StyleSheet.create({
   },
   timerIndicator: {
     height: 3,
-    backgroundColor: Monochrome.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 2,
     overflow: 'hidden',
   },
   timerProgress: {
     height: '100%',
-    backgroundColor: Monochrome.textPrimary,
+    backgroundColor: colors.textPrimary,
   },
   timerDetails: {
     flexDirection: 'row',
@@ -414,11 +375,11 @@ const styles = StyleSheet.create({
   },
   timerText: {
     fontSize: 12,
-    color: Monochrome.textSecondary,
+    color: colors.textSecondary,
   },
   manualRefreshText: {
     fontSize: 12,
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
     fontWeight: '600',
   },
   footerRow: {
@@ -428,25 +389,26 @@ const styles = StyleSheet.create({
     marginTop: Spacing.three,
     paddingTop: Spacing.two,
     borderTopWidth: 1,
-    borderTopColor: Monochrome.surfaceElevated,
+    borderTopColor: colors.surfaceElevated,
   },
   footerLabel: {
     fontSize: 10,
-    color: Monochrome.textMuted,
+    color: colors.textMuted,
     fontWeight: '700',
   },
   footerUid: {
     fontSize: 11,
-    color: Monochrome.textSecondary,
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', web: 'monospace' }),
+    color: colors.textSecondary,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   tipsBox: {
     marginTop: Spacing.four,
-    backgroundColor: Monochrome.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: 16,
     padding: Spacing.four,
     borderWidth: 1,
-    borderColor: Monochrome.border,
+    borderColor: colors.border,
   },
   tipsHeader: {
     flexDirection: 'row',
@@ -457,12 +419,13 @@ const styles = StyleSheet.create({
   tipsTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
   },
   tipItem: {
     fontSize: 12,
-    color: Monochrome.textMuted,
+    color: colors.textMuted,
     lineHeight: 18,
     marginBottom: 4,
   },
 });
+}

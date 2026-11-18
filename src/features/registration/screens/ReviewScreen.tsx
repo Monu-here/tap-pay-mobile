@@ -1,4 +1,5 @@
 import { AppText } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
@@ -105,15 +106,7 @@ export function ReviewScreen() {
           { paddingTop: insets.top + Spacing.two, paddingHorizontal: Spacing.four },
         ]}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={8}
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
-          <AppText style={styles.backIcon}>←</AppText>
-        </Pressable>
+        <AppBackButton fallbackHref="/register/documents" />
         <View style={styles.stepIndicator}>
           <AppText style={styles.stepLabel}>Step 4 of 7</AppText>
           <View style={styles.progressTrack}>
@@ -271,15 +264,12 @@ export function ReviewScreen() {
             disabled={isSubmitting || cooldown > 0}
             style={isSubmitting ? styles.buttonDisabled : undefined}
           />
-          <Pressable
-            accessibilityRole="button"
-            hitSlop={8}
+          <AppBackButton
+            accessibilityLabel="Go to previous registration step"
             disabled={isSubmitting}
-            onPress={() => router.back()}
-            style={styles.backTextButton}
-          >
-            <AppText style={styles.backText}>Back</AppText>
-          </Pressable>
+            fallbackHref="/register/documents"
+            style={{ alignSelf: 'center' }}
+          />
         </View>
       </ScrollView>
     </View>

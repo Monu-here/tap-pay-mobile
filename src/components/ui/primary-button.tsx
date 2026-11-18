@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import type { ReactNode } from 'react';
 
-import { Monochrome } from '@/constants/theme';
+import { Brand, Radius } from '@/constants/theme';
 
 export type PrimaryButtonProps = Omit<PressableProps, 'style'> & {
   label?: string;
@@ -49,8 +49,8 @@ export function PrimaryButton({
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: Monochrome.actionPrimary,
-    borderRadius: 14,
+    backgroundColor: Brand.primary,
+    borderRadius: Radius.medium,
     paddingVertical: 15,
     paddingHorizontal: 20,
     alignItems: 'center',
@@ -59,20 +59,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   disabledButton: {
-    backgroundColor: Monochrome.surfaceElevated,
+    backgroundColor: Brand.surfaceElevated,
     borderWidth: 1,
-    borderColor: Monochrome.border,
+    borderColor: Brand.border,
   },
   pressed: {
     opacity: 0.88,
   },
   label: {
-    color: Monochrome.actionPrimaryText,
+    color: Brand.primaryText,
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: -0.2,
   },
   disabledLabel: {
-    color: Monochrome.textMuted,
+    color: Brand.textMuted,
   },
 });

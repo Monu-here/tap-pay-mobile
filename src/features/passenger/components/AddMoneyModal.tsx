@@ -1,8 +1,7 @@
 import { AppText, AppTextInput } from '@/components/typography/app-text';
 import { PrimaryButton } from '@/components/ui/primary-button';
-import { DriverColors, Monochrome, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { createIdempotencyKey } from '@/features/auth/services/apiClient';
-import { getSession } from '@/features/auth/session';
 import {
   getPayment,
   getPaymentGateways,
@@ -15,8 +14,9 @@ import {
   isFailedPaymentStatus,
   isSuccessfulPaymentStatus,
 } from '@/features/passenger/services/paymentStatus';
+import { useTheme } from '@/hooks/use-theme';
 import { SymbolView } from 'expo-symbols';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
@@ -61,7 +61,9 @@ export function AddMoneyModal({
 }: AddMoneyModalProps) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const isDriver = getSession().user?.type === 'driver';
+  const theme = useTheme();
+  const colors = theme.tokens;
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [amountInput, setAmountInput] = useState('500');
   const [gateways, setGateways] = useState<PaymentGateway[]>([]);
   const [selectedGateway, setSelectedGateway] = useState('');
@@ -282,20 +284,20 @@ export function AddMoneyModal({
           style={[
             styles.modalContent,
             {
-              backgroundColor: isDriver ? DriverColors.surfacePrimary : Monochrome.surfacePrimary,
-              borderColor: isDriver ? DriverColors.border : Monochrome.border,
+              backgroundColor: colors.surfacePrimary,
+              borderColor: colors.border,
               maxHeight: windowHeight * 0.9,
               paddingBottom: insets.bottom + 20,
             },
           ]}
         >
           <View style={styles.modalHeader}>
-            <AppText style={[styles.modalTitle, isDriver && { color: DriverColors.textPrimary }]}>Add Money to Wallet</AppText>
+            <AppText style={styles.modalTitle}>Add Money to Wallet</AppText>
             <Pressable onPress={handleClose} hitSlop={8}>
               <SymbolView
                 name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
                 size={22}
-                tintColor={isDriver ? DriverColors.textMuted : Monochrome.textMuted}
+                tintColor={colors.textMuted}
               />
             </Pressable>
           </View>
@@ -310,11 +312,11 @@ export function AddMoneyModal({
           >
             {pendingPayment ? (
               <View style={styles.paymentPendingBox}>
-                <ActivityIndicator size="large" color={isDriver ? DriverColors.actionPrimary : Monochrome.textPrimary} />
-                <AppText style={[styles.paymentPendingText, isDriver && { color: DriverColors.textPrimary }]}>
+                <ActivityIndicator size="large" color={colors.actionPrimary} />
+                <AppText style={styles.paymentPendingText}>
                   {paymentStatusMessage || 'Awaiting payment confirmation...'}
                 </AppText>
-                <AppText style={[styles.paymentReference, isDriver && { color: DriverColors.textMuted }]}>Reference: {pendingPayment.reference}</AppText>
+                <AppText style={styles.paymentReference}>Reference: {pendingPayment.reference}</AppText>
                 <PrimaryButton
                   title={isProcessing ? 'Verifying...' : 'Check Payment Status'}
                   onPress={() => void checkPaymentStatus(pendingPayment)}
@@ -328,7 +330,7 @@ export function AddMoneyModal({
                   }}
                   accessibilityRole="button"
                 >
-                  <AppText style={[styles.closePendingText, isDriver && { color: DriverColors.textMuted }]}>Cancel Check</AppText>
+                  <AppText style={styles.closePendingText}>Cancel Check</AppText>
                 </Pressable>
               </View>
             ) : topUpSuccess ? (
@@ -336,9 +338,9 @@ export function AddMoneyModal({
                 <SymbolView
                   name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
                   size={52}
-                  tintColor={isDriver ? DriverColors.actionPrimary : Monochrome.textPrimary}
+                  tintColor={colors.actionPrimary}
                 />
-                <AppText style={[styles.modalSuccessText, isDriver && { color: DriverColors.textPrimary }]}>{topUpSuccess}</AppText>
+                <AppText style={styles.modalSuccessText}>{topUpSuccess}</AppText>
                 <PrimaryButton
                   title="Done"
                   onPress={() => {
@@ -350,17 +352,17 @@ export function AddMoneyModal({
               </View>
             ) : (
               <View style={styles.modalForm}>
-                <AppText style={[styles.inputLabel, isDriver && { color: DriverColors.textSecondary }]}>Enter Amount (NPR)</AppText>
-                <View style={[styles.amountInputWrap, isDriver && { backgroundColor: DriverColors.surfaceSecondary, borderColor: DriverColors.border }]}>
-                  <AppText style={[styles.currencyPrefix, isDriver && { color: DriverColors.textPrimary }]}>Rs.</AppText>
+                <AppText style={styles.inputLabel}>Enter Amount (NPR)</AppText>
+                <View style={styles.amountInputWrap}>
+                  <AppText style={styles.currencyPrefix}>Rs.</AppText>
                   <AppTextInput
-                    style={[styles.amountInput, isDriver && { color: DriverColors.textPrimary }]}
+                    style={styles.amountInput}
                     keyboardType="decimal-pad"
                     autoFocus
                     value={amountInput}
                     onChangeText={setAmountInput}
                     placeholder="0"
-                    placeholderTextColor={isDriver ? DriverColors.textMuted : Monochrome.textMuted}
+                    placeholderTextColor={colors.textMuted}
                   />
                 </View>
 
@@ -371,14 +373,12 @@ export function AddMoneyModal({
                       onPress={() => setAmountInput(amount.toString())}
                       style={[
                         styles.presetChip,
-                        isDriver && { backgroundColor: DriverColors.surfaceSecondary, borderColor: DriverColors.border },
                         amountInput === amount.toString() && styles.presetChipActive,
                       ]}
                     >
                       <AppText
                         style={[
                           styles.presetChipText,
-                          isDriver && { color: DriverColors.textSecondary },
                           amountInput === amount.toString() && styles.presetChipTextActive,
                         ]}
                       >
@@ -388,12 +388,12 @@ export function AddMoneyModal({
                   ))}
                 </View>
 
-                <AppText style={[styles.inputLabel, isDriver && { color: DriverColors.textSecondary }, { marginTop: Spacing.three }]}>
+                <AppText style={[styles.inputLabel, { marginTop: Spacing.three }]}>
                   Select Payment Gateway
                 </AppText>
                 <View style={styles.gatewaysList}>
                   {gatewayLoading ? (
-                    <ActivityIndicator size="small" color={isDriver ? DriverColors.actionPrimary : Monochrome.textPrimary} />
+                    <ActivityIndicator size="small" color={colors.actionPrimary} />
                   ) : gateways.length > 0 ? (
                     gateways.map((gateway) => (
                       <Pressable
@@ -401,14 +401,13 @@ export function AddMoneyModal({
                         onPress={() => setSelectedGateway(gateway.slug)}
                         style={[
                           styles.gatewayItem,
-                          isDriver && { backgroundColor: DriverColors.surfaceSecondary, borderColor: DriverColors.border },
                           selectedGateway === gateway.slug && styles.gatewayItemActive,
                         ]}
                       >
                         <View style={styles.gatewayInfo}>
-                          <AppText style={[styles.gatewayName, isDriver && { color: DriverColors.textPrimary }]}>{gateway.name}</AppText>
+                          <AppText style={styles.gatewayName}>{gateway.name}</AppText>
                           {gateway.currency ? (
-                            <AppText style={[styles.gatewayBadge, isDriver && { color: DriverColors.textSecondary, backgroundColor: DriverColors.surfaceElevated }]}>{gateway.currency}</AppText>
+                            <AppText style={styles.gatewayBadge}>{gateway.currency}</AppText>
                           ) : null}
                         </View>
                         <SymbolView
@@ -418,12 +417,12 @@ export function AddMoneyModal({
                             web: selectedGateway === gateway.slug ? 'check_circle' : 'radio_button_unchecked',
                           }}
                           size={18}
-                          tintColor={isDriver ? DriverColors.actionPrimary : Monochrome.textPrimary}
+                          tintColor={colors.actionPrimary}
                         />
                       </Pressable>
                     ))
                   ) : (
-                    <AppText style={[styles.gatewayNotice, isDriver && { color: DriverColors.textMuted }]}>
+                    <AppText style={styles.gatewayNotice}>
                       No online payment gateways are currently configured on this server.
                     </AppText>
                   )}
@@ -448,7 +447,7 @@ export function AddMoneyModal({
                   </AppText>
                 </View> */}
 
-                {errorMessage ? <AppText style={[styles.errorBanner, isDriver && { color: DriverColors.textPrimary }]}>{errorMessage}</AppText> : null}
+                {errorMessage ? <AppText style={styles.errorBanner}>{errorMessage}</AppText> : null}
               </View>
             )}
           </ScrollView>
@@ -467,7 +466,8 @@ export function AddMoneyModal({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof useTheme>['tokens']) {
+return StyleSheet.create({
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -478,11 +478,11 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     flexShrink: 1,
-    backgroundColor: Monochrome.surfacePrimary,
+    backgroundColor: colors.surfacePrimary,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderWidth: 1,
-    borderColor: Monochrome.border,
+    borderColor: colors.border,
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.four,
   },
@@ -501,7 +501,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
   },
   modalForm: {
     gap: Spacing.two,
@@ -509,29 +509,29 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: Monochrome.textSecondary,
+    color: colors.textSecondary,
   },
   amountInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Monochrome.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: 14,
     paddingHorizontal: Spacing.four,
     height: 56,
     gap: Spacing.two,
     borderWidth: 1,
-    borderColor: Monochrome.border,
+    borderColor: colors.border,
   },
   currencyPrefix: {
     fontSize: 18,
     fontWeight: '700',
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
   },
   amountInput: {
     flex: 1,
     fontSize: 22,
     fontWeight: '700',
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
   },
   presetsRow: {
     flexDirection: 'row',
@@ -543,52 +543,52 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: Monochrome.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,
-    borderColor: Monochrome.border,
+    borderColor: colors.border,
   },
   presetChipActive: {
-    backgroundColor: Monochrome.surfaceElevated,
-    borderColor: Monochrome.textPrimary,
+    backgroundColor: colors.surfaceElevated,
+    borderColor: colors.actionPrimary,
   },
   presetChipText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Monochrome.textMuted,
+    color: colors.textMuted,
   },
   presetChipTextActive: {
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
   },
   gatewaysList: {
     gap: Spacing.two,
     marginTop: Spacing.one,
   },
   paymentSummary: {
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderColor: Monochrome.border,
+    backgroundColor: colors.surfaceSecondary,
+    borderColor: colors.border,
     borderWidth: 1,
     borderRadius: 12,
     padding: Spacing.three,
     gap: Spacing.two,
   },
   summaryTitle: {
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
     fontSize: 14,
     fontWeight: '700',
   },
   summaryRow: {
-    color: Monochrome.textSecondary,
+    color: colors.textSecondary,
     fontSize: 13,
   },
   summaryNote: {
-    color: Monochrome.textMuted,
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 18,
   },
   gatewayNotice: {
     fontSize: 12,
     lineHeight: 17,
-    color: Monochrome.textMuted,
+    color: colors.textMuted,
     marginTop: Spacing.one,
   },
   gatewayItem: {
@@ -598,12 +598,12 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Monochrome.border,
-    backgroundColor: Monochrome.surfaceSecondary,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceSecondary,
   },
   gatewayItemActive: {
-    borderColor: Monochrome.textPrimary,
-    backgroundColor: Monochrome.surfaceElevated,
+    borderColor: colors.actionPrimary,
+    backgroundColor: colors.surfaceElevated,
   },
   gatewayInfo: {
     flexDirection: 'row',
@@ -613,19 +613,19 @@ const styles = StyleSheet.create({
   gatewayName: {
     fontSize: 14,
     fontWeight: '600',
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
   },
   gatewayBadge: {
     fontSize: 11,
-    color: Monochrome.textSecondary,
-    backgroundColor: Monochrome.surfaceElevated,
+    color: colors.textSecondary,
+    backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
     fontWeight: '600',
   },
   errorBanner: {
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
     fontSize: 13,
     fontWeight: '500',
     marginTop: 4,
@@ -641,7 +641,7 @@ const styles = StyleSheet.create({
   modalSuccessText: {
     fontSize: 16,
     fontWeight: '600',
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -657,18 +657,19 @@ const styles = StyleSheet.create({
   paymentPendingText: {
     fontSize: 15,
     fontWeight: '600',
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
     lineHeight: 22,
   },
   paymentReference: {
     fontSize: 12,
-    color: Monochrome.textMuted,
+    color: colors.textMuted,
   },
   closePendingText: {
     paddingVertical: Spacing.two,
-    color: Monochrome.textMuted,
+    color: colors.textMuted,
     fontSize: 14,
     fontWeight: '600',
   },
 });
+}

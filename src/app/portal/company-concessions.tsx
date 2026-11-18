@@ -1,4 +1,5 @@
 import { AppText } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { Brand, Spacing } from '@/constants/theme';
 import { API_BASE_URL } from '@/config/api';
 import { getSession } from '@/features/auth/session';
@@ -7,7 +8,6 @@ import {
   getCompanyConcessionTransactions,
   type CompanyConcessionTransaction,
 } from '@/features/admin/services/adminApi';
-import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -88,9 +88,7 @@ export default function CompanyConcessionsScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.back}>
-          <AppText style={styles.link}>‹  Back</AppText>
-        </Pressable>
+        <AppBackButton fallbackHref="/portal/company" />
         <AppText style={styles.title}>Concession reports</AppText>
         <View style={styles.spacer} />
       </View>

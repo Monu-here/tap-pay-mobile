@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -17,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 import { AppText } from '@/components/typography/app-text';
+import { WalletSkeleton } from '@/components/skeletons/ScreenSkeletons';
 import { DriverColors, Palette, Spacing } from '@/constants/theme';
 import { FontFamilies } from '@/constants/typography';
 import { useTheme } from '@/hooks/use-theme';
@@ -280,6 +280,10 @@ export default function WalletScreen() {
           />
         }
       >
+        {loading && !refreshing ? (
+          <WalletSkeleton />
+        ) : (
+          <>
         {/* Error notification if any */}
         {loadError && (
           <View
@@ -740,6 +744,8 @@ export default function WalletScreen() {
             )}
           </Pressable>
         )}
+          </>
+        )}
       </ScrollView>
 
       {/* Add Money Modal */}
@@ -1005,7 +1011,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   txRef: {
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontSize: 11,
   },
   txRight: {

@@ -1,16 +1,15 @@
 import { AppText } from '@/components/typography/app-text';
-import { router } from 'expo-router';
+import { AppHeaderIconButton, AppScreenHeader } from '@/components/ui/app-screen-header';
+import { DriverQrSkeleton } from '@/components/skeletons/ScreenSkeletons';
 import { StatusBar } from 'expo-status-bar';
 import QRCode from 'react-native-qrcode-svg';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SymbolView } from 'expo-symbols';
 
-import { DriverColors as Monochrome, Palette, Spacing } from '@/constants/theme';
+import { Brand as Monochrome, Spacing } from '@/constants/theme';
 import { getActiveTripQr, type DriverTripQr } from '@/features/driver/services/driverApi';
 import { useKeyboardDismissOnBlur } from '@/hooks/use-keyboard-dismiss-on-blur';
-import { LinearGradient } from 'expo-linear-gradient';
 
 export default function DriverTripQrScreen() {
   const insets = useSafeAreaInsets();
@@ -21,15 +20,21 @@ export default function DriverTripQrScreen() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const result = await getActiveTripQr();
-    if (result.ok && result.data) {
-      setQr(result.data);
-      setError(null);
-    } else {
+    try {
+      const result = await getActiveTripQr();
+      if (result.ok && result.data) {
+        setQr(result.data);
+        setError(null);
+      } else {
+        setQr(null);
+        setError(result.message || 'Unable to generate a trip payment QR.');
+      }
+    } catch (requestError) {
       setQr(null);
-      setError(result.message || 'Unable to generate a trip payment QR.');
+      setError(requestError instanceof Error ? requestError.message : 'Unable to generate a trip payment QR.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -49,31 +54,25 @@ export default function DriverTripQrScreen() {
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
-      <StatusBar style="light" />
-      <LinearGradient
-        colors={['#003049', '#001824']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.header, { paddingTop: insets.top + Spacing.two }]}
-      >
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-          <SymbolView
-            name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-            size={18}
-            tintColor={Palette.warmCream}
+      <StatusBar style="dark" />
+      <AppScreenHeader
+        title="Passenger Fare QR"
+        subtitle="Active trip payment pass"
+        backButton={{ fallbackHref: '/portal/driver' }}
+        rightAction={
+          <AppHeaderIconButton
+            accessibilityLabel="Refresh trip QR"
+            icon={{ ios: 'arrow.clockwise', android: 'refresh', web: 'refresh' }}
+            onPress={() => void refresh()}
           />
-        </Pressable>
-        <View style={styles.headerTitleContainer}>
-          <AppText style={styles.title}>Passenger Fare QR</AppText>
-          <AppText style={styles.subtitle}>Active Trip Payment Pass</AppText>
-        </View>
-      </LinearGradient>
+        }
+      />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.four }]}
         showsVerticalScrollIndicator={false}
       >
-        {loading && !qr ? <ActivityIndicator size="large" color={Monochrome.actionPrimary} /> : null}
+        {loading && !qr ? <DriverQrSkeleton /> : null}
         {qr ? (
           <>
             <View style={styles.qrContainer}>
@@ -134,35 +133,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Monochrome.background,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: Spacing.four,
-    paddingBottom: Spacing.three,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(253,240,213,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleContainer: {
-    flex: 1,
-  },
-  title: {
-    color: Palette.warmCream,
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  subtitle: {
-    color: 'rgba(253,240,213,0.7)',
-    fontSize: 13,
-    marginTop: 2,
-  },
   content: {
     flexGrow: 1,
     alignItems: 'center',
@@ -176,7 +146,7 @@ const styles = StyleSheet.create({
     backgroundColor: Monochrome.surfacePrimary,
     borderWidth: 1,
     borderColor: Monochrome.border,
-    borderRadius: 24,
+    borderRadius: 16,
     padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
@@ -216,7 +186,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: Monochrome.textSecondary,
-    fontFamily: 'monospace',
+    letterSpacing: 0.3,
   },
   expiry: {
     color: Monochrome.textMuted,

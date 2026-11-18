@@ -1,4 +1,5 @@
 import { AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -6,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Image,
   Linking,
   Modal,
@@ -203,18 +205,7 @@ export default function PassengerPayScreen() {
         end={{ x: 1, y: 1 }}
         style={[styles.header, { paddingTop: insets.top + 12 }]}
       >
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.backButton}
-          hitSlop={8}
-        >
-          <SymbolView
-            name={{ ios: 'chevron.left', android: 'chevron_left', web: 'chevron_left' }}
-            size={20}
-            tintColor="#FDF0D5"
-          />
-        </Pressable>
+        <AppBackButton />
         <View style={styles.headerTitleWrap}>
           <AppText style={styles.title}>Scan & Pay</AppText>
           <AppText style={styles.subtitle}>Hold camera to the driver&apos;s QR code</AppText>
@@ -247,6 +238,8 @@ export default function PassengerPayScreen() {
         contentContainerStyle={styles.scrollBody}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       >
         {/* Scanner View */}
         {!ticket && !quote && (
@@ -596,8 +589,26 @@ export default function PassengerPayScreen() {
           }
         }}
       >
-        <View style={styles.mpinOverlay}>
-          <View style={[styles.mpinSheet, { backgroundColor: theme.surfacePrimary, paddingBottom: insets.bottom + Spacing.lg }]}>
+        <KeyboardAvoidingView
+          style={styles.mpinOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <ScrollView
+            style={[
+              styles.mpinSheet,
+              {
+                backgroundColor: theme.surfacePrimary,
+                maxHeight: '90%',
+              },
+            ]}
+            contentContainerStyle={[
+              styles.mpinSheetContent,
+              { paddingBottom: insets.bottom + Spacing.lg },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            showsVerticalScrollIndicator={false}
+          >
             <View style={[styles.mpinHandle, { backgroundColor: theme.border }]} />
             <View style={styles.mpinHeader}>
               <View style={[styles.mpinLockIcon, { backgroundColor: '#C1121F' }]}>
@@ -655,8 +666,8 @@ export default function PassengerPayScreen() {
             }}>
               <AppText style={[styles.forgotMpin, { color: theme.actionPrimary }]}>Forgot MPIN?</AppText>
             </Pressable>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -831,7 +842,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   verifiedBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  refText: { fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  refText: { fontSize: 11 },
   quoteRouteName: { fontSize: 20, fontWeight: '800' },
   quoteCompanyBus: { fontSize: 13, marginTop: 4 },
   recipientCard: {
@@ -955,13 +966,11 @@ const styles = StyleSheet.create({
   ticketValEmphasized: {
     fontSize: 14,
     fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   ticketValFare: { fontSize: 16, fontWeight: '800' },
   ticketValBalance: { fontSize: 13, fontWeight: '600' },
   ticketValSmall: {
     fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     maxWidth: '60%',
     textAlign: 'right',
   },
@@ -993,10 +1002,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
   mpinSheet: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+  },
+  mpinSheetContent: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
   },
   mpinHandle: {
     width: 40,

@@ -1,4 +1,6 @@
 import { AppText } from '@/components/typography/app-text';
+import { RewardsSkeleton } from '@/components/skeletons/ScreenSkeletons';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { Palette, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -12,7 +14,6 @@ import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -71,17 +72,20 @@ export default function PassengerRewardsScreen() {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar style={theme.isDark ? 'light' : 'dark'} />
       <View style={[styles.header, { paddingTop: insets.top + Spacing.md, borderBottomColor: theme.border }]}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Back to wallet" onPress={() => router.back()} style={styles.backButton}>
-          <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={22} tintColor={theme.text} />
-        </Pressable>
+        <AppBackButton
+          accessibilityLabel="Back to wallet"
+          fallbackHref="/(tabs)/wallet"
+        />
         <View style={styles.headerText}>
           <AppText style={[styles.title, { color: theme.text }]}>Rewards</AppText>
           <AppText style={{ color: theme.textSecondary }}>Earn points when you pay eligible QR fares</AppText>
         </View>
       </View>
 
-      {loading ? (
-        <View style={styles.loading}><ActivityIndicator color={Palette.crimsonRed} size="large" /></View>
+      {loading && !dashboard ? (
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+          <RewardsSkeleton />
+        </ScrollView>
       ) : (
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
@@ -158,7 +162,6 @@ const styles = StyleSheet.create({
   backButton: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
   headerText: { flex: 1, gap: 2 },
   title: { fontSize: 24, fontWeight: '800' },
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 20, gap: 14 },
   balanceCard: { borderWidth: 1, borderRadius: 22, padding: 20 },
   balanceHeading: { flexDirection: 'row', alignItems: 'center', gap: 12 },

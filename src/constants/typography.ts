@@ -11,14 +11,6 @@ export const FontFamilies = {
   semiBoldItalic: 'PlusJakartaSans_600SemiBold_Italic',
   boldItalic: 'PlusJakartaSans_700Bold_Italic',
   extraBoldItalic: 'PlusJakartaSans_800ExtraBold_Italic',
-  devanagari: {
-    regular: 'NotoSansDevanagari_400Regular',
-    medium: 'NotoSansDevanagari_500Medium',
-    semiBold: 'NotoSansDevanagari_600SemiBold',
-    bold: 'NotoSansDevanagari_700Bold',
-    extraBold: 'NotoSansDevanagari_700Bold',
-  },
-  cursive: 'Caveat_400Regular',
 } as const;
 
 /**
@@ -61,16 +53,11 @@ export const Typography = StyleSheet.create({
   transactionStatus: { fontFamily: FontFamilies.medium, fontSize: 12 } as TextStyle,
   error: { fontFamily: FontFamilies.medium, fontSize: 13, lineHeight: 19 } as TextStyle,
 
-  // Decorative & Special
+  // Supporting emphasis
   italicDescription: {
     fontFamily: FontFamilies.regularItalic,
     fontSize: 14,
     lineHeight: 20,
-  } as TextStyle,
-  decorativeCursive: {
-    fontFamily: FontFamilies.cursive,
-    fontSize: 30,
-    lineHeight: 38,
   } as TextStyle,
   promotional: {
     fontFamily: FontFamilies.boldItalic,
@@ -103,10 +90,8 @@ export function normalizeWeight(weight: TextStyle['fontWeight']): FontWeight {
 export function getFontFamily(
   weight: TextStyle['fontWeight'] = '400',
   italic = false,
-  devanagari = false,
 ): string {
   const normalizedWeight = normalizeWeight(weight);
-  if (devanagari) return FontFamilies.devanagari[normalizedWeight];
 
   if (italic) {
     if (normalizedWeight === 'regular') return FontFamilies.regularItalic;

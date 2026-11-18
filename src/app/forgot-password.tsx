@@ -1,4 +1,5 @@
-import {AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
@@ -55,15 +56,13 @@ export default function ForgotPasswordScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <SymbolView
-              name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-              size={22}
-              tintColor={Brand.text}
-            />
-            <AppText style={styles.backText}>Back to Sign In</AppText>
-          </Pressable>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        >
+          <AppBackButton fallbackHref="/login" accessibilityLabel="Back to sign in" />
 
           <View style={styles.header}>
             <AppText style={styles.title}>Forgot Password</AppText>

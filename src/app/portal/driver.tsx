@@ -1,4 +1,9 @@
 import {AppText, AppTextInput } from '@/components/typography/app-text';
+import {
+  DriverDashboardSkeleton,
+  RouteListSkeleton,
+  TransactionSkeleton,
+} from '@/components/skeletons/ScreenSkeletons';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -467,7 +472,7 @@ export default function DriverConsoleScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
       {/* Header */}
       <LinearGradient
@@ -552,6 +557,10 @@ export default function DriverConsoleScreen() {
               <RefreshControl refreshing={refreshing} onRefresh={() => loadDriverData(true)} tintColor={Monochrome.textPrimary} />
             }
           >
+            {loading && !refreshing ? (
+              <DriverDashboardSkeleton />
+            ) : (
+              <>
             {loadError ? (
               <View style={styles.errorNotice}>
                 <AppText style={styles.errorNoticeText}>{loadError}</AppText>
@@ -707,12 +716,7 @@ export default function DriverConsoleScreen() {
                 </Pressable>
               </View>
 
-              {loading && !refreshing ? (
-                <View style={styles.loadingBox}>
-                  <ActivityIndicator size="large" color={Monochrome.textPrimary} />
-                  <AppText style={styles.loadingText}>Fetching assigned trip shifts...</AppText>
-                </View>
-              ) : trips.length > 0 ? (
+              {trips.length > 0 ? (
                 trips.map((trip) => {
                   const isProgress = trip.status === 'in_progress';
                   const isDone = trip.status === 'completed';
@@ -820,6 +824,8 @@ export default function DriverConsoleScreen() {
                 </View>
               )}
             </View>
+              </>
+            )}
           </ScrollView>
         )}
 
@@ -836,10 +842,7 @@ export default function DriverConsoleScreen() {
             </View>
 
             {routeLoading && !routeInfo ? (
-              <View style={styles.loadingBox}>
-                <ActivityIndicator size="large" color={Monochrome.textPrimary} />
-                <AppText style={styles.loadingText}>Loading assigned route details...</AppText>
-              </View>
+              <RouteListSkeleton count={2} />
             ) : routeInfo?.route ? (
               <>
                 <View style={styles.routeHeaderCard}>
@@ -903,10 +906,7 @@ export default function DriverConsoleScreen() {
             </View>
 
             {ticketsLoading && tickets.length === 0 ? (
-              <View style={styles.loadingBox}>
-                <ActivityIndicator size="large" color={Monochrome.textPrimary} />
-                <AppText style={styles.loadingText}>Fetching fare tickets...</AppText>
-              </View>
+              <TransactionSkeleton count={4} />
             ) : tickets.length > 0 ? (
               tickets.map((tkt) => (
                 <View key={tkt.id} style={styles.ticketCard}>

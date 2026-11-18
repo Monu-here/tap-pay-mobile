@@ -1,6 +1,6 @@
-import {AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { StatusBar } from 'expo-status-bar';
-import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -13,7 +13,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SymbolView } from 'expo-symbols';
 
 import { Monochrome, Spacing } from '@/constants/theme';
 import {
@@ -115,9 +114,7 @@ export default function PlatformSupportScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.canGoBack() ? router.back() : router.replace('/portal/admin' as any)} style={styles.backButton}>
-          <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={18} tintColor={Monochrome.textPrimary} />
-        </Pressable>
+        <AppBackButton fallbackHref="/portal/admin" />
         <AppText style={styles.title}>{selected ? 'Support case' : 'Support queue'}</AppText>
         {selected ? (
           <Pressable onPress={() => setSelected(null)} style={styles.backToQueue}><AppText style={styles.backToQueueText}>Queue</AppText></Pressable>
@@ -126,7 +123,11 @@ export default function PlatformSupportScreen() {
 
       {selected ? (
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 30 }]} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 30 }]}
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets
+          >
             <View style={styles.caseCard}>
               <AppText style={styles.subject}>{selected.subject}</AppText>
               <AppText style={styles.meta}>#{selected.reference} · {selected.category.replaceAll('_', ' ')}</AppText>

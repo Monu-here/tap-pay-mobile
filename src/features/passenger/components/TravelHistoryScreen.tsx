@@ -1,4 +1,5 @@
 import { AppText } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -126,19 +127,7 @@ export function TravelHistoryScreen({ onBack = () => router.back() }: TravelHist
         style={[styles.gradientHeader, { paddingTop: insets.top + 12 }]}
       >
         <View style={styles.headerTopRow}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            onPress={onBack}
-            style={styles.backBtn}
-            hitSlop={8}
-          >
-            <SymbolView
-              name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-              size={20}
-              tintColor="#FDF0D5"
-            />
-          </Pressable>
+          <AppBackButton onPress={onBack} />
           <View style={styles.headerTitleWrap}>
             <AppText style={styles.headerTitle}>My Trips</AppText>
             <AppText style={styles.headerSubtitle}>Travel history & receipts</AppText>

@@ -1,7 +1,8 @@
 import {AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
+import { TransactionSkeleton } from '@/components/skeletons/ScreenSkeletons';
 import { useCallback, useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { router } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
@@ -130,9 +131,7 @@ export default function ConcessionReviewScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.back}>
-          <AppText style={styles.backText}>‹  Back</AppText>
-        </Pressable>
+        <AppBackButton fallbackHref="/portal/admin" />
         <AppText style={styles.title}>Concession review</AppText>
         <View style={styles.headerSpacer} />
       </View>
@@ -168,9 +167,13 @@ export default function ConcessionReviewScreen() {
           </Pressable>
         ))}
       </View>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+      >
         {error ? <AppText accessibilityRole="alert" style={styles.error}>{error}</AppText> : null}
-        {loading ? <ActivityIndicator color={Brand.teal.primary} /> : applications.length === 0 ? (
+        {loading ? <TransactionSkeleton count={3} /> : applications.length === 0 ? (
           <AppText style={styles.empty}>No {status} applications.</AppText>
         ) : applications.map((application) => (
           <View key={application.id} style={styles.card}>

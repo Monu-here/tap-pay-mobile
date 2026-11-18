@@ -1,4 +1,5 @@
 import { AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { Brand, Spacing } from '@/constants/theme';
 import {
   approvePlatformConcessionFunding,
@@ -7,7 +8,6 @@ import {
   setPlatformConcessionPolicyStatus,
   type PlatformConcessionPolicy,
 } from '@/features/admin/services/adminApi';
-import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -184,13 +184,15 @@ export default function ConcessionPoliciesScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.back}>
-          <AppText style={styles.link}>‹  Back</AppText>
-        </Pressable>
+        <AppBackButton fallbackHref="/portal/admin" />
         <AppText style={styles.title}>Concession policies</AppText>
         <View style={styles.spacer} />
       </View>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+      >
         <AppText style={styles.intro}>
           New versions are disabled by default. Configure and approve funding explicitly before activation.
         </AppText>

@@ -1,4 +1,5 @@
 import {AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -13,7 +14,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
@@ -133,17 +133,11 @@ export default function DriverScanScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
-          <SymbolView
-            name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-            size={18}
-            tintColor={Monochrome.textPrimary}
-          />
-        </Pressable>
+        <AppBackButton fallbackHref="/portal/driver" />
         <View style={styles.headerTitleGroup}>
           <AppText style={styles.headerTitle}>Scan Passenger QR</AppText>
           <AppText style={styles.headerSubtitle}>
@@ -594,7 +588,6 @@ const styles = StyleSheet.create({
   resultTicketNumber: {
     fontSize: 13,
     color: Monochrome.textSecondary,
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', web: 'monospace' }),
     marginTop: 4,
   },
   resultErrorReason: {
@@ -700,7 +693,6 @@ const styles = StyleSheet.create({
     color: Monochrome.textPrimary,
     minHeight: 90,
     textAlignVertical: 'top',
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', web: 'monospace' }),
   },
   manualModalActions: {
     flexDirection: 'row',

@@ -1,6 +1,5 @@
 import { AppText } from '@/components/typography/app-text';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
-import { Caveat_400Regular } from '@expo-google-fonts/caveat';
 import {
   PlusJakartaSans_400Regular,
   PlusJakartaSans_400Regular_Italic,
@@ -13,18 +12,14 @@ import {
   PlusJakartaSans_800ExtraBold,
   PlusJakartaSans_800ExtraBold_Italic,
 } from '@expo-google-fonts/plus-jakarta-sans';
-import {
-  NotoSansDevanagari_400Regular,
-  NotoSansDevanagari_500Medium,
-  NotoSansDevanagari_600SemiBold,
-  NotoSansDevanagari_700Bold,
-} from '@expo-google-fonts/noto-sans-devanagari';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useMemo } from 'react';
 import { StyleSheet, View, useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { KeyboardManagementProvider } from '@/components/keyboard/KeyboardManagementProvider';
+import { SkeletonAnimationProvider } from '@/components/skeletons/Skeleton';
 import { Colors } from '@/constants/theme';
 import { FcmRuntime } from '@/features/notifications/FcmRuntime';
 
@@ -33,7 +28,6 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [fontsLoaded, fontError] = useFonts({
-    Caveat_400Regular,
     PlusJakartaSans_400Regular,
     PlusJakartaSans_400Regular_Italic,
     PlusJakartaSans_500Medium,
@@ -44,10 +38,6 @@ export default function RootLayout() {
     PlusJakartaSans_700Bold_Italic,
     PlusJakartaSans_800ExtraBold,
     PlusJakartaSans_800ExtraBold_Italic,
-    NotoSansDevanagari_400Regular,
-    NotoSansDevanagari_500Medium,
-    NotoSansDevanagari_600SemiBold,
-    NotoSansDevanagari_700Bold,
   });
 
   useEffect(() => {
@@ -93,10 +83,14 @@ export default function RootLayout() {
     <ThemeProvider value={navigationTheme}>
       <AnimatedSplashOverlay />
       <FcmRuntime />
-      <Stack
-        initialRouteName="index"
-        screenOptions={{ headerShown: false }}
-      />
+      <KeyboardManagementProvider>
+        <SkeletonAnimationProvider>
+          <Stack
+            initialRouteName="index"
+            screenOptions={{ headerShown: false }}
+          />
+        </SkeletonAnimationProvider>
+      </KeyboardManagementProvider>
     </ThemeProvider>
   );
 }

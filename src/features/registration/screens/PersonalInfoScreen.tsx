@@ -1,7 +1,8 @@
 import { AppText } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -9,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  type TextInput,
 } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -32,6 +34,12 @@ export function PersonalInfoScreen() {
   const theme = useTheme();
   const { data, setPersonal } = useRegistration();
   const [personal, setLocalPersonal] = useState<PersonalInfo>(data.personal);
+  const nameNepaliRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
+  const addressRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
   const [errors, setErrors] = useState<Partial<Record<keyof PersonalInfo, string>>>({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -112,25 +120,10 @@ export function PersonalInfoScreen() {
           { paddingTop: insets.top + Spacing.two, paddingHorizontal: Spacing.four },
         ]}
       >
-        <Pressable
-          accessibilityRole="button"
+        <AppBackButton
           accessibilityLabel="Go back to login"
-          hitSlop={8}
           onPress={goBack}
-          style={[
-            styles.backButton,
-            {
-              backgroundColor: theme.isDark ? '#002235' : '#FAF4EB',
-              borderColor: theme.border,
-            },
-          ]}
-        >
-          <SymbolView
-            name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-            size={18}
-            tintColor={theme.text}
-          />
-        </Pressable>
+        />
 
         <View style={styles.stepIndicator}>
           <AppText style={[styles.stepLabel, { color: theme.textSecondary }]}>
@@ -148,6 +141,8 @@ export function PersonalInfoScreen() {
           { paddingBottom: insets.bottom + Spacing.five },
         ]}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headingBlock}>
@@ -178,6 +173,9 @@ export function PersonalInfoScreen() {
             required
             autoCapitalize="words"
             textContentType="name"
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => nameNepaliRef.current?.focus()}
           />
           <FormTextField
             label="Full Name (Nepali)"
@@ -186,6 +184,10 @@ export function PersonalInfoScreen() {
             onChangeText={(text) => updateField('fullNameNepali', text)}
             error={errors.fullNameNepali}
             required
+            inputRef={nameNepaliRef}
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => emailRef.current?.focus()}
           />
         </View>
 
@@ -211,6 +213,10 @@ export function PersonalInfoScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             textContentType="emailAddress"
+            inputRef={emailRef}
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => phoneRef.current?.focus()}
           />
           <FormTextField
             label="Mobile Phone Number"
@@ -222,6 +228,10 @@ export function PersonalInfoScreen() {
             keyboardType="phone-pad"
             textContentType="telephoneNumber"
             prefix="+977"
+            inputRef={phoneRef}
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => addressRef.current?.focus()}
           />
 
           <FormTextField
@@ -232,6 +242,10 @@ export function PersonalInfoScreen() {
             error={errors.address}
             required
             autoCapitalize="words"
+            inputRef={addressRef}
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => passwordRef.current?.focus()}
           />
         </View>
 
@@ -290,6 +304,10 @@ export function PersonalInfoScreen() {
             required
             secureTextEntry={!showPassword}
             textContentType="newPassword"
+            inputRef={passwordRef}
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => confirmPasswordRef.current?.focus()}
             trailing={
               <VisibilityToggle visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
             }
@@ -303,6 +321,9 @@ export function PersonalInfoScreen() {
             required
             secureTextEntry={!showConfirmPassword}
             textContentType="newPassword"
+            inputRef={confirmPasswordRef}
+            returnKeyType="go"
+            onSubmitEditing={handleContinue}
             trailing={
               <VisibilityToggle
                 visible={showConfirmPassword}

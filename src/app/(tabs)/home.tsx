@@ -1,4 +1,5 @@
 import { AppText, AppTextInput } from "@/components/typography/app-text";
+import { DashboardSkeleton } from "@/components/skeletons/ScreenSkeletons";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -6,6 +7,7 @@ import {
   AppState,
   Image,
   Linking,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -52,6 +54,7 @@ export default function HomeScreen() {
   const [unreadNotifications, setUnreadNotifications] = useState<number>(0);
   const [busSearchQuery, setBusSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [addMoneyVisible, setAddMoneyVisible] = useState(false);
@@ -114,12 +117,21 @@ export default function HomeScreen() {
 
       if (dashRes.status === "fulfilled" && dashRes.value.ok && dashRes.value.data) {
         setDashboard(dashRes.value.data);
+        setDashboardError(null);
+      } else {
+        setDashboardError(
+          dashRes.status === "fulfilled"
+            ? dashRes.value.message || "Unable to load your dashboard."
+            : dashRes.reason instanceof Error
+              ? dashRes.reason.message
+              : "Unable to load your dashboard.",
+        );
       }
       if (notifRes.status === "fulfilled" && notifRes.value.ok && notifRes.value.data) {
         setUnreadNotifications(notifRes.value.data.unread_count);
       }
-    } catch {
-      // Silently fail — content will stay empty/stale
+    } catch (error) {
+      setDashboardError(error instanceof Error ? error.message : "Unable to load your dashboard.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -284,6 +296,9 @@ export default function HomeScreen() {
           styles.scrollContent,
           { paddingBottom: insets.bottom + 100 },
         ]}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -293,6 +308,19 @@ export default function HomeScreen() {
           />
         }
       >
+        {loading && !refreshing && !dashboard ? (
+          <DashboardSkeleton />
+        ) : (
+          <>
+        {dashboardError ? (
+          <View style={[styles.stateCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border }]}>
+            <AppText style={[styles.stateText, { color: theme.textSecondary }]}>{dashboardError}</AppText>
+            <Pressable accessibilityRole="button" onPress={() => void fetchData(true)}>
+              <AppText style={[styles.viewAllText, { color: theme.actionPrimary }]}>Retry</AppText>
+            </Pressable>
+          </View>
+        ) : null}
+
         {/* Privileged Role Switcher */}
         {isPrivileged && (
           <Pressable
@@ -321,16 +349,6 @@ export default function HomeScreen() {
               tintColor={theme.textSecondary}
             />
           </Pressable>
-        )}
-
-        {/* Loading skeleton */}
-        {loading && !refreshing && (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color="#C1121F" />
-            <AppText style={[styles.loadingText, { color: theme.textSecondary }]}>
-              Syncing transit data...
-            </AppText>
-          </View>
         )}
 
         {/* ── Smart Transit Card ── */}
@@ -698,7 +716,8 @@ export default function HomeScreen() {
             </AppText>
           </View>
         )}
-
+          </>
+        )}
       </ScrollView>
 
       <AddMoneyModal

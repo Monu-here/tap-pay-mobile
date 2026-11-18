@@ -837,6 +837,8 @@ export default function CompanyPortalScreen() {
       {/* ---------------- MAIN CONTENT AREA ---------------- */}
       <ScrollView
         contentContainerStyle={[styles.mainScroll, { paddingBottom: insets.bottom + 85 }]}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} tintColor={Brand.teal.primary} />
@@ -2212,7 +2214,10 @@ export default function CompanyPortalScreen() {
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
               <AppText style={styles.fieldLabel}>Bus Fleet Identifier (e.g. BA-101)</AppText>
               <AppTextInput
                 value={busNumber}
@@ -2286,7 +2291,10 @@ export default function CompanyPortalScreen() {
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
               <AppText style={styles.fieldLabel}>Driver Account ID (Registered User ID)</AppText>
               <AppTextInput
                 value={driverUserId}
@@ -2340,7 +2348,10 @@ export default function CompanyPortalScreen() {
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
               <AppText style={styles.fieldLabel}>Select Bus</AppText>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectorScroll}>
                 {buses.map((b) => (
@@ -2415,7 +2426,10 @@ export default function CompanyPortalScreen() {
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
               <AppText style={styles.fieldLabel}>Select Bus</AppText>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectorScroll}>
                 {buses.map((b) => (
@@ -2514,7 +2528,10 @@ export default function CompanyPortalScreen() {
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
               <AppText style={styles.fieldLabel}>Route Code (e.g. RT-01)</AppText>
               <AppTextInput
                 value={routeCode}
@@ -2655,7 +2672,10 @@ export default function CompanyPortalScreen() {
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
               <AppText style={styles.fieldLabel}>Policy Name</AppText>
               <AppTextInput
                 value={fareName}

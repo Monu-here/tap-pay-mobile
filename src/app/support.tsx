@@ -1,6 +1,7 @@
-import {AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppText, AppTextInput } from '@/components/typography/app-text';
+import { SupportSkeleton } from '@/components/skeletons/ScreenSkeletons';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { StatusBar } from 'expo-status-bar';
-import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -21,6 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useKeyboardDismissOnBlur } from '@/hooks/use-keyboard-dismiss-on-blur';
 
 import { DriverColors, Monochrome, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { getSession } from '@/features/auth/session';
 import {
   createSupportTicket,
@@ -46,8 +48,9 @@ function statusLabel(status: SupportTicket['status']): string {
 export default function SupportScreen() {
   const insets = useSafeAreaInsets();
   useKeyboardDismissOnBlur();
+  const theme = useTheme();
   const isDriver = getSession().user?.type === 'driver';
-  const colors = isDriver ? DriverColors : Monochrome;
+  const colors = theme.isDark ? theme.tokens : isDriver ? DriverColors : Monochrome;
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [selected, setSelected] = useState<SupportTicket | null>(null);
@@ -185,7 +188,7 @@ export default function SupportScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style={isDriver ? 'light' : 'dark'} />
+      <StatusBar style={theme.isDark ? 'light' : 'dark'} />
       <LinearGradient
         colors={isDriver ? ['#003049', '#001824'] : [colors.surfacePrimary, colors.surfacePrimary]}
         start={{ x: 0, y: 0 }}
@@ -193,13 +196,12 @@ export default function SupportScreen() {
         style={styles.header}
       >
         {selected ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Back to support requests" onPress={() => setSelected(null)} style={styles.iconButton}>
-            <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={18} tintColor={colors.textPrimary} />
-          </Pressable>
+          <AppBackButton
+            accessibilityLabel="Back to support requests"
+            onPress={() => setSelected(null)}
+          />
         ) : (
-          <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/home')} style={styles.iconButton}>
-            <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={18} tintColor={colors.textPrimary} />
-          </Pressable>
+          <AppBackButton fallbackHref="/(tabs)/home" />
         )}
         <AppText style={styles.headerTitle}>{selected ? 'Support request' : 'Help & support'}</AppText>
         {!selected ? (
@@ -281,7 +283,7 @@ export default function SupportScreen() {
           ) : (
             <AppText style={styles.intro}>Track payment disputes and other questions directly with Tap & Pay Support.</AppText>
           )}
-          {loading ? <ActivityIndicator color={colors.actionPrimary} style={styles.loading} /> : null}
+          {loading && !refreshing ? <SupportSkeleton /> : null}
           {loadError ? (
             <View style={styles.errorCard}>
               <AppText style={styles.errorText}>{loadError}</AppText>

@@ -1,4 +1,5 @@
 import { AppText } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 /**
  * Shared shell for both OTP verification screens.
  *
@@ -105,15 +106,7 @@ export function OtpVerificationLayout({
           { paddingTop: insets.top + Spacing.two, paddingHorizontal: Spacing.four },
         ]}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={8}
-          onPress={onBack}
-          style={styles.backButton}
-        >
-          <AppText style={styles.backIcon}>←</AppText>
-        </Pressable>
+        <AppBackButton accessibilityLabel="Go back" onPress={onBack} />
         <View style={styles.stepIndicator}>
           <AppText style={styles.stepLabel}>Step {step} of 7</AppText>
           <View style={styles.progressTrack}>
@@ -128,6 +121,8 @@ export function OtpVerificationLayout({
           { paddingBottom: insets.bottom + Spacing.five },
         ]}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headingBlock}>

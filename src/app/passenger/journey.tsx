@@ -1,4 +1,5 @@
-import { AppText } from '@/components/typography/app-text';
+import { AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { Monochrome, Spacing } from '@/constants/theme';
 import {
   getCurrentTransitJourney,
@@ -15,14 +16,12 @@ import { createIdempotencyKey } from '@/features/auth/services/apiClient';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { SymbolView } from 'expo-symbols';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -125,14 +124,17 @@ export default function PassengerJourneyScreen() {
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar style="dark" />
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
-          <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={19} tintColor={Monochrome.textPrimary} />
-        </Pressable>
+        <AppBackButton />
         <AppText style={styles.title}>My bus journey</AppText>
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      >
         {ticket ? (
           <View style={styles.card}>
             <AppText style={styles.heading}>Fare paid · Ticket issued</AppText>
@@ -219,7 +221,7 @@ export default function PassengerJourneyScreen() {
                 <AppText style={styles.amount}>
                   {preview?.fare.amount_formatted || `Rs. ${((journey.fare_due_minor || 0) / 100).toFixed(2)}`}
                 </AppText>
-                <TextInput
+                <AppTextInput
                   accessibilityLabel="Four-digit MPIN"
                   value={mpin}
                   onChangeText={(value) => setMpin(value.replace(/\D/g, '').slice(0, 4))}
