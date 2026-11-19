@@ -18,10 +18,20 @@ export type PlatformConcessionApplication = {
   id: number;
   category: 'student' | 'senior_citizen';
   details: Record<string, string | null>;
-  status: 'pending' | 'approved' | 'rejected';
+  status:
+    | 'pending'
+    | 'under_review'
+    | 'approved'
+    | 'rejected'
+    | 'additional_documents_requested'
+    | 'expired'
+    | 'suspended'
+    | 'renewal_pending'
+    | 'revoked';
   review_note: string | null;
   submitted_at: string;
   reviewed_at: string | null;
+  expires_at: string | null;
   user: {
     id: number;
     name: string | null;
@@ -42,6 +52,28 @@ export type PlatformConcessionApplication = {
   } | null;
 };
 
+export type PlatformConcessionPolicy = {
+  id: number;
+  category: 'student' | 'senior_citizen';
+  version: number;
+  enabled: boolean;
+  discount_percentage: string;
+  minimum_eligibility_age: number | null;
+  verification_required: boolean;
+  document_types: string[];
+  validity_months: number | null;
+  renewal_required: boolean;
+  company_ids: number[] | null;
+  vehicle_types: string[] | null;
+  effective_from: string;
+  effective_until: string | null;
+  maximum_discount_minor: number | null;
+  fare_rules: Record<string, unknown> | null;
+  funding_model: 'operator_funded' | 'platform_funded' | 'government_funded';
+  funding_approval_reference: string | null;
+  funding_approved_at: string | null;
+};
+
 export type PlatformListQuery = {
   cursor?: string | null;
   qrCursor?: string | null;
@@ -60,8 +92,21 @@ export type PlatformListQuery = {
 
 export function getPlatformConcessionApplications(
   status: PlatformConcessionApplication['status'] = 'pending',
+  category?: PlatformConcessionApplication['category'],
 ): Promise<ApiResult<PlatformConcessionApplication[]>> {
-  return apiRequest(`/platform/concession-applications?status=${status}&per_page=50`);
+  const query = new URLSearchParams({ status, per_page: '50' });
+  if (category) query.set('category', category);
+  return apiRequest(`/platform/concession-applications?${query.toString()}`);
+}
+
+export function requestPlatformConcessionDocuments(
+  id: number,
+  message: string,
+): Promise<ApiResult<{ application: PlatformConcessionApplication }>> {
+  return apiRequest(`/platform/concession-applications/${id}/request-documents`, {
+    method: 'POST',
+    body: { message },
+  });
 }
 
 export function reviewPlatformConcessionApplication(
@@ -75,6 +120,38 @@ export function reviewPlatformConcessionApplication(
       decision,
       ...(reviewNote ? { review_note: reviewNote } : {}),
     },
+  });
+}
+
+export function getPlatformConcessionPolicies(): Promise<
+  ApiResult<{ policies: PlatformConcessionPolicy[] }>
+> {
+  return apiRequest('/platform/concession-policies');
+}
+
+export function createPlatformConcessionPolicy(
+  policy: Omit<PlatformConcessionPolicy, 'id' | 'version' | 'enabled' | 'funding_approval_reference' | 'funding_approved_at'>,
+): Promise<ApiResult<{ policy: PlatformConcessionPolicy }>> {
+  return apiRequest('/platform/concession-policies', { method: 'POST', body: policy });
+}
+
+export function approvePlatformConcessionFunding(
+  id: number,
+  approvalReference: string,
+): Promise<ApiResult<{ policy: PlatformConcessionPolicy }>> {
+  return apiRequest(`/platform/concession-policies/${id}/funding-approval`, {
+    method: 'POST',
+    body: { approval_reference: approvalReference },
+  });
+}
+
+export function setPlatformConcessionPolicyStatus(
+  id: number,
+  enabled: boolean,
+): Promise<ApiResult<{ policy: PlatformConcessionPolicy }>> {
+  return apiRequest(`/platform/concession-policies/${id}/status`, {
+    method: 'PATCH',
+    body: { enabled },
   });
 }
 
@@ -1070,6 +1147,45 @@ export function getCompanyReports(dateRange?: PlatformDateRange): Promise<ApiRes
     dateFrom: dateRange?.date_from,
     dateTo: dateRange?.date_to,
   })}`);
+}
+
+export type CompanyConcessionTransaction = {
+  travel_uid: string;
+  transaction_id: number | null;
+  trip_id: number | null;
+  passenger: { id: number; name: string | null; name_en: string | null; name_np: string | null } | null;
+  bus_number: string | null;
+  boarding_point: string | null;
+  exit_point: string | null;
+  regular_fare_minor: number;
+  category: 'student' | 'senior_citizen' | null;
+  policy_id: number | null;
+  policy_version: number | null;
+  discount_percentage: string | null;
+  discount_minor: number;
+  passenger_payable_minor: number;
+  operator_settlement_minor: number;
+  status: string;
+  paid_at: string | null;
+};
+
+export type CompanyConcessionReport = {
+  trip_count: number;
+  regular_fare_minor: number;
+  discount_minor: number;
+  passenger_payable_minor: number;
+};
+
+export function getCompanyConcessionTransactions(): Promise<
+  ApiResult<{ transactions: CompanyConcessionTransaction[] }>
+> {
+  return apiRequest<unknown>('/admin/company/concessions/transactions?per_page=50').then((result) =>
+    normalizeCollection<CompanyConcessionTransaction, 'transactions'>(result, 'transactions'),
+  );
+}
+
+export function getCompanyConcessionReport(): Promise<ApiResult<{ summary: CompanyConcessionReport }>> {
+  return apiRequest('/admin/company/concessions/reports');
 }
 
 export type CompanyDriverReport = {

@@ -1,17 +1,14 @@
-import {AppText, AppTextInput } from '@/components/typography/app-text';
-/**
- * Screen — Login.
- *
- * Calls the real `POST /auth/login` endpoint via `login()`. On success it saves
- * the session (token + user) and routes by verification state: any unverified
- * channel goes to the OTP `VerificationScreen`, otherwise into the app. No
- * password or token is ever logged.
- */
-
-import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
+import { AppText, AppTextInput } from '@/components/typography/app-text';
+import { PrimaryButton } from '@/components/ui/primary-button';
+import { login as L, t } from '@/constants/strings';
+import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState, type ReactNode } from 'react';
+import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import {
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -19,14 +16,10 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  type TextInput,
   type TextInputProps,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
-
-import { PrimaryButton } from '@/components/ui/primary-button';
-import { t, login as L } from '@/constants/strings';
-import { Brand, Spacing } from '@/constants/theme';
 
 import { getDeviceName, login } from '../services/auth';
 import {
@@ -45,6 +38,7 @@ type LoginTextFieldProps = TextInputProps & {
   error?: string | null;
   trailing?: ReactNode;
   onSubmit?: () => void;
+  inputRef?: Ref<TextInput>;
 };
 
 function LoginTextField({
@@ -53,33 +47,45 @@ function LoginTextField({
   error,
   trailing,
   onSubmit,
+  inputRef,
   style,
   ...rest
 }: LoginTextFieldProps) {
+  const theme = useTheme();
+  const [isFocused, setIsFocused] = useState(false);
   const hasError = Boolean(error);
+
   return (
     <View style={styles.field}>
-      <AppText style={styles.fieldLabel}>{label}</AppText>
+      <AppText style={[styles.fieldLabel, { color: theme.text }]}>{label}</AppText>
       <View
         style={[
           styles.fieldInputContainer,
-          hasError && styles.fieldInputContainerError,
+          {
+            backgroundColor: theme.surfaceSecondary,
+            borderColor: hasError ? theme.error : isFocused ? theme.actionPrimary : theme.border,
+          },
         ]}
       >
         <SymbolView
           name={icon}
           size={18}
-          tintColor={hasError ? Brand.error : Brand.textSecondary}
+          tintColor={hasError ? theme.error : isFocused ? theme.actionPrimary : theme.textSecondary}
         />
         <AppTextInput
-          placeholderTextColor={Brand.textSecondary}
-          style={[styles.fieldInput, style]}
+          ref={inputRef}
+          placeholderTextColor={theme.textSecondary}
+          style={[styles.fieldInput, { color: theme.text }, style]}
           onSubmitEditing={onSubmit}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           {...rest}
         />
         {trailing}
       </View>
-      {hasError && <AppText style={styles.fieldError}>{error}</AppText>}
+      {hasError && (
+        <AppText style={[styles.fieldError, { color: theme.error }]}>{error}</AppText>
+      )}
     </View>
   );
 }
@@ -88,19 +94,18 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function LoginScreen() {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const searchParams = useLocalSearchParams<{ email?: string }>();
 
-  // Prefill the email handed back from a failed signup-then-login.
   const [email, setEmail] = useState(searchParams.email ?? '');
   const [password, setPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
-  // Surface a session-expired notice set by a global 401 (read once on mount).
   const [generalError, setGeneralError] = useState<string | null>(() => consumePendingAuthMessage());
   const [cooldown, setCooldown] = useState(0);
+  const passwordInputRef = useRef<TextInput>(null);
 
-  // Rate-limit cooldown; cleared on unmount.
   useEffect(() => {
     if (cooldown <= 0) return;
     const id = setInterval(() => {
@@ -146,7 +151,7 @@ export function LoginScreen() {
         try {
           await clearSession();
         } catch {
-          // Keep the login screen active; do not enter the app without secure persistence.
+          // Keep the login screen active
         }
         setGeneralError('Could not securely save your session. Please try signing in again.');
         return;
@@ -204,48 +209,56 @@ export function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.flex}
+      style={[styles.flex, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View
         style={[
           styles.container,
           {
-            paddingTop: insets.top + Spacing.five,
+            backgroundColor: theme.background,
+            paddingTop: insets.top + Spacing.four,
             paddingBottom: insets.bottom + Spacing.four,
             paddingHorizontal: Spacing.four,
           },
         ]}
         onStartShouldSetResponder={dismissKeyboard}
       >
-        <StatusBar style="dark" />
+        <StatusBar style={theme.isDark ? 'light' : 'dark'} />
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.brandHeader}>
-            <View style={styles.logoContainer}>
-              <View style={styles.logoMark}>
-                <SymbolView
-                  name={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }}
-                  size={25}
-                  tintColor={Brand.white}
-                />
-              </View>
-              <AppText style={styles.logoText}>Tap &amp; Pay</AppText>
+          {/* Streamlined Header with eYatra Logo and Name */}
+          <View style={styles.header}>
+            <View style={styles.brandRow}>
+              <Image
+                source={require('@/assets/images/eyatra-logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+              <AppText style={[styles.appName, { color: theme.text }]}>eYatra</AppText>
             </View>
-            <AppText style={styles.brandCaption}>SMARTER TRAVEL ACROSS NEPAL</AppText>
+            <AppText style={[styles.title, { color: theme.text }]}>Sign In</AppText>
+            <AppText style={[styles.subtitle, { color: theme.textSecondary }]}>
+              {L.subtitle}
+            </AppText>
           </View>
 
-          <View style={styles.heading}>
-            <AppText style={styles.eyebrow}>WELCOME BACK</AppText>
-            <AppText style={styles.title}>{L.title}</AppText>
-            <AppText style={styles.subtitle}>{L.subtitle}</AppText>
-          </View>
-
-          <View style={styles.loginCard}>
+          {/* Clean Form Card */}
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme.cardSurface,
+                borderColor: theme.border,
+              },
+            ]}
+          >
             <View style={styles.form}>
               <LoginTextField
                 label={L.emailLabel}
@@ -258,9 +271,12 @@ export function LoginScreen() {
                 autoComplete="email"
                 textContentType="emailAddress"
                 returnKeyType="next"
+                blurOnSubmit={false}
                 error={fieldErrors.email}
                 icon={{ ios: 'envelope.fill', android: 'email', web: 'email' }}
+                onSubmit={() => passwordInputRef.current?.focus()}
               />
+
               <LoginTextField
                 label={L.passwordLabel}
                 value={password}
@@ -271,6 +287,7 @@ export function LoginScreen() {
                 autoCapitalize="none"
                 returnKeyType="go"
                 onSubmit={handleSubmit}
+                inputRef={passwordInputRef}
                 error={fieldErrors.password}
                 icon={{ ios: 'lock.fill', android: 'lock', web: 'lock' }}
                 trailing={
@@ -278,7 +295,7 @@ export function LoginScreen() {
                     onPress={() => setIsPasswordVisible((visible) => !visible)}
                     accessibilityRole="button"
                     accessibilityLabel={isPasswordVisible ? L.hidePassword : L.showPassword}
-                    hitSlop={8}
+                    hitSlop={10}
                     style={styles.visibilityToggle}
                   >
                     <SymbolView
@@ -288,7 +305,7 @@ export function LoginScreen() {
                         web: isPasswordVisible ? 'visibility_off' : 'visibility',
                       }}
                       size={18}
-                      tintColor={Brand.textSecondary}
+                      tintColor={theme.textSecondary}
                     />
                   </Pressable>
                 }
@@ -298,34 +315,59 @@ export function LoginScreen() {
                 <Pressable
                   accessibilityRole="button"
                   hitSlop={8}
-                  onPress={() => router.push(email ? `/forgot-password?email=${encodeURIComponent(email)}` as any : '/forgot-password')}
+                  onPress={() =>
+                    router.push(
+                      email
+                        ? (`/forgot-password?email=${encodeURIComponent(email)}` as any)
+                        : '/forgot-password',
+                    )
+                  }
                 >
-                  <AppText style={styles.forgotPasswordLink}>Forgot Password?</AppText>
+                  <AppText style={[styles.forgotPasswordLink, { color: theme.actionPrimary }]}>
+                    Forgot Password?
+                  </AppText>
                 </Pressable>
               </View>
 
-              {generalError && <AppText style={styles.generalError}>{generalError}</AppText>}
+              {generalError && (
+                <View style={[styles.errorBanner, { backgroundColor: `${theme.error}15` }]}>
+                  <AppText style={[styles.generalError, { color: theme.error }]}>
+                    {generalError}
+                  </AppText>
+                </View>
+              )}
+
               {cooldown > 0 && (
-                <AppText style={styles.cooldownText}>{t(L.retryIn, { seconds: cooldown })}</AppText>
+                <AppText style={[styles.cooldownText, { color: theme.textSecondary }]}>
+                  {t(L.retryIn, { seconds: cooldown })}
+                </AppText>
               )}
             </View>
 
-            <View style={styles.footer}>
+            <View style={styles.actions}>
               <PrimaryButton
                 label={isSubmitting ? L.loggingIn : L.loginCta}
                 onPress={handleSubmit}
                 disabled={isDisabled}
-                style={isSubmitting ? styles.buttonLoading : undefined}
+                style={[
+                  styles.submitButton,
+                  { backgroundColor: theme.actionPrimary },
+                  isSubmitting && styles.buttonLoading,
+                ]}
               />
 
               <View style={styles.registerRow}>
-                <AppText style={styles.registerPrompt}>{L.registerPrompt}</AppText>
+                <AppText style={[styles.registerPrompt, { color: theme.textSecondary }]}>
+                  {L.registerPrompt}
+                </AppText>
                 <Pressable
                   accessibilityRole="button"
                   hitSlop={8}
                   onPress={() => router.push('/register/personal-info')}
                 >
-                  <AppText style={styles.registerLink}>{L.registerCta}</AppText>
+                  <AppText style={[styles.registerLink, { color: theme.actionPrimary }]}>
+                    {L.registerCta}
+                  </AppText>
                 </Pressable>
               </View>
             </View>
@@ -339,162 +381,148 @@ export function LoginScreen() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: Brand.background,
   },
   container: {
     flex: 1,
-    backgroundColor: Brand.background,
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    gap: Spacing.five,
-    paddingVertical: Spacing.four,
+    gap: Spacing.four,
+    paddingVertical: Spacing.three,
   },
-  logoContainer: {
-    flexDirection: 'row',
+  header: {
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: Spacing.two,
-  },
-  brandHeader: {
-    gap: Spacing.two,
+    gap: Spacing.one,
     paddingVertical: Spacing.two,
   },
-  logoMark: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
+  brandRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Brand.primary,
+    gap: Spacing.two,
+    marginBottom: Spacing.two,
   },
-  logoText: {
-    color: Brand.text,
-    fontSize: 21,
+  logoImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+  },
+  appName: {
+    fontSize: 26,
     fontWeight: '800',
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
-  brandCaption: {
-    color: Brand.primary,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.4,
-  },
-  heading: {
-    gap: Spacing.one,
-  },
-  eyebrow: {
-    color: Brand.primary,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-  },
+  // Main Headings -> 800 (ExtraBold)
   title: {
-    color: Brand.text,
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: '800',
     letterSpacing: -0.3,
+    textAlign: 'center',
   },
+  // Body text -> 400 (Regular)
   subtitle: {
-    color: Brand.textSecondary,
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '400',
+    textAlign: 'center',
+  },
+  card: {
+    borderRadius: 20,
+    padding: Spacing.four,
+    gap: Spacing.four,
+    borderWidth: 1,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 2,
   },
   form: {
     gap: Spacing.three,
   },
-  loginCard: {
-    backgroundColor: Brand.white,
-    borderRadius: 24,
-    padding: Spacing.four,
-    gap: Spacing.four,
-    borderWidth: 1,
-    borderColor: Brand.border,
-    shadowColor: '#183B35',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.07,
-    shadowRadius: 18,
-    elevation: 3,
-  },
   field: {
-    gap: Spacing.one,
+    gap: 6,
   },
+  // Small labels -> 500 (Medium)
   fieldLabel: {
-    color: Brand.text,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '500',
   },
   fieldInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    backgroundColor: Brand.inputBackground,
-    borderWidth: 1,
-    borderColor: Brand.border,
-    borderRadius: 14,
+    borderWidth: 1.5,
+    borderRadius: 12,
     paddingHorizontal: Spacing.three,
-    height: 52,
+    height: 48,
   },
+  // Body text input -> 400 (Regular)
   fieldInput: {
     flex: 1,
-    color: Brand.text,
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '400',
     height: '100%',
   },
   visibilityToggle: {
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  generalError: {
-    color: Brand.error,
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  cooldownText: {
-    color: Brand.textSecondary,
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  footer: {
-    gap: Spacing.three,
+  fieldError: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
   },
   forgotPasswordRow: {
     alignItems: 'flex-end',
-    marginTop: -Spacing.one,
+    marginTop: -2,
   },
+  // Subheadings/link -> 600 (SemiBold)
   forgotPasswordLink: {
-    color: Brand.primary,
     fontSize: 13,
     fontWeight: '600',
+  },
+  errorBanner: {
+    borderRadius: 10,
+    padding: Spacing.two,
+  },
+  generalError: {
+    fontSize: 13,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  cooldownText: {
+    fontSize: 13,
+    fontWeight: '400',
+    textAlign: 'center',
+  },
+  actions: {
+    gap: Spacing.three,
+  },
+  submitButton: {
+    borderRadius: 12,
+    paddingVertical: 14,
+  },
+  buttonLoading: {
+    opacity: 0.7,
   },
   registerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.one,
+    paddingTop: Spacing.one,
   },
   registerPrompt: {
-    color: Brand.textSecondary,
     fontSize: 14,
+    fontWeight: '400',
   },
+  // Buttons/CTA -> 700 (Bold)
   registerLink: {
-    color: Brand.primary,
     fontSize: 14,
     fontWeight: '700',
-  },
-  fieldInputContainerError: {
-    borderWidth: 1,
-    borderColor: Brand.error,
-  },
-  fieldError: {
-    color: Brand.error,
-    fontSize: 12,
-    marginTop: Spacing.half,
-  },
-  buttonLoading: {
-    opacity: 0.7,
   },
 });

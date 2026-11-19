@@ -45,7 +45,7 @@ export function messageForApiFailure(result: ApiFailure): string {
 
 export const login = {
   title: 'Welcome back',
-  subtitle: 'Log in to continue to Tap & Pay',
+  subtitle: 'Log in to continue to eYatra',
   emailLabel: 'Email',
   emailPlaceholder: 'you@example.com',
   passwordLabel: 'Password',

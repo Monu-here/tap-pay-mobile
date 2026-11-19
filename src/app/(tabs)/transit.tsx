@@ -1,4 +1,5 @@
 import {AppText, AppTextInput } from '@/components/typography/app-text';
+import { RouteListSkeleton } from '@/components/skeletons/ScreenSkeletons';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -427,6 +428,9 @@ export default function TransitScreen() {
 
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -616,10 +620,7 @@ export default function TransitScreen() {
             </Pressable>
 
             {loading && !refreshing ? (
-              <View style={styles.loadingBox}>
-                <ActivityIndicator size="small" color={Monochrome.textPrimary} />
-                <AppText style={styles.loadingText}>Loading transit routes...</AppText>
-              </View>
+              <RouteListSkeleton count={3} />
             ) : filteredRoutes.length > 0 ? (
               filteredRoutes.map((route) => (
                 <View key={route.id} style={styles.routeCard}>
@@ -696,10 +697,7 @@ export default function TransitScreen() {
         {activeSegment === 'nearby' && (
           <View style={styles.sectionContainer}>
             {loading && !refreshing ? (
-              <View style={styles.loadingBox}>
-                <ActivityIndicator size="small" color={Monochrome.textPrimary} />
-                <AppText style={styles.loadingText}>Finding nearby buses and stops...</AppText>
-              </View>
+              <RouteListSkeleton count={2} />
             ) : null}
             {nearbyError ? (
               <View style={styles.emptyCard}>
@@ -850,10 +848,7 @@ export default function TransitScreen() {
         {activeSegment === 'saved' && (
           <View style={styles.sectionContainer}>
             {loading && !refreshing ? (
-              <View style={styles.loadingBox}>
-                <ActivityIndicator size="small" color={Monochrome.textPrimary} />
-                <AppText style={styles.loadingText}>Loading your saved routes...</AppText>
-              </View>
+              <RouteListSkeleton count={3} />
             ) : filteredRoutes.length > 0 ? (
               filteredRoutes.map((route) => (
                 <View key={route.id} style={styles.routeCard}>
@@ -1326,7 +1321,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: Monochrome.textPrimary,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   routeTitleGroup: {
     flex: 1,
@@ -1641,7 +1635,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: Monochrome.textMuted,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   modalRouteName: {
     fontSize: 18,

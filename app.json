@@ -1,24 +1,24 @@
 {
   "expo": {
-    "name": "tap-pay-mobile",
-    "slug": "tap-pay",
+    "name": "eYatra",
+    "slug": "eyatra",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "tappaymobile",
+    "scheme": "eyatra",
     "userInterfaceStyle": "dark",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.tappay.mobile",
       "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "package": "com.tappay.mobile",
       "googleServicesFile": "./google-services.json",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "backgroundColor": "#111111",
+        "backgroundColor": "#E7FFD0",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
@@ -35,7 +35,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Tap & Pay needs access to your photos so you can upload identity documents during registration."
+          "photosPermission": "eYatra needs access to your photos so you can upload identity documents during registration."
         }
       ],
       [
@@ -51,7 +51,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Tap & Pay uses your location to find nearby buses and stops and to share a driver's live trip location."
+          "locationWhenInUsePermission": "eYatra uses your location to find nearby buses and stops and to share a driver's live trip location."
         }
       ]
     ],
@@ -62,7 +62,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "249829a1-4db6-444c-9c8b-3a8b07e3095d"
+        "projectId": "d5a2c1f0-dfd8-41f1-b3d2-e514ac8a130c"
       }
     },
     "owner": "testafds"

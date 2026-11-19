@@ -1,17 +1,9 @@
 import { AppText } from '@/components/typography/app-text';
-/**
- * Screen — Email + phone OTP verification.
- *
- * One card per channel, showing verified/pending status and, when pending, a
- * 6-digit auto-submitting OTP input with a Send/Resend button on a cooldown.
- * Each successful verify refreshes the stored user (`GET /auth/me`); once both
- * channels are verified the user is sent into the app. `REQUIRE_VERIFICATION`
- * toggles a "Skip for now" escape hatch and how the Android back button behaves.
- */
-
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { Redirect, router } from 'expo-router';
-import { useCallback, useEffect, useRef, type RefObject } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
+  ActivityIndicator,
   BackHandler,
   KeyboardAvoidingView,
   Platform,
@@ -20,11 +12,14 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SymbolView } from 'expo-symbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { PrimaryButton } from '@/components/ui/primary-button';
-import { Brand, Spacing } from '@/constants/theme';
-
+import { Palette, Spacing } from '@/constants/theme';
+import { FontFamilies } from '@/constants/typography';
+import { useTheme } from '@/hooks/use-theme';
 import { getCurrentUser } from '../../auth/services/verification';
 import {
   getRoleDashboardPath,
@@ -39,7 +34,7 @@ import {
   VERIFICATION_CODE_LENGTH,
   VERIFICATION_DEV_CODE_FOR_DISPLAY,
 } from '../config/verification';
-import { useVerification, type VerificationChannelState } from '../hooks/useVerification';
+import { useVerification } from '../hooks/useVerification';
 import { t, verification as V } from '@/constants/strings';
 
 function messageForError(
@@ -57,9 +52,8 @@ function messageForError(
       return 'Your verification code has expired. Request a new code.';
     case 'tooManyAttempts':
       return 'Too many incorrect attempts. Request a new code to continue.';
-    case 'mailSendFailed':
     case 'deliveryFailed':
-      return 'Unable to deliver the verification code. Please try again later.';
+      return 'Unable to deliver SMS code. Please check your network and try again.';
     case 'rateLimited':
       return t(V.error.rateLimited, { seconds: error.params?.seconds ?? 60 });
     case 'network':
@@ -72,114 +66,21 @@ function messageForError(
   }
 }
 
-type ChannelCardProps = {
-  channel: 'email' | 'phone';
-  state: VerificationChannelState;
-  title: string;
-  destination: string;
-  inputRef: RefObject<OtpCodeInputHandle | null>;
-};
-
-function ChannelCard({ channel, state, title, destination, inputRef }: ChannelCardProps) {
-  const errorMessage = messageForError(state.error);
-
-  const resendLabel =
-    state.secondsLeft > 0
-      ? t(V.resendIn, { seconds: state.secondsLeft })
-      : state.codeSent
-        ? V.resendCode
-        : V.sendCode;
-
-  const sentSuccessHint =
-    channel === 'email'
-      ? 'Verification code sent. Check your inbox and spam folder.'
-      : 'Verification code sent. Check your SMS messages.';
-
-  return (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.cardHeaderText}>
-          <AppText style={styles.cardTitle}>{title}</AppText>
-          <AppText style={styles.cardDestination} numberOfLines={1}>
-            {destination}
-          </AppText>
-        </View>
-        <View style={[styles.badge, state.isVerified ? styles.badgeVerified : styles.badgePending]}>
-          <AppText
-            style={[
-              styles.badgeText,
-              state.isVerified ? styles.badgeTextVerified : styles.badgeTextPending,
-            ]}
-          >
-            {state.isVerified ? V.verifiedBadge : V.pendingBadge}
-          </AppText>
-        </View>
-      </View>
-
-      {state.isVerified ? (
-        <View style={styles.verifiedRow}>
-          <View style={styles.verifiedDot}>
-            <AppText style={styles.verifiedDotText}>✓</AppText>
-          </View>
-          <AppText style={styles.verifiedText}>{V.verifiedBadge}</AppText>
-        </View>
-      ) : (
-        <View style={styles.cardBody}>
-          <AppText style={styles.helper}>{V.codeHelper}</AppText>
-          <OtpCodeInput
-            ref={inputRef}
-            value={state.code}
-            onChange={state.setCode}
-            onComplete={state.submit}
-            autoFocus
-            hasError={Boolean(errorMessage)}
-            length={VERIFICATION_CODE_LENGTH}
-          />
-          {state.codeSent && !errorMessage && (
-            <AppText style={styles.sentHint}>{sentSuccessHint}</AppText>
-          )}
-          {errorMessage && <AppText style={styles.error}>{errorMessage}</AppText>}
-          <PrimaryButton
-            label={
-              state.status === 'sending'
-                ? V.sending
-                : state.status === 'verifying'
-                  ? V.verifying
-                  : resendLabel
-            }
-            onPress={state.send}
-            disabled={state.isBusy || state.secondsLeft > 0}
-          />
-        </View>
-      )}
-    </View>
-  );
-}
-
 export function VerificationScreen() {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const { user } = useSession();
   const dashboardPath = getRoleDashboardPath(getUserRole(user));
 
-  const emailInputRef = useRef<OtpCodeInputHandle | null>(null);
   const phoneInputRef = useRef<OtpCodeInputHandle | null>(null);
-
-  const emailVerified = user?.email_verified === true;
   const phoneVerified = user?.phone_verified === true;
 
-  // Refetch the authoritative user after each successful verify so the stored
-  // session (and this screen) reflect the server's flags.
+  // Refetch user after successful verify so stored session reflects server state
   const refreshUser = useCallback(async () => {
     const result = await getCurrentUser();
     if (result.ok) await setSession({ user: result.data });
   }, []);
 
-  const email = useVerification({
-    channel: 'email',
-    verified: emailVerified,
-    onVerified: refreshUser,
-    inputRef: emailInputRef,
-  });
   const phone = useVerification({
     channel: 'phone',
     verified: phoneVerified,
@@ -187,22 +88,21 @@ export function VerificationScreen() {
     inputRef: phoneInputRef,
   });
 
-  // On open: require a saved token. No token -> back to login (cannot verify anonymously).
+  // Guard: require saved token
   useEffect(() => {
     if (!getSession().token) {
       router.replace('/login');
     }
   }, []);
 
-  // Both channels verified -> into the app.
+  // Phone verified -> proceed to dashboard
   useEffect(() => {
-    if (emailVerified && phoneVerified) {
+    if (phoneVerified) {
       router.replace(dashboardPath as any);
     }
-  }, [dashboardPath, emailVerified, phoneVerified]);
+  }, [dashboardPath, phoneVerified]);
 
-  // Android hardware back: when verification is required keep the user here,
-  // otherwise treat it like "skip".
+  // Android hardware back
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (!REQUIRE_VERIFICATION) {
@@ -214,64 +114,211 @@ export function VerificationScreen() {
   }, [dashboardPath]);
 
   if (!user) {
-    // Session missing (e.g., a restart before persistence lands): back to login.
     return <Redirect href="/login" />;
   }
 
+  const errorMessage = messageForError(phone.error);
+
+  const resendLabel =
+    phone.secondsLeft > 0
+      ? `Resend code in ${phone.secondsLeft}s`
+      : phone.codeSent
+      ? 'Resend SMS Code'
+      : 'Send SMS Code';
+
+  const userPhone = user.phone || 'Your registered phone';
+
   return (
     <KeyboardAvoidingView
-      style={styles.flex}
+      style={[styles.container, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={[styles.headerRow, { paddingTop: insets.top + Spacing.two }]}>
-        {!REQUIRE_VERIFICATION && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={V.back}
-            hitSlop={8}
-            onPress={() => router.replace(dashboardPath as any)}
-            style={styles.backButton}
-          >
-            <AppText style={styles.backIcon}>←</AppText>
-          </Pressable>
-        )}
-      </View>
+      <StatusBar style="light" />
+
+      {/* Branded Header */}
+      <LinearGradient
+        colors={['#003049', '#001824']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.headerGradient, { paddingTop: insets.top + 8 }]}
+      >
+        <View style={styles.headerRow}>
+          {!REQUIRE_VERIFICATION ? (
+            <AppBackButton
+              accessibilityLabel="Back to Home"
+              onPress={() => router.replace(dashboardPath as any)}
+            />
+          ) : (
+            <View style={{ width: 38 }} />
+          )}
+
+          <View style={styles.headerCenter}>
+            <AppText style={styles.headerSubtitle}>eYatra Security</AppText>
+            <AppText style={styles.headerTitle}>Phone Verification</AppText>
+          </View>
+
+          {!REQUIRE_VERIFICATION ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.replace(dashboardPath as any)}
+              style={styles.skipBtn}
+            >
+              <AppText style={styles.skipText}>Skip</AppText>
+            </Pressable>
+          ) : (
+            <View style={{ width: 38 }} />
+          )}
+        </View>
+      </LinearGradient>
 
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.five }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Spacing.five }]}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.heading}>
-          <AppText style={styles.title}>{V.title}</AppText>
-          <AppText style={styles.subtitle}>{V.subtitle}</AppText>
+        {/* Verification Card */}
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: theme.isDark ? '#002235' : Palette.white,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          {/* Card Icon & Header */}
+          <View style={styles.cardHeader}>
+            <View style={styles.iconBox}>
+              <SymbolView
+                name={{ ios: 'phone.badge.checkmark', android: 'verified_user', web: 'verified_user' }}
+                size={24}
+                tintColor={Palette.crimsonRed}
+              />
+            </View>
+
+            <View style={styles.cardHeaderText}>
+              <AppText style={[styles.cardTitle, { color: theme.text }]}>
+                Verify Mobile Number
+              </AppText>
+              <AppText style={[styles.cardDestination, { color: theme.textSecondary }]}>
+                {userPhone}
+              </AppText>
+            </View>
+
+            <View
+              style={[
+                styles.badge,
+                phone.isVerified ? styles.badgeVerified : styles.badgePending,
+              ]}
+            >
+              <AppText
+                style={[
+                  styles.badgeText,
+                  phone.isVerified ? styles.badgeTextVerified : styles.badgeTextPending,
+                ]}
+              >
+                {phone.isVerified ? 'VERIFIED' : 'PENDING'}
+              </AppText>
+            </View>
+          </View>
+
+          {phone.isVerified ? (
+            <View style={styles.verifiedRow}>
+              <View style={styles.verifiedDot}>
+                <AppText style={styles.verifiedDotText}>✓</AppText>
+              </View>
+              <AppText style={[styles.verifiedText, { color: '#1B8A5A' }]}>
+                Mobile number verified successfully. Redirecting...
+              </AppText>
+            </View>
+          ) : (
+            <View style={styles.cardBody}>
+              <AppText style={[styles.helper, { color: theme.textSecondary }]}>
+                Enter the 6-digit SMS verification code sent to your mobile.
+              </AppText>
+
+              {/* 6-Digit OTP Code Input */}
+              <View style={styles.otpInputWrap}>
+                <OtpCodeInput
+                  ref={phoneInputRef}
+                  value={phone.code}
+                  onChange={phone.setCode}
+                  onComplete={phone.submit}
+                  autoFocus
+                  hasError={Boolean(errorMessage)}
+                  length={VERIFICATION_CODE_LENGTH}
+                />
+              </View>
+
+              {phone.codeSent && !errorMessage && (
+                <AppText style={[styles.sentHint, { color: '#1B8A5A' }]}>
+                  SMS code sent. Please check your messages.
+                </AppText>
+              )}
+
+              {errorMessage && (
+                <View style={styles.errorBox}>
+                  <AppText style={styles.errorText}>{errorMessage}</AppText>
+                </View>
+              )}
+
+              {/* Action Buttons */}
+              <View style={styles.actions}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => phone.submit(phone.code)}
+                  disabled={phone.code.length !== VERIFICATION_CODE_LENGTH || phone.isBusy}
+                  style={[
+                    styles.verifyBtn,
+                    (phone.code.length !== VERIFICATION_CODE_LENGTH || phone.isBusy) &&
+                      styles.disabledBtn,
+                  ]}
+                >
+                  <LinearGradient
+                    colors={[Palette.crimsonRed, Palette.deepMaroon]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.verifyBtnGradient}
+                  >
+                    {phone.isBusy ? (
+                      <ActivityIndicator size="small" color={Palette.white} />
+                    ) : (
+                      <AppText style={styles.verifyBtnText}>Verify Code</AppText>
+                    )}
+                  </LinearGradient>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={phone.send}
+                  disabled={phone.isBusy || phone.secondsLeft > 0}
+                  style={styles.resendBtn}
+                >
+                  <AppText
+                    style={[
+                      styles.resendText,
+                      {
+                        color:
+                          phone.secondsLeft > 0
+                            ? theme.textMuted
+                            : Palette.crimsonRed,
+                      },
+                    ]}
+                  >
+                    {resendLabel}
+                  </AppText>
+                </Pressable>
+              </View>
+            </View>
+          )}
         </View>
 
-        <ChannelCard
-          channel="email"
-          state={email}
-          title={V.emailSectionTitle}
-          destination={user.email || '—'}
-          inputRef={emailInputRef}
-        />
-        <ChannelCard
-          channel="phone"
-          state={phone}
-          title={V.phoneSectionTitle}
-          destination={user.phone || '—'}
-          inputRef={phoneInputRef}
-        />
-
         {VERIFICATION_DEV_CODE_FOR_DISPLAY && (
-          <AppText style={styles.devHint}>{V.devCodeHint}</AppText>
-        )}
-
-        {!REQUIRE_VERIFICATION && (
-          <PrimaryButton
-            label={V.skip}
-            style={styles.skipButton}
-            onPress={() => router.replace(dashboardPath as any)}
-          />
+          <AppText style={[styles.devHint, { color: theme.textMuted }]}>
+            {V.devCodeHint}
+          </AppText>
         )}
       </ScrollView>
     </KeyboardAvoidingView>
@@ -279,142 +326,203 @@ export function VerificationScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: {
+  container: {
     flex: 1,
-    backgroundColor: Brand.white,
+  },
+  headerGradient: {
+    paddingHorizontal: Spacing.four,
+    paddingBottom: Spacing.three,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.four,
+    justifyContent: 'space-between',
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Brand.inputBackground,
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backIcon: {
-    fontSize: 18,
-    color: Brand.text,
-    fontWeight: '600',
+  headerCenter: {
+    alignItems: 'center',
   },
-  content: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
-    gap: Spacing.four,
+  headerSubtitle: {
+    color: Palette.slateBlue,
+    fontFamily: FontFamilies.medium,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
-  heading: {
-    gap: Spacing.one,
+  headerTitle: {
+    color: Palette.warmCream,
+    fontFamily: FontFamilies.extraBold,
+    fontSize: 20,
+    letterSpacing: -0.3,
   },
-  title: {
-    color: Brand.text,
-    fontSize: 26,
-    fontWeight: '700',
-    letterSpacing: -0.4,
+  skipBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
-  subtitle: {
-    color: Brand.textSecondary,
-    fontSize: 15,
-    lineHeight: 22,
+  skipText: {
+    fontFamily: FontFamilies.bold,
+    fontSize: 13,
+    color: Palette.warmCream,
+  },
+  scrollContent: {
+    padding: Spacing.four,
+    gap: 16,
   },
   card: {
-    borderRadius: 16,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: Brand.divider,
-    backgroundColor: Brand.white,
-    padding: Spacing.three,
-    gap: Spacing.three,
+    padding: 20,
+    gap: 18,
+    shadowColor: Palette.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.two,
+    gap: 12,
+  },
+  iconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(193, 18, 31, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardHeaderText: {
     flex: 1,
     gap: 2,
   },
   cardTitle: {
-    color: Brand.text,
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: FontFamilies.bold,
+    fontSize: 16,
+    lineHeight: 20,
   },
   cardDestination: {
-    color: Brand.textSecondary,
-    fontSize: 14,
+    fontFamily: FontFamilies.regular,
+    fontSize: 13,
   },
   badge: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.one,
-    borderRadius: 999,
-  },
-  badgeVerified: {
-    backgroundColor: Brand.teal.light,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   badgePending: {
-    backgroundColor: Brand.inputBackground,
+    backgroundColor: 'rgba(194, 120, 3, 0.12)',
+  },
+  badgeVerified: {
+    backgroundColor: 'rgba(27, 138, 90, 0.12)',
   },
   badgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  badgeTextVerified: {
-    color: Brand.teal.text,
+    fontFamily: FontFamilies.extraBold,
+    fontSize: 10,
+    letterSpacing: 0.5,
   },
   badgeTextPending: {
-    color: Brand.textSecondary,
+    color: '#C27803',
+  },
+  badgeTextVerified: {
+    color: '#1B8A5A',
   },
   cardBody: {
-    gap: Spacing.three,
+    gap: 16,
   },
   helper: {
-    color: Brand.textSecondary,
+    fontFamily: FontFamilies.regular,
     fontSize: 13,
+    lineHeight: 19,
+  },
+  otpInputWrap: {
+    marginVertical: 4,
   },
   sentHint: {
-    color: Brand.teal.text,
-    fontSize: 13,
-    fontWeight: '500',
+    fontFamily: FontFamilies.medium,
+    fontSize: 12,
   },
-  error: {
-    color: Brand.error,
+  errorBox: {
+    backgroundColor: '#FDF0D5',
+    borderColor: Palette.crimsonRed,
+    borderWidth: 1,
+    padding: 10,
+    borderRadius: 12,
+  },
+  errorText: {
+    fontFamily: FontFamilies.medium,
+    fontSize: 12,
+    color: Palette.crimsonRed,
+  },
+  actions: {
+    gap: 12,
+    marginTop: 4,
+  },
+  verifyBtn: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: Palette.crimsonRed,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  verifyBtnGradient: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  verifyBtnText: {
+    fontFamily: FontFamilies.bold,
+    fontSize: 15,
+    color: Palette.white,
+  },
+  disabledBtn: {
+    opacity: 0.5,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  resendBtn: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  resendText: {
+    fontFamily: FontFamilies.bold,
     fontSize: 13,
-    fontWeight: '500',
   },
   verifiedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: 8,
+    paddingVertical: 8,
   },
   verifiedDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Brand.teal.primary,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#1B8A5A',
     alignItems: 'center',
     justifyContent: 'center',
   },
   verifiedDotText: {
-    color: Brand.white,
-    fontSize: 14,
-    fontWeight: '700',
+    color: Palette.white,
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   verifiedText: {
-    color: Brand.teal.text,
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FontFamilies.semiBold,
+    fontSize: 13,
   },
   devHint: {
-    color: Brand.textSecondary,
-    fontSize: 12,
+    fontSize: 11,
     textAlign: 'center',
-    lineHeight: 18,
-  },
-  skipButton: {
-    backgroundColor: Brand.inputBackground,
+    fontStyle: 'italic',
   },
 });

@@ -1,8 +1,9 @@
 import { AppText } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/ui/primary-button';
@@ -59,15 +60,7 @@ export function UserTypeScreen() {
           { paddingTop: insets.top + Spacing.two, paddingHorizontal: Spacing.four },
         ]}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={8}
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
-          <AppText style={styles.backIcon}>←</AppText>
-        </Pressable>
+        <AppBackButton fallbackHref="/register/personal-info" />
         <View style={styles.stepIndicator}>
           <AppText style={styles.stepLabel}>Step 2 of 7</AppText>
           <View style={styles.progressTrack}>
@@ -108,14 +101,11 @@ export function UserTypeScreen() {
             disabled={!selected}
             style={!selected ? styles.buttonDisabled : undefined}
           />
-          <Pressable
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => router.back()}
-            style={styles.backTextButton}
-          >
-            <AppText style={styles.backText}>Back</AppText>
-          </Pressable>
+          <AppBackButton
+            accessibilityLabel="Go to previous registration step"
+            fallbackHref="/register/personal-info"
+            style={{ alignSelf: 'center' }}
+          />
         </View>
       </ScrollView>
     </View>

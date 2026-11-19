@@ -1,27 +1,38 @@
 import {AppText, AppTextInput } from '@/components/typography/app-text';
+import {
+  DriverDashboardSkeleton,
+  RouteListSkeleton,
+  TransactionSkeleton,
+} from '@/components/skeletons/ScreenSkeletons';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AppState,
   ActivityIndicator,
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Switch,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 
-import { Monochrome, Spacing } from '@/constants/theme';
+import { DriverColors as Monochrome, Spacing } from '@/constants/theme';
 import { logout } from '@/features/auth/services/auth';
 import { getSession } from '@/features/auth/session';
 import { useNotificationCount } from '@/features/notifications/useNotificationCount';
+import { useKeyboardDismissOnBlur } from '@/hooks/use-keyboard-dismiss-on-blur';
 import {
   endTrip,
   getCurrentDriverBus,
@@ -49,6 +60,7 @@ type DriverTab = 'console' | 'route' | 'tickets' | 'account';
 
 export default function DriverConsoleScreen() {
   const insets = useSafeAreaInsets();
+  useKeyboardDismissOnBlur();
   const session = getSession();
   const { unreadCount } = useNotificationCount();
 
@@ -131,6 +143,7 @@ export default function DriverConsoleScreen() {
   }, []);
 
   const submitFuelExpense = async () => {
+    Keyboard.dismiss();
     const amount = fuelAmount.trim();
     const match = /^(\d{1,8})(?:\.(\d{1,2}))?$/.exec(amount);
     const amountMinor = match ? Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0')) : 0;
@@ -170,6 +183,7 @@ export default function DriverConsoleScreen() {
   };
 
   const submitOperationalReport = async () => {
+    Keyboard.dismiss();
     setReportError(null);
     const inspection = reportType === 'inspection';
     if (!inspection && (reportCategory.trim().length < 2 || reportDescription.trim().length < 5)) {
@@ -461,7 +475,12 @@ export default function DriverConsoleScreen() {
       <StatusBar style="dark" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <LinearGradient
+        colors={['#003049', '#001824']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
         <View style={styles.headerLeft}>
           <View style={styles.appBadge}>
             <SymbolView
@@ -526,7 +545,7 @@ export default function DriverConsoleScreen() {
             </AppText>
           </Pressable>
         </View>
-      </View>
+      </LinearGradient>
 
       {/* Main Tab Content */}
       <View style={styles.contentArea}>
@@ -538,6 +557,10 @@ export default function DriverConsoleScreen() {
               <RefreshControl refreshing={refreshing} onRefresh={() => loadDriverData(true)} tintColor={Monochrome.textPrimary} />
             }
           >
+            {loading && !refreshing ? (
+              <DriverDashboardSkeleton />
+            ) : (
+              <>
             {loadError ? (
               <View style={styles.errorNotice}>
                 <AppText style={styles.errorNoticeText}>{loadError}</AppText>
@@ -693,12 +716,7 @@ export default function DriverConsoleScreen() {
                 </Pressable>
               </View>
 
-              {loading && !refreshing ? (
-                <View style={styles.loadingBox}>
-                  <ActivityIndicator size="large" color={Monochrome.textPrimary} />
-                  <AppText style={styles.loadingText}>Fetching assigned trip shifts...</AppText>
-                </View>
-              ) : trips.length > 0 ? (
+              {trips.length > 0 ? (
                 trips.map((trip) => {
                   const isProgress = trip.status === 'in_progress';
                   const isDone = trip.status === 'completed';
@@ -806,6 +824,8 @@ export default function DriverConsoleScreen() {
                 </View>
               )}
             </View>
+              </>
+            )}
           </ScrollView>
         )}
 
@@ -822,10 +842,7 @@ export default function DriverConsoleScreen() {
             </View>
 
             {routeLoading && !routeInfo ? (
-              <View style={styles.loadingBox}>
-                <ActivityIndicator size="large" color={Monochrome.textPrimary} />
-                <AppText style={styles.loadingText}>Loading assigned route details...</AppText>
-              </View>
+              <RouteListSkeleton count={2} />
             ) : routeInfo?.route ? (
               <>
                 <View style={styles.routeHeaderCard}>
@@ -889,10 +906,7 @@ export default function DriverConsoleScreen() {
             </View>
 
             {ticketsLoading && tickets.length === 0 ? (
-              <View style={styles.loadingBox}>
-                <ActivityIndicator size="large" color={Monochrome.textPrimary} />
-                <AppText style={styles.loadingText}>Fetching fare tickets...</AppText>
-              </View>
+              <TransactionSkeleton count={4} />
             ) : tickets.length > 0 ? (
               tickets.map((tkt) => (
                 <View key={tkt.id} style={styles.ticketCard}>
@@ -1096,18 +1110,33 @@ export default function DriverConsoleScreen() {
         visible={reportModalVisible}
         animationType="slide"
         transparent
-        onRequestClose={() => setReportModalVisible(false)}
+        onRequestClose={() => {
+          Keyboard.dismiss();
+          setReportModalVisible(false);
+        }}
       >
-        <View style={styles.reportModalOverlay}>
-          <ScrollView
-            contentContainerStyle={[styles.reportModalContent, { paddingBottom: insets.bottom + Spacing.lg }]}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={styles.sectionHeaderRow}>
+        <KeyboardAvoidingView
+          style={styles.modalKeyboardArea}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <View style={styles.reportModalOverlay}>
+              <Pressable style={StyleSheet.absoluteFill} onPress={Keyboard.dismiss} />
+              <ScrollView
+                style={styles.reportModalScroll}
+                contentContainerStyle={[styles.reportModalContent, { paddingBottom: insets.bottom + Spacing.lg }]}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                automaticallyAdjustKeyboardInsets
+              >
+                <View style={styles.sectionHeaderRow}>
               <AppText style={styles.reportModalTitle}>
                 {reportType === 'inspection' ? 'Vehicle inspection' : 'Operational report'}
               </AppText>
-              <Pressable accessibilityRole="button" onPress={() => setReportModalVisible(false)}>
+              <Pressable accessibilityRole="button" onPress={() => {
+                Keyboard.dismiss();
+                setReportModalVisible(false);
+              }}>
                 <AppText style={styles.refreshLink}>Close</AppText>
               </Pressable>
             </View>
@@ -1199,21 +1228,41 @@ export default function DriverConsoleScreen() {
                 ? <ActivityIndicator color={Monochrome.actionPrimaryText} />
                 : <AppText style={styles.reportSubmitText}>Submit report</AppText>}
             </Pressable>
-          </ScrollView>
-        </View>
+              </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
         visible={fuelModalVisible}
         animationType="slide"
         transparent
-        onRequestClose={() => setFuelModalVisible(false)}
+        onRequestClose={() => {
+          Keyboard.dismiss();
+          setFuelModalVisible(false);
+        }}
       >
-        <View style={styles.reportModalOverlay}>
-          <View style={[styles.reportModalContent, { paddingBottom: insets.bottom + Spacing.lg }]}>
+        <KeyboardAvoidingView
+          style={styles.modalKeyboardArea}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <View style={styles.reportModalOverlay}>
+              <Pressable style={StyleSheet.absoluteFill} onPress={Keyboard.dismiss} />
+              <ScrollView
+                style={styles.reportModalScroll}
+                contentContainerStyle={[styles.reportModalContent, { paddingBottom: insets.bottom + Spacing.lg }]}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                automaticallyAdjustKeyboardInsets
+              >
             <View style={styles.sectionHeaderRow}>
               <AppText style={styles.reportModalTitle}>Record fuel expense</AppText>
-              <Pressable accessibilityRole="button" onPress={() => setFuelModalVisible(false)}>
+              <Pressable accessibilityRole="button" onPress={() => {
+                Keyboard.dismiss();
+                setFuelModalVisible(false);
+              }}>
                 <AppText style={styles.refreshLink}>Close</AppText>
               </Pressable>
             </View>
@@ -1266,8 +1315,10 @@ export default function DriverConsoleScreen() {
                 ? <ActivityIndicator color={Monochrome.actionPrimaryText} />
                 : <AppText style={styles.reportSubmitText}>Save fuel expense</AppText>}
             </Pressable>
-          </View>
-        </View>
+              </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1666,6 +1717,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
+  },
+  modalKeyboardArea: {
+    flex: 1,
+  },
+  reportModalScroll: {
+    maxHeight: '90%',
   },
   reportModalContent: {
     gap: Spacing.md,

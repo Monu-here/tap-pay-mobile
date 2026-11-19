@@ -1,7 +1,7 @@
-import {AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { useCallback, useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { router } from 'expo-router';
 import {
   ActivityIndicator,
   Pressable,
@@ -122,16 +122,14 @@ export default function CompanyNoticesScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
       <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.canGoBack() ? router.back() : router.replace('/portal/company')}
-          style={styles.backButton}
-        >
-          <AppText style={styles.backText}>‹ Company</AppText>
-        </Pressable>
+        <AppBackButton fallbackHref="/portal/company" accessibilityLabel="Back to company" />
         <AppText style={styles.title}>Service notices</AppText>
       </View>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+      >
         <View style={styles.card}>
           <AppText style={styles.sectionTitle}>Publish an update</AppText>
           <AppText style={styles.helper}>Notices are visible to passengers while active and are recorded with your company account.</AppText>

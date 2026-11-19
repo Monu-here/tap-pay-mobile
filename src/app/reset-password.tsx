@@ -1,13 +1,14 @@
-import {AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   View,
+  type TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -28,6 +29,9 @@ export default function ResetPasswordScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const tokenInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  const confirmationInputRef = useRef<TextInput>(null);
 
   const handleSubmit = async () => {
     if (!email.trim() || !token.trim()) {
@@ -67,15 +71,16 @@ export default function ResetPasswordScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <Pressable onPress={() => router.replace('/login')} style={styles.backButton}>
-            <SymbolView
-              name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-              size={22}
-              tintColor={Brand.text}
-            />
-            <AppText style={styles.backText}>Cancel and Sign In</AppText>
-          </Pressable>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        >
+          <AppBackButton
+            accessibilityLabel="Back to sign in"
+            onPress={() => router.replace('/login')}
+          />
 
           <View style={styles.header}>
             <AppText style={styles.title}>Reset Password</AppText>
@@ -117,6 +122,9 @@ export default function ResetPasswordScreen() {
                     placeholderTextColor={Brand.textSecondary}
                     keyboardType="email-address"
                     autoCapitalize="none"
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => tokenInputRef.current?.focus()}
                   />
                 </View>
               </View>
@@ -125,6 +133,7 @@ export default function ResetPasswordScreen() {
                 <AppText style={styles.fieldLabel}>Reset Token</AppText>
                 <View style={styles.inputContainer}>
                   <AppTextInput
+                    ref={tokenInputRef}
                     style={styles.input}
                     value={token}
                     onChangeText={(val) => {
@@ -135,6 +144,9 @@ export default function ResetPasswordScreen() {
                     placeholderTextColor={Brand.textSecondary}
                     autoCapitalize="none"
                     autoCorrect={false}
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => passwordInputRef.current?.focus()}
                   />
                 </View>
               </View>
@@ -143,6 +155,7 @@ export default function ResetPasswordScreen() {
                 <AppText style={styles.fieldLabel}>New Password</AppText>
                 <View style={styles.inputContainer}>
                   <AppTextInput
+                    ref={passwordInputRef}
                     style={styles.input}
                     value={password}
                     onChangeText={(val) => {
@@ -152,6 +165,9 @@ export default function ResetPasswordScreen() {
                     placeholder="At least 8 characters"
                     placeholderTextColor={Brand.textSecondary}
                     secureTextEntry
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => confirmationInputRef.current?.focus()}
                   />
                 </View>
               </View>
@@ -160,6 +176,7 @@ export default function ResetPasswordScreen() {
                 <AppText style={styles.fieldLabel}>Confirm New Password</AppText>
                 <View style={styles.inputContainer}>
                   <AppTextInput
+                    ref={confirmationInputRef}
                     style={styles.input}
                     value={passwordConfirmation}
                     onChangeText={(val) => {
@@ -169,6 +186,8 @@ export default function ResetPasswordScreen() {
                     placeholder="Re-enter password"
                     placeholderTextColor={Brand.textSecondary}
                     secureTextEntry
+                    returnKeyType="go"
+                    onSubmitEditing={handleSubmit}
                   />
                 </View>
               </View>

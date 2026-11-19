@@ -1,7 +1,7 @@
-import {AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { useCallback, useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { router } from 'expo-router';
 import {
   ActivityIndicator,
   Pressable,
@@ -190,12 +190,14 @@ export default function CompanyFleetLogsScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" onPress={() => router.canGoBack() ? router.back() : router.replace('/portal/company')} style={styles.back}>
-          <AppText style={styles.backText}>‹ Company Fleet</AppText>
-        </Pressable>
+        <AppBackButton fallbackHref="/portal/company" accessibilityLabel="Back to company fleet" />
         <AppText style={styles.pageTitle}>Maintenance &amp; fuel</AppText>
       </View>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+      >
         <View style={styles.tabs}>
           {(['maintenance', 'fuel'] as const).map((tab) => (
             <Pressable key={tab} accessibilityRole="button" onPress={() => { setActiveTab(tab); setError(null); }} style={[styles.tab, activeTab === tab && styles.tabActive]}>

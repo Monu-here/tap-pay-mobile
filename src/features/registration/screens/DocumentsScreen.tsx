@@ -1,11 +1,11 @@
 import { AppText } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   View,
@@ -111,15 +111,7 @@ export function DocumentsScreen() {
           { paddingTop: insets.top + Spacing.two, paddingHorizontal: Spacing.four },
         ]}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={8}
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
-          <AppText style={styles.backIcon}>←</AppText>
-        </Pressable>
+        <AppBackButton fallbackHref="/register/user-type" />
         <View style={styles.stepIndicator}>
           <AppText style={styles.stepLabel}>Step 3 of 7</AppText>
           <View style={styles.progressTrack}>
@@ -134,6 +126,8 @@ export function DocumentsScreen() {
           { paddingBottom: insets.bottom + Spacing.five },
         ]}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headingBlock}>
@@ -255,14 +249,11 @@ export function DocumentsScreen() {
 
         <View style={styles.footer}>
           <PrimaryButton label="Continue" onPress={handleContinue} />
-          <Pressable
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => router.back()}
-            style={styles.backTextButton}
-          >
-            <AppText style={styles.backText}>Back</AppText>
-          </Pressable>
+          <AppBackButton
+            accessibilityLabel="Go to previous registration step"
+            fallbackHref="/register/user-type"
+            style={{ alignSelf: 'center' }}
+          />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

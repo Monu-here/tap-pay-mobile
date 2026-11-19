@@ -1,81 +1,79 @@
-import {AppText, AppTextInput } from '@/components/typography/app-text';
-import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  AppState,
   ActivityIndicator,
-  Alert,
+  AppState,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Switch,
   View,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SymbolView } from 'expo-symbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import { Monochrome, Spacing } from '@/constants/theme';
-import { fcmDestination, isFcmAvailable, registerCurrentDeviceForFcm } from '@/features/notifications/fcm';
+
+import { AppText } from '@/components/typography/app-text';
+import { NotificationSkeleton } from '@/components/skeletons/ScreenSkeletons';
+import { AppBackButton } from '@/components/ui/app-back-button';
+import { DriverColors, Palette, Spacing } from '@/constants/theme';
+import { FontFamilies } from '@/constants/typography';
+import { useTheme } from '@/hooks/use-theme';
 import { getSession } from '@/features/auth/session';
+import {
+  fcmDestination,
+  isFcmAvailable,
+  registerCurrentDeviceForFcm,
+} from '@/features/notifications/fcm';
 import {
   getNotifications,
   markAllNotificationsRead,
   markNotificationRead,
-  getProfile,
-  updateProfile,
   type NotificationItem,
 } from '@/features/passenger/services/passengerApi';
 
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
-  const isPassenger = getSession().user?.type === 'passenger';
+  const baseTheme = useTheme();
+  const isDriver = getSession().user?.type === 'driver';
+  const theme = isDriver
+    ? {
+        ...baseTheme,
+        ...DriverColors,
+        text: DriverColors.textPrimary,
+        borderLight: DriverColors.border,
+        isDark: false,
+      }
+    : baseTheme;
+  const actionColor = isDriver ? DriverColors.actionPrimary : Palette.crimsonRed;
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [lowBalanceEnabled, setLowBalanceEnabled] = useState(false);
-  const [lowBalanceThreshold, setLowBalanceThreshold] = useState('5000');
-  const [savingPreferences, setSavingPreferences] = useState(false);
-  const [preferenceError, setPreferenceError] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [registeringPush, setRegisteringPush] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const loadNotifications = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
     try {
-      const [res, profileResult] = await Promise.all([
-        getNotifications(),
-        isPassenger ? getProfile() : Promise.resolve(null),
-      ]);
+      const res = await getNotifications();
       if (res.ok && res.data) {
         setNotifications(res.data.notifications || []);
+        setErrorMsg(null);
       } else {
-        setPreferenceError(res.message || 'Could not load notifications.');
+        setErrorMsg(res.message || 'Could not load notifications.');
       }
-      if (profileResult?.ok && profileResult.data) {
-        const userValue = profileResult.data.user;
-        const user = userValue && typeof userValue === 'object' && !Array.isArray(userValue)
-          ? userValue as Record<string, unknown>
-          : profileResult.data;
-        const preferencesValue = user.preferences;
-        const preferences = preferencesValue && typeof preferencesValue === 'object' && !Array.isArray(preferencesValue)
-          ? preferencesValue as Record<string, unknown>
-          : {};
-        setLowBalanceEnabled(preferences.low_balance_alerts_enabled === true);
-        setLowBalanceThreshold(String(preferences.low_balance_threshold_minor ?? 5000));
-      } else if (profileResult && !profileResult.ok) {
-        setPreferenceError(profileResult.message || 'Could not load notification preferences.');
-      }
-    } catch (error) {
-      setPreferenceError(error instanceof Error ? error.message : 'Network error loading notifications.');
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Network error loading notifications.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [isPassenger]);
+  }, []);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -96,87 +94,47 @@ export default function NotificationsScreen() {
         })
         .catch(() => {});
     }
+
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') void loadNotifications(true);
     });
+
     return () => {
       active = false;
       subscription.remove();
     };
   }, [loadNotifications]);
 
-  const handleMarkRead = async (id: string) => {
+  const handleMarkRead = async (id: string | number) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n)),
+    );
     try {
-      const result = await markNotificationRead(id);
-      if (!result.ok) {
-        Alert.alert('Notification not updated', result.message || 'Please try again.');
-        return;
-      }
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n)),
-      );
-    } catch (error) {
-      Alert.alert('Notification not updated', error instanceof Error ? error.message : 'Network error.');
+      await markNotificationRead(String(id));
+    } catch {
+      // Background action
     }
   };
 
   const handleMarkAllRead = async () => {
+    const now = new Date().toISOString();
+    setNotifications((prev) => prev.map((n) => ({ ...n, read_at: now })));
     try {
-      const result = await markAllNotificationsRead();
-      if (!result.ok) {
-        Alert.alert('Notifications not updated', result.message || 'Please try again.');
-        return;
-      }
-      setNotifications((prev) =>
-        prev.map((n) => ({ ...n, read_at: new Date().toISOString() })),
-      );
-    } catch (error) {
-      Alert.alert('Notifications not updated', error instanceof Error ? error.message : 'Network error.');
-    }
-  };
-
-  const savePreferences = async () => {
-    const thresholdMinor = Number(lowBalanceThreshold);
-    if (!Number.isSafeInteger(thresholdMinor) || thresholdMinor < 1 || thresholdMinor > 10000000) {
-      setPreferenceError('Set a whole-paisa threshold from 1 to 10000000 when alerts are enabled.');
-      return;
-    }
-    setSavingPreferences(true);
-    setPreferenceError(null);
-    try {
-      const result = await updateProfile({
-        preferences: {
-          low_balance_alerts_enabled: lowBalanceEnabled,
-          low_balance_threshold_minor: thresholdMinor,
-        },
-      });
-      if (!result.ok) {
-        setPreferenceError(result.message || 'Could not save notification preferences.');
-        return;
-      }
-      Alert.alert('Preferences saved', lowBalanceEnabled
-        ? `You will be notified when your wallet falls below NPR ${(thresholdMinor / 100).toFixed(2)}.`
-        : 'Low-balance notifications are turned off.');
-    } catch (error) {
-      setPreferenceError(error instanceof Error ? error.message : 'Network error saving preferences.');
-    } finally {
-      setSavingPreferences(false);
+      await markAllNotificationsRead();
+    } catch {
+      // Background action
     }
   };
 
   const enablePush = async () => {
     setRegisteringPush(true);
-    setPreferenceError(null);
     try {
-      const result = await registerCurrentDeviceForFcm(true);
-      if (!result.ok) {
-        setPushEnabled(false);
-        setPreferenceError(result.message);
-        return;
+      const token = await registerCurrentDeviceForFcm();
+      if (token) {
+        setPushEnabled(true);
       }
-      setPushEnabled(true);
-    } catch (error) {
-      setPreferenceError(error instanceof Error ? error.message : 'FCM push registration failed.');
+    } catch {
+      // Ignored
     } finally {
       setRegisteringPush(false);
     }
@@ -185,38 +143,63 @@ export default function NotificationsScreen() {
   const openNotification = async (item: NotificationItem) => {
     if (!item.read_at) await handleMarkRead(item.id);
     const resource = (item.resource ?? item.data?.resource) as Record<string, unknown> | undefined;
-    router.push(fcmDestination({
+    const dest = fcmDestination({
       ...(item.data ?? {}),
       eventType: item.data?.event_type ?? item.type,
       resourceType: typeof resource?.type === 'string' ? resource.type : undefined,
       resourceReference: typeof resource?.reference === 'string' ? resource.reference : undefined,
-    }) as never);
+    });
+    if (dest) {
+      router.push(dest as never);
+    }
   };
 
   const unreadCount = notifications.filter((n) => !n.read_at).length;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="dark" />
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <StatusBar style="light" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
-          <SymbolView
-            name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-            size={18}
-            tintColor={Monochrome.textPrimary}
-          />
-        </Pressable>
-        <AppText style={styles.headerTitle}>Notifications</AppText>
-        {unreadCount > 0 ? (
-          <Pressable onPress={handleMarkAllRead} style={styles.markAllBtn}>
-            <AppText style={styles.markAllText}>Mark all read</AppText>
-          </Pressable>
-        ) : (
-          <View style={{ width: 40 }} />
-        )}
-      </View>
+      {/* Header Gradient */}
+      <LinearGradient
+        colors={['#003049', '#001824']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.headerGradient, { paddingTop: insets.top + 8 }]}
+      >
+        <View style={styles.headerRow}>
+          <View style={styles.headerLeft}>
+            <AppBackButton />
+
+            <View>
+              <AppText style={styles.headerSubtitle}>eYatra</AppText>
+              <View style={styles.headerTitleRow}>
+                <AppText style={styles.headerTitle}>Notifications</AppText>
+                {unreadCount > 0 && (
+                  <View style={[styles.unreadBadge, { backgroundColor: actionColor }]}>
+                    <AppText style={styles.unreadBadgeText}>{unreadCount} New</AppText>
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+
+          {unreadCount > 0 && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleMarkAllRead}
+              style={({ pressed }) => [
+                styles.markAllBtn,
+                isDriver && { backgroundColor: 'rgba(253,240,213,0.12)' },
+                { opacity: pressed ? 0.75 : 1 },
+              ]}
+              hitSlop={8}
+            >
+              <AppText style={styles.markAllText}>Mark all read</AppText>
+            </Pressable>
+          )}
+        </View>
+      </LinearGradient>
 
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
@@ -224,100 +207,187 @@ export default function NotificationsScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => loadNotifications(true)}
-            tintColor={Monochrome.textPrimary}
+            onRefresh={() => void loadNotifications(true)}
+            tintColor={actionColor}
           />
         }
       >
-        <View style={styles.preferenceCard}>
-          {isPassenger ? (
-            <>
-              <View style={styles.preferenceTitleRow}>
-                <View style={styles.preferenceCopy}>
-                  <AppText style={styles.preferenceTitle}>Low wallet balance</AppText>
-                  <AppText style={styles.preferenceDescription}>In-app alert when a fare payment takes your balance below the threshold.</AppText>
-                </View>
-                <Switch
-                  accessibilityLabel="Enable low wallet balance alerts"
-                  value={lowBalanceEnabled}
-                  onValueChange={setLowBalanceEnabled}
-                  trackColor={{ false: Monochrome.border, true: Monochrome.textSecondary }}
-                  thumbColor={Monochrome.textPrimary}
-                />
-              </View>
-              <AppText style={styles.preferenceLabel}>Alert below (paisa)</AppText>
-              <AppTextInput
-                accessibilityLabel="Low balance threshold in paisa"
-                style={styles.thresholdInput}
-                value={lowBalanceThreshold}
-                onChangeText={setLowBalanceThreshold}
-                keyboardType="number-pad"
-                editable={!savingPreferences}
-              />
-              <AppText style={styles.preferenceHint}>For example, 5000 paisa equals NPR 50.00. In-app history is available even when push is disabled.</AppText>
-            </>
-          ) : null}
-          <View style={styles.pushRow}>
-            <View style={styles.preferenceCopy}>
-              <AppText style={styles.preferenceTitle}>Device push notifications</AppText>
-              <AppText style={styles.preferenceDescription}>
-                {pushEnabled ? 'Push permission is enabled on this device.' : 'Enable optional push alerts for account updates.'}
-              </AppText>
-            </View>
-            {!pushEnabled ? (
-              <Pressable
-                accessibilityRole="button"
-                disabled={registeringPush}
-                onPress={() => void enablePush()}
-                style={[styles.pushButton, registeringPush && styles.disabledButton]}
-              >
-                {registeringPush
-                  ? <ActivityIndicator color={Monochrome.actionPrimaryText} />
-                  : <AppText style={styles.savePreferencesText}>Enable</AppText>}
-              </Pressable>
-            ) : null}
+        {loading && !refreshing ? (
+          <NotificationSkeleton />
+        ) : (
+          <>
+        {/* Device Push Notifications Banner */}
+        <View
+          style={[
+            styles.pushBanner,
+            {
+              backgroundColor: theme.isDark ? '#002235' : Palette.white,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <View style={styles.pushIconWrap}>
+            <SymbolView
+              name={{ ios: 'bell.badge.fill', android: 'notifications_active', web: 'notifications_active' }}
+              size={20}
+              tintColor={pushEnabled ? DriverColors.actionPrimary : actionColor}
+            />
           </View>
-          {preferenceError ? <AppText accessibilityRole="alert" style={styles.preferenceError}>{preferenceError}</AppText> : null}
-          {isPassenger ? (
-            <Pressable accessibilityRole="button" disabled={savingPreferences} onPress={() => void savePreferences()} style={[styles.savePreferencesButton, savingPreferences && styles.disabledButton]}>
-              {savingPreferences ? <ActivityIndicator color={Monochrome.actionPrimaryText} /> : <AppText style={styles.savePreferencesText}>Save preferences</AppText>}
+
+          <View style={styles.pushTextGroup}>
+            <AppText style={[styles.pushTitle, { color: theme.text }]}>
+              {pushEnabled ? 'Push Notifications Active' : 'Enable Ride & Fare Alerts'}
+            </AppText>
+            <AppText style={[styles.pushSubtitle, { color: theme.textSecondary }]}>
+              {pushEnabled
+                ? 'You will receive instant alerts for bus payments and travel passes.'
+                : 'Stay notified on bus arrivals, receipts, and important journey updates.'}
+            </AppText>
+          </View>
+
+          {!pushEnabled && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void enablePush()}
+              disabled={registeringPush}
+              style={({ pressed }) => [
+                styles.enableBtn,
+                { opacity: pressed || registeringPush ? 0.75 : 1 },
+              ]}
+            >
+              {registeringPush ? (
+                <ActivityIndicator size="small" color={Palette.white} />
+              ) : (
+                <AppText style={styles.enableBtnText}>Enable</AppText>
+              )}
             </Pressable>
-          ) : null}
+          )}
         </View>
 
-        {loading && !refreshing ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={Monochrome.textPrimary} />
-            <AppText style={styles.loadingText}>Fetching updates...</AppText>
+        {/* Error notification if any */}
+        {errorMsg && (
+          <View
+            style={[
+              styles.errorCard,
+              {
+                backgroundColor: theme.isDark ? '#3D0D11' : isDriver ? DriverColors.surfaceElevated : '#FDF0D5',
+                borderColor: actionColor,
+              },
+            ]}
+          >
+            <AppText style={[styles.errorText, { color: theme.text }]}>{errorMsg}</AppText>
+            <Pressable onPress={() => void loadNotifications(true)}>
+              <AppText style={styles.retryText}>Retry</AppText>
+            </Pressable>
           </View>
-        ) : notifications.length > 0 ? (
-          <View style={styles.listCard}>
+        )}
+
+        {/* Notifications List */}
+        {notifications.length > 0 ? (
+          <View
+            style={[
+              styles.listCard,
+              {
+                backgroundColor: theme.isDark ? '#002235' : Palette.white,
+                borderColor: theme.border,
+              },
+            ]}
+          >
             {notifications.map((item, idx) => {
               const isUnread = !item.read_at;
+              const isLast = idx === notifications.length - 1;
+
+              // Format notification timestamp
+              let timeFormatted = item.created_at;
+              try {
+                const date = new Date(item.created_at);
+                timeFormatted = date.toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
+              } catch {
+                // keep string
+              }
+
               return (
                 <Pressable
                   key={item.id}
                   onPress={() => void openNotification(item)}
-                  style={[styles.itemRow, idx > 0 && styles.rowDivider, isUnread && styles.unreadRow]}
+                  style={({ pressed }) => [
+                    styles.notificationItem,
+                    !isLast && [styles.itemDivider, { borderBottomColor: theme.borderLight }],
+                    {
+                      backgroundColor: pressed
+                        ? theme.isDark
+                          ? '#002B42'
+                          : isDriver ? DriverColors.surfaceSecondary : '#FBF5EB'
+                        : isUnread
+                        ? theme.isDark
+                          ? 'rgba(193, 18, 31, 0.08)'
+                          : isDriver ? 'rgba(27, 138, 90, 0.10)' : 'rgba(253, 240, 213, 0.45)'
+                        : 'transparent',
+                    },
+                  ]}
                 >
-                  <View style={[styles.iconWrap, isUnread ? styles.iconUnread : styles.iconRead]}>
+                  {/* Category Indicator Icon */}
+                  <View
+                    style={[
+                      styles.iconCircle,
+                      {
+                        backgroundColor: isUnread
+                          ? isDriver ? 'rgba(27, 138, 90, 0.12)' : 'rgba(193, 18, 31, 0.12)'
+                          : theme.isDark
+                          ? '#001824'
+                          : isDriver ? DriverColors.surfaceElevated : '#F5EFE6',
+                      },
+                    ]}
+                  >
                     <SymbolView
-                      name={{ ios: 'bell.fill', android: 'notifications', web: 'notifications' }}
+                      name={
+                        item.type?.includes('payment') || item.type?.includes('wallet')
+                          ? { ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }
+                          : item.type?.includes('trip') || item.type?.includes('fare')
+                          ? { ios: 'bus.fill', android: 'directions_bus', web: 'directions_bus' }
+                          : { ios: 'bell.fill', android: 'notifications', web: 'notifications' }
+                      }
                       size={18}
-                      tintColor={isUnread ? Monochrome.textPrimary : Monochrome.textMuted}
+                      tintColor={isUnread ? actionColor : theme.textMuted}
                     />
                   </View>
 
-                  <View style={styles.contentWrap}>
-                    <View style={styles.titleRow}>
-                      <AppText style={[styles.itemTitle, isUnread && styles.itemTitleBold]}>
-                        {item.title || 'Transit Alert'}
+                  {/* Body Content */}
+                  <View style={styles.itemBody}>
+                    <View style={styles.itemTitleRow}>
+                      <AppText
+                        style={[
+                          styles.itemTitle,
+                          {
+                            color: theme.text,
+                            fontFamily: isUnread ? FontFamilies.bold : FontFamilies.semiBold,
+                          },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.title || item.type || 'Notification'}
                       </AppText>
+
                       {isUnread && <View style={styles.unreadDot} />}
                     </View>
-                    <AppText style={styles.itemBody}>{item.body || 'No details provided.'}</AppText>
-                    <AppText style={styles.itemTime}>
-                      {new Date(item.created_at).toLocaleString()}
+
+                    <AppText
+                      style={[
+                        styles.itemMessage,
+                        { color: isUnread ? theme.text : theme.textSecondary },
+                      ]}
+                      numberOfLines={3}
+                    >
+                      {item.body || 'Tap to view details.'}
+                    </AppText>
+
+                    <AppText style={[styles.itemTime, { color: theme.textMuted }]}>
+                      {timeFormatted}
                     </AppText>
                   </View>
                 </Pressable>
@@ -325,15 +395,31 @@ export default function NotificationsScreen() {
             })}
           </View>
         ) : (
-          <View style={styles.emptyBox}>
-            <SymbolView
-              name={{ ios: 'bell.slash', android: 'notifications_off', web: 'notifications_off' }}
-              size={40}
-              tintColor={Monochrome.textMuted}
-            />
-            <AppText style={styles.emptyTitle}>All Caught Up</AppText>
-            <AppText style={styles.emptySubtitle}>You have no unread notifications or transit alerts.</AppText>
+          <View
+            style={[
+              styles.emptyCard,
+              {
+                backgroundColor: theme.isDark ? '#002235' : Palette.white,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <View style={styles.emptyIconCircle}>
+              <SymbolView
+                name={{ ios: 'bell.slash.fill', android: 'notifications_off', web: 'notifications_off' }}
+                size={34}
+                tintColor={Palette.slateBlue}
+              />
+            </View>
+            <AppText style={[styles.emptyTitle, { color: theme.text }]}>
+              No Notifications
+            </AppText>
+            <AppText style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
+              You are all caught up! You will receive updates about your bus tickets, wallet top-ups, and security alerts here.
+            </AppText>
           </View>
+        )}
+          </>
         )}
       </ScrollView>
     </View>
@@ -343,183 +429,231 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Monochrome.background,
   },
-  header: {
+  headerGradient: {
+    paddingHorizontal: Spacing.four,
+    paddingBottom: Spacing.three,
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    backgroundColor: Monochrome.background,
-    borderBottomWidth: 1,
-    borderBottomColor: Monochrome.border,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   backBtn: {
     width: 38,
     height: 38,
-    borderRadius: 19,
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerSubtitle: {
+    color: Palette.slateBlue,
+    fontFamily: FontFamilies.medium,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Monochrome.textPrimary,
+    color: Palette.warmCream,
+    fontFamily: FontFamilies.extraBold,
+    fontSize: 22,
+    lineHeight: 28,
+    letterSpacing: -0.3,
+  },
+  unreadBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: Palette.crimsonRed,
+  },
+  unreadBadgeText: {
+    fontFamily: FontFamilies.bold,
+    fontSize: 10,
+    color: Palette.white,
   },
   markAllBtn: {
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-    borderRadius: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
   markAllText: {
+    fontFamily: FontFamilies.bold,
     fontSize: 12,
-    color: Monochrome.textSecondary,
-    fontWeight: '600',
+    color: Palette.warmCream,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
+    padding: Spacing.four,
+    gap: 16,
   },
-  loadingBox: {
-    padding: Spacing.xl,
+  pushBanner: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: Monochrome.textSecondary,
-  },
-  preferenceCard: {
-    padding: Spacing.md,
-    gap: Spacing.sm,
-    marginBottom: Spacing.lg,
-    backgroundColor: Monochrome.surfaceSecondary,
+    padding: 14,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: Monochrome.border,
-  },
-  preferenceTitleRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    alignItems: 'center',
-  },
-  preferenceCopy: { flex: 1, gap: 4 },
-  preferenceTitle: { color: Monochrome.textPrimary, fontSize: 15, fontWeight: '700' },
-  preferenceDescription: { color: Monochrome.textSecondary, fontSize: 12, lineHeight: 17 },
-  preferenceLabel: { color: Monochrome.textSecondary, fontSize: 12, fontWeight: '700' },
-  thresholdInput: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-    borderRadius: 10,
-    backgroundColor: Monochrome.surfacePrimary,
-    color: Monochrome.textPrimary,
-    paddingHorizontal: 12,
-  },
-  preferenceHint: { color: Monochrome.textMuted, fontSize: 11, lineHeight: 16 },
-  pushRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingTop: Spacing.sm },
-  pushButton: { minWidth: 82, minHeight: 40, borderRadius: 10, backgroundColor: Monochrome.actionPrimary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.sm },
-  preferenceError: { color: Monochrome.textPrimary, fontSize: 12 },
-  savePreferencesButton: { minHeight: 44, borderRadius: 11, backgroundColor: Monochrome.actionPrimary, alignItems: 'center', justifyContent: 'center' },
-  disabledButton: { opacity: 0.55 },
-  savePreferencesText: { color: Monochrome.actionPrimaryText, fontSize: 13, fontWeight: '700' },
-  listCard: {
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-    overflow: 'hidden',
-  },
-  itemRow: {
-    flexDirection: 'row',
-    padding: Spacing.md,
     gap: 12,
-    alignItems: 'flex-start',
+    shadowColor: Palette.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  rowDivider: {
-    borderTopWidth: 1,
-    borderTopColor: Monochrome.border,
-  },
-  unreadRow: {
-    backgroundColor: Monochrome.surfaceElevated,
-  },
-  iconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+  pushIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(102, 155, 188, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    marginTop: 2,
   },
-  iconUnread: {
-    backgroundColor: Monochrome.surfaceElevated,
-    borderColor: Monochrome.border,
-  },
-  iconRead: {
-    backgroundColor: Monochrome.surfacePrimary,
-    borderColor: Monochrome.border,
-  },
-  contentWrap: {
+  pushTextGroup: {
     flex: 1,
-    gap: 4,
+    gap: 2,
   },
-  titleRow: {
+  pushTitle: {
+    fontFamily: FontFamilies.bold,
+    fontSize: 13,
+    lineHeight: 17,
+  },
+  pushSubtitle: {
+    fontFamily: FontFamilies.regular,
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  enableBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: Palette.crimsonRed,
+  },
+  enableBtnText: {
+    fontFamily: FontFamilies.bold,
+    fontSize: 12,
+    color: Palette.white,
+  },
+  errorCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  errorText: {
+    fontFamily: FontFamilies.medium,
+    fontSize: 12,
+    flex: 1,
+  },
+  retryText: {
+    fontFamily: FontFamilies.bold,
+    fontSize: 12,
+    color: Palette.crimsonRed,
+    marginLeft: 8,
+  },
+  centerContainer: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    gap: 12,
+  },
+  loadingLabel: {
+    fontFamily: FontFamilies.medium,
+    fontSize: 13,
+  },
+  listCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: Palette.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  notificationItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 14,
+    gap: 12,
+  },
+  itemDivider: {
+    borderBottomWidth: 1,
+  },
+  iconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  itemBody: {
+    flex: 1,
+    gap: 4,
+  },
+  itemTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   itemTitle: {
-    fontSize: 15,
-    color: Monochrome.textSecondary,
-    fontWeight: '600',
-  },
-  itemTitleBold: {
-    fontWeight: '700',
-    color: Monochrome.textPrimary,
+    fontSize: 14,
+    lineHeight: 18,
+    flex: 1,
   },
   unreadDot: {
     width: 7,
     height: 7,
-    borderRadius: 3.5,
-    backgroundColor: Monochrome.textPrimary,
+    borderRadius: 4,
+    backgroundColor: Palette.crimsonRed,
   },
-  itemBody: {
-    fontSize: 13,
-    color: Monochrome.textSecondary,
-    lineHeight: 18,
+  itemMessage: {
+    fontFamily: FontFamilies.regular,
+    fontSize: 12,
+    lineHeight: 17,
   },
   itemTime: {
-    fontSize: 11,
-    color: Monochrome.textMuted,
+    fontFamily: FontFamilies.regular,
+    fontSize: 10,
     marginTop: 2,
   },
-  emptyBox: {
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderRadius: 20,
-    padding: Spacing.xl,
-    alignItems: 'center',
-    gap: Spacing.sm,
+  emptyCard: {
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: Monochrome.border,
-    marginTop: Spacing.md,
+    padding: 36,
+    alignItems: 'center',
+    gap: 10,
+  },
+  emptyIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: 'rgba(102, 155, 188, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
   emptyTitle: {
+    fontFamily: FontFamilies.bold,
     fontSize: 17,
-    fontWeight: '700',
-    color: Monochrome.textPrimary,
   },
   emptySubtitle: {
+    fontFamily: FontFamilies.regular,
     fontSize: 13,
-    color: Monochrome.textSecondary,
     textAlign: 'center',
-    lineHeight: 18,
+    maxWidth: 270,
+    lineHeight: 19,
   },
 });

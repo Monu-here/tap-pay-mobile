@@ -1,25 +1,18 @@
-import { AppText } from '@/components/typography/app-text';
-/**
- * App entry / session restore.
- *
- * On launch: no token (or an expired one) -> login. A token present ->
- * confirmed with `GET /auth/me` (which refreshes the stored user), then routed
- * by verification state. A 401 clears the session and goes to login; any other
- * validation failure falls back to the home screen with the stored token.
- */
-
 import { useEffect, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 
-import { Brand, Spacing } from '@/constants/theme';
-
+import { AppText } from '@/components/typography/app-text';
+import { Palette, Spacing } from '@/constants/theme';
+import { FontFamilies } from '@/constants/typography';
 import { getMe } from '@/features/auth/services/auth';
 import {
   clearSession,
   getRoleDashboardPath,
   getSession,
   getUserRole,
+  hasCompletedOnboarding,
   isSessionValid,
   restoreSession,
   setPendingAuthMessage,
@@ -27,7 +20,6 @@ import {
 } from '@/features/auth/session';
 
 export default function Index() {
-  // Guards against React 18/19 StrictMode double-invocation in dev.
   const startedRef = useRef(false);
 
   useEffect(() => {
@@ -36,18 +28,28 @@ export default function Index() {
 
     let active = true;
 
+    const routeUnauthenticated = async () => {
+      const seenOnboarding = await hasCompletedOnboarding();
+      if (!active) return;
+      if (!seenOnboarding) {
+        router.replace('/onboarding/screen-1');
+      } else {
+        router.replace('/login');
+      }
+    };
+
     void (async () => {
       try {
         await restoreSession();
       } catch {
         if (!active) return;
         setPendingAuthMessage('Unable to restore your secure session. Please sign in again.');
-        router.replace('/login');
+        await routeUnauthenticated();
         return;
       }
       if (!active) return;
 
-      // No token, or an expired one -> login.
+      // No token, or an expired one -> onboarding or login
       const { token } = getSession();
       if (!token || !isSessionValid()) {
         try {
@@ -55,7 +57,7 @@ export default function Index() {
         } catch {
           setPendingAuthMessage('Could not clear the expired secure session. Please sign in again.');
         }
-        router.replace('/login');
+        await routeUnauthenticated();
         return;
       }
 
@@ -72,8 +74,7 @@ export default function Index() {
           return;
         }
         if (result.status === 401) {
-          // The client also clears + redirects on 401; this is a safety net.
-          router.replace('/login');
+          await routeUnauthenticated();
           return;
         }
         // Token stays stored; route according to stored role.
@@ -86,7 +87,7 @@ export default function Index() {
         } catch {
           setPendingAuthMessage('Unable to clear the secure session. Please sign in again.');
         }
-        router.replace('/login');
+        await routeUnauthenticated();
       }
     })();
 
@@ -97,8 +98,18 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color={Brand.teal.primary} />
-      <AppText style={styles.brand}>Tap &amp; Pay</AppText>
+      <View style={styles.logoCard}>
+        <Image
+          source={require('@/assets/images/eyatra-logo.png')}
+          style={styles.logo}
+          contentFit="contain"
+        />
+      </View>
+      <View style={styles.textGroup}>
+        <AppText style={styles.brand}>eYatra</AppText>
+        <AppText style={styles.tagline}>Smart Transit &amp; Bus Pay</AppText>
+      </View>
+      <ActivityIndicator size="small" color={Palette.crimsonRed} style={styles.spinner} />
     </View>
   );
 }
@@ -108,13 +119,44 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Palette.prussianNavy,
     gap: Spacing.three,
-    backgroundColor: Brand.white,
+  },
+  logoCard: {
+    width: 90,
+    height: 90,
+    borderRadius: 24,
+    backgroundColor: Palette.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Palette.black,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  logo: {
+    width: 76,
+    height: 76,
+  },
+  textGroup: {
+    alignItems: 'center',
+    gap: 4,
   },
   brand: {
-    color: Brand.text,
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: -0.2,
+    color: Palette.warmCream,
+    fontFamily: FontFamilies.extraBold,
+    fontSize: 26,
+    letterSpacing: -0.5,
+  },
+  tagline: {
+    color: Palette.slateBlue,
+    fontFamily: FontFamilies.medium,
+    fontSize: 13,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  spinner: {
+    marginTop: 8,
   },
 });

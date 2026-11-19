@@ -29,10 +29,20 @@ export type ConcessionApplication = {
   id: number;
   category: 'student' | 'senior_citizen';
   details: Record<string, string | null>;
-  status: 'pending' | 'approved' | 'rejected';
+  status:
+    | 'pending'
+    | 'under_review'
+    | 'approved'
+    | 'rejected'
+    | 'additional_documents_requested'
+    | 'expired'
+    | 'suspended'
+    | 'renewal_pending'
+    | 'revoked';
   review_note: string | null;
   submitted_at: string;
   reviewed_at: string | null;
+  expires_at: string | null;
   document: {
     id: number;
     document_type: string;
@@ -46,12 +56,40 @@ export type ConcessionApplication = {
 
 export type ConcessionSubmission = {
   category: 'student' | 'senior_citizen';
+  full_name: string;
+  date_of_birth: string;
   student_id_number?: string;
   college_name?: string;
   college_address?: string;
+  institution_type?: string;
+  course_grade?: string;
+  enrollment_date?: string;
+  expected_graduation_date?: string;
   student_id_expiry_date?: string;
+  citizenship_number?: string;
+  citizenship_issuing_district?: string;
   senior_card_number?: string;
+  consent: boolean;
   document: { uri: string; fileName?: string; mimeType?: string };
+  supportingDocument?: { uri: string; fileName?: string; mimeType?: string };
+  seniorCitizenIdDocument?: { uri: string; fileName?: string; mimeType?: string };
+};
+
+export type PassengerConcessionSummary = {
+  status: ConcessionApplication['status'] | 'not_applied';
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  expires_at: string | null;
+  review_note: string | null;
+  discount_percentage: string | null;
+  policy_version: number | null;
+};
+
+export type ConcessionPolicySummary = {
+  category: 'student' | 'senior_citizen';
+  discount_percentage: string;
+  version: number;
+  applicable: boolean;
 };
 
 export type CardSummary = {
@@ -149,6 +187,59 @@ export type DashboardData = {
   recent_transactions: WalletTransaction[];
   recent_trips: TravelRecord[];
   stats: DashboardStats;
+};
+
+export type RewardsDashboard = {
+  available_points: number;
+  equivalent_npr_minor: number;
+  equivalent_npr_formatted: string;
+  points_per_npr: number;
+  minimum_conversion_points: number;
+  maximum_conversion_points: number;
+  daily_conversion_points_limit: number;
+  rewards_enabled: boolean;
+};
+
+export type RewardTransaction = {
+  id: number;
+  reference: string;
+  type: 'earn' | 'conversion' | 'redeem' | 'adjustment' | 'reversal' | 'expiry';
+  direction: 'credit' | 'debit';
+  points: number;
+  balance_before: number;
+  balance_after: number;
+  reward_value_minor: number;
+  earning_rate_bps: number | null;
+  conversion_points_per_npr: number | null;
+  source: string;
+  source_reference: string | null;
+  reason: string | null;
+  created_at: string;
+};
+
+export type RewardConversionReceipt = {
+  conversion_reference: string;
+  points_converted: number;
+  points_balance_before: number;
+  points_balance_after: number;
+  points_per_npr: number;
+  wallet_credit_minor: number;
+  wallet_credit_formatted: string;
+  wallet_balance_before_minor: number;
+  wallet_balance_after_minor: number;
+  reward_transaction_reference: string;
+  wallet_transaction_reference: string;
+  created_at: string;
+};
+
+export type RewardConversionRecord = {
+  id: number;
+  reference: string;
+  points: number;
+  points_per_npr: number;
+  amount_minor: number;
+  status: string;
+  created_at: string;
 };
 
 export type RouteInfo = {
@@ -272,6 +363,45 @@ export type PaymentCheckout = {
 
 export function getDashboard(): Promise<ApiResult<DashboardData>> {
   return apiRequest<DashboardData>('/passenger/dashboard');
+}
+
+// ---------------------------------------------------------------------------
+// Rewards
+// ---------------------------------------------------------------------------
+
+export function getRewardsDashboard(): Promise<ApiResult<RewardsDashboard>> {
+  return apiRequest<RewardsDashboard>('/passenger/rewards');
+}
+
+export function getRewardTransactions(
+  perPage = 25,
+): Promise<ApiResult<{ transactions: RewardTransaction[] }>> {
+  return apiRequest<unknown>(`/passenger/rewards/transactions?per_page=${perPage}`)
+    .then((result) => normalizeCollection<RewardTransaction, 'transactions'>(result, 'transactions'));
+}
+
+export function getRewardConversions(
+  perPage = 25,
+): Promise<ApiResult<{ conversions: RewardConversionRecord[] }>> {
+  return apiRequest<unknown>(`/passenger/rewards/conversions?per_page=${perPage}`)
+    .then((result) => normalizeCollection<RewardConversionRecord, 'conversions'>(result, 'conversions'));
+}
+
+export function convertRewardPoints(
+  points: number,
+  idempotencyKey: string,
+): Promise<ApiResult<{ conversion: RewardConversionReceipt }>> {
+  return apiRequest<{ conversion: RewardConversionReceipt }>('/passenger/rewards/conversions', {
+    method: 'POST',
+    body: { points },
+    idempotencyKey,
+  });
+}
+
+export function getRewardConversionReceipt(
+  reference: string,
+): Promise<ApiResult<{ conversion: RewardConversionRecord }>> {
+  return apiRequest(`/passenger/rewards/conversions/${encodeURIComponent(reference)}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -708,10 +838,61 @@ export type TransitFareTicket = {
   company_name: string | null;
   fare_minor: number;
   fare_formatted: string;
+  fare_breakdown?: {
+    regular_fare_minor: number;
+    discount_minor: number;
+    concession: ExitFarePreview['fare']['concession'];
+  };
+  boarding_stop?: string | null;
+  exit_stop?: string | null;
   balance_remaining_minor: number;
   balance_remaining_formatted: string;
   issued_at: string;
   status: string;
+};
+
+export type PassengerJourney = {
+  travel_uid: string;
+  status: 'in_progress' | 'payment_due';
+  fare_due_minor?: number;
+  boarding_stop_sequence?: number | null;
+  boarded_at?: string | null;
+  exited_at?: string | null;
+  boarding_stop?: string | null;
+  exit_stop?: string | null;
+  bus_number?: string | null;
+  route_name?: string | null;
+  route_id?: number;
+};
+
+export type ExitFarePreview = {
+  travel_uid: string;
+  status: 'payment_due';
+  boarding_stop: { id: number; name: string | null; sequence: number };
+  exit_stop: { id: number; name: string | null; sequence: number };
+  company_name: string | null;
+  bus_number: string;
+  trip_reference: string;
+  fare: {
+    amount_minor: number;
+    amount_formatted: string;
+    regular_amount_minor: number;
+    discount_minor: number;
+    concession: {
+      category: 'student' | 'senior_citizen';
+      policy_id: number;
+      policy_version: number;
+      discount_percentage: string;
+      discount_minor: number;
+      regular_fare_minor: number;
+      passenger_payable_minor: number;
+      operator_settlement_minor: number;
+      funding_model: string;
+    } | null;
+    currency: string;
+    rule_snapshot: Record<string, unknown>;
+    breakdown: Record<string, unknown>;
+  };
 };
 
 export type PassengerFeedback = {
@@ -771,6 +952,51 @@ export function payTransitFare(
   });
 }
 
+export function boardTransitJourney(
+  qrPayload: string,
+  idempotencyKey: string,
+  boardingStopSequence?: number,
+): Promise<ApiResult<{ journey: PassengerJourney }>> {
+  return apiRequest('/passenger/transit/board', {
+    method: 'POST',
+    idempotencyKey,
+    body: {
+      qr_payload: qrPayload,
+      ...(boardingStopSequence !== undefined ? { boarding_stop_sequence: boardingStopSequence } : {}),
+    },
+  });
+}
+
+export function getCurrentTransitJourney(): Promise<ApiResult<{ journey: PassengerJourney | null }>> {
+  return apiRequest('/passenger/transit/current');
+}
+
+export function previewTransitExit(
+  travelUid: string,
+  exitStopSequence: number,
+): Promise<ApiResult<{ fare_due: ExitFarePreview }>> {
+  return apiRequest(`/passenger/travel-history/${encodeURIComponent(travelUid)}/exit-preview`, {
+    method: 'POST',
+    body: { exit_stop_sequence: exitStopSequence },
+  });
+}
+
+export function payTransitExit(
+  travelUid: string,
+  mpin: string,
+  idempotencyKey: string,
+): Promise<ApiResult<{ ticket: TransitFareTicket }>> {
+  return apiRequest(`/passenger/travel-history/${encodeURIComponent(travelUid)}/pay`, {
+    method: 'POST',
+    idempotencyKey,
+    body: { mpin },
+  });
+}
+
+export function getTransitTicket(travelUid: string): Promise<ApiResult<{ ticket: TransitFareTicket }>> {
+  return apiRequest(`/passenger/travel-history/${encodeURIComponent(travelUid)}/ticket`);
+}
+
 function stopName(value: unknown): string | null {
   if (typeof value === 'string') return value;
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -792,22 +1018,67 @@ export async function getConcessionApplications(): Promise<
   return apiRequest('/passenger/concession-applications');
 }
 
+export function getPassengerConcessions(): Promise<
+  ApiResult<{ concessions: Record<'student' | 'senior_citizen', PassengerConcessionSummary> }>
+> {
+  return apiRequest('/passenger/concessions');
+}
+
+export function getConcessionPolicies(): Promise<
+  ApiResult<{ policies: ConcessionPolicySummary[] }>
+> {
+  return apiRequest('/passenger/concessions/policies');
+}
+
 export function submitConcessionApplication(
   submission: ConcessionSubmission,
+  renewalApplicationId?: number,
 ): Promise<ApiResult<{ application: ConcessionApplication }>> {
   const form = new FormData();
   form.append('category', submission.category);
+  form.append('full_name', submission.full_name);
+  form.append('date_of_birth', submission.date_of_birth);
   if (submission.student_id_number) form.append('student_id_number', submission.student_id_number);
   if (submission.college_name) form.append('college_name', submission.college_name);
   if (submission.college_address) form.append('college_address', submission.college_address);
+  if (submission.institution_type) form.append('institution_type', submission.institution_type);
+  if (submission.course_grade) form.append('course_grade', submission.course_grade);
+  if (submission.enrollment_date) form.append('enrollment_date', submission.enrollment_date);
+  if (submission.expected_graduation_date) {
+    form.append('expected_graduation_date', submission.expected_graduation_date);
+  }
   if (submission.student_id_expiry_date) {
     form.append('student_id_expiry_date', submission.student_id_expiry_date);
   }
+  if (submission.citizenship_number) form.append('citizenship_number', submission.citizenship_number);
+  if (submission.citizenship_issuing_district) {
+    form.append('citizenship_issuing_district', submission.citizenship_issuing_district);
+  }
   if (submission.senior_card_number) form.append('senior_card_number', submission.senior_card_number);
+  form.append('consent', submission.consent ? '1' : '0');
   form.append('document', {
     uri: submission.document.uri,
-    name: submission.document.fileName ?? 'concession-document.jpg',
-    type: submission.document.mimeType ?? 'image/jpeg',
+    name: submission.document.fileName ?? 'concession-document',
+    type: submission.document.mimeType ?? 'application/octet-stream',
   } as unknown as Blob);
-  return apiRequest('/passenger/concession-applications', { method: 'POST', body: form });
+  if (submission.supportingDocument) {
+    form.append('supporting_document', {
+      uri: submission.supportingDocument.uri,
+      name: submission.supportingDocument.fileName ?? 'supporting-document',
+      type: submission.supportingDocument.mimeType ?? 'application/octet-stream',
+    } as unknown as Blob);
+  }
+  if (submission.seniorCitizenIdDocument) {
+    form.append('senior_id_document', {
+      uri: submission.seniorCitizenIdDocument.uri,
+      name: submission.seniorCitizenIdDocument.fileName ?? 'senior-citizen-id',
+      type: submission.seniorCitizenIdDocument.mimeType ?? 'application/octet-stream',
+    } as unknown as Blob);
+  }
+  return apiRequest(
+    renewalApplicationId
+      ? `/passenger/concessions/${renewalApplicationId}/renew`
+      : '/passenger/concession-applications',
+    { method: 'POST', body: form },
+  );
 }

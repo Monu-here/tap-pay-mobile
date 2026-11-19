@@ -1,26 +1,33 @@
 import { AppText, AppTextInput } from '@/components/typography/app-text';
-import { Monochrome, Spacing } from '@/constants/theme';
+import { AppBackButton } from '@/components/ui/app-back-button';
+import { Palette, Spacing } from '@/constants/theme';
 import { getSession } from '@/features/auth/session';
 import { changeMpin, getMpinStatus, resetMpin, setMpin } from '@/features/passenger/services/passengerApi';
-import { router } from 'expo-router';
+import { useTheme } from '@/hooks/use-theme';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
+import { useKeyboardDismissOnBlur } from '@/hooks/use-keyboard-dismiss-on-blur';
 
 type RecoveryMode = 'change' | 'reset';
 
 export default function MpinSettingsScreen() {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const styles = useMemo(() => createStyles(theme.tokens), [theme.tokens]);
+  useKeyboardDismissOnBlur();
   const role = getSession().user?.type;
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [recoveryMode, setRecoveryMode] = useState<RecoveryMode>('change');
@@ -59,6 +66,7 @@ export default function MpinSettingsScreen() {
   }, [loadStatus]);
 
   const submit = async () => {
+    Keyboard.dismiss();
     setError(null);
     setSuccess(null);
     if (!/^\d{4}$/.test(newMpin)) {
@@ -121,24 +129,25 @@ export default function MpinSettingsScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar style="dark" />
+      <StatusBar style={theme.isDark ? 'light' : 'dark'} />
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backButton}>
-          <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={19} tintColor={Monochrome.textPrimary} />
-        </Pressable>
+        <AppBackButton />
         <AppText style={styles.headerTitle}>Security &amp; MPIN</AppText>
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]}
-        keyboardShouldPersistTaps="handled"
-      >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          automaticallyAdjustKeyboardInsets
+        >
         <View style={styles.hero}>
           <View style={styles.shield}>
-            <SymbolView name={{ ios: 'lock.shield.fill', android: 'security', web: 'security' }} size={27} tintColor={Monochrome.textPrimary} />
+            <SymbolView name={{ ios: 'lock.shield.fill', android: 'security', web: 'security' }} size={27} tintColor={theme.text} />
           </View>
           <AppText style={styles.title}>{loading ? 'Checking your security…' : title}</AppText>
           <AppText style={styles.description}>
@@ -147,12 +156,12 @@ export default function MpinSettingsScreen() {
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color={Monochrome.textPrimary} style={styles.loader} />
+          <ActivityIndicator size="large" color={theme.text} style={styles.loader} />
         ) : (
           <>
             <View style={styles.formCard}>
               {configured && recoveryMode === 'change' ? (
-                <PinField label="Current MPIN" value={currentMpin} onChangeText={setCurrentMpin} />
+                <PinField label="Current MPIN" value={currentMpin} onChangeText={setCurrentMpin} styles={styles} colors={theme.tokens} />
               ) : null}
 
               {configured && recoveryMode === 'reset' ? (
@@ -164,7 +173,7 @@ export default function MpinSettingsScreen() {
                     value={currentPassword}
                     onChangeText={setCurrentPassword}
                     placeholder="Verify your account password"
-                    placeholderTextColor={Monochrome.textMuted}
+                    placeholderTextColor={theme.textMuted}
                     secureTextEntry
                     autoCapitalize="none"
                     autoComplete="current-password"
@@ -174,8 +183,8 @@ export default function MpinSettingsScreen() {
                 </View>
               ) : null}
 
-              <PinField label={configured ? 'New MPIN' : 'Four-digit MPIN'} value={newMpin} onChangeText={setNewMpin} />
-              <PinField label="Confirm MPIN" value={confirmation} onChangeText={setConfirmation} />
+              <PinField label={configured ? 'New MPIN' : 'Four-digit MPIN'} value={newMpin} onChangeText={setNewMpin} styles={styles} colors={theme.tokens} />
+              <PinField label="Confirm MPIN" value={confirmation} onChangeText={setConfirmation} styles={styles} colors={theme.tokens} />
 
               {error ? <AppText accessibilityRole="alert" style={styles.error}>{error}</AppText> : null}
               {success ? <AppText accessibilityLiveRegion="polite" style={styles.success}>{success}</AppText> : null}
@@ -187,7 +196,7 @@ export default function MpinSettingsScreen() {
                 style={[styles.primaryButton, saving && styles.disabled]}
               >
                 {saving
-                  ? <ActivityIndicator color={Monochrome.actionPrimaryText} />
+                  ? <ActivityIndicator color={theme.actionPrimaryText} />
                   : <AppText style={styles.primaryText}>{title}</AppText>}
               </Pressable>
             </View>
@@ -213,12 +222,13 @@ export default function MpinSettingsScreen() {
             ) : null}
 
             <View style={styles.notice}>
-              <SymbolView name={{ ios: 'info.circle.fill', android: 'info', web: 'info' }} size={16} tintColor={Monochrome.textSecondary} />
+              <SymbolView name={{ ios: 'info.circle.fill', android: 'info', web: 'info' }} size={16} tintColor={theme.textSecondary} />
               <AppText style={styles.noticeText}>Never share your MPIN. Tap &amp; Pay staff will never ask you for it.</AppText>
             </View>
           </>
         )}
-      </ScrollView>
+        </ScrollView>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 }
@@ -227,10 +237,14 @@ function PinField({
   label,
   value,
   onChangeText,
+  styles,
+  colors,
 }: {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
+  styles: ReturnType<typeof createStyles>;
+  colors: ReturnType<typeof useTheme>['tokens'];
 }) {
   return (
     <View style={styles.field}>
@@ -241,7 +255,7 @@ function PinField({
         value={value}
         onChangeText={(text) => onChangeText(text.replace(/\D/g, '').slice(0, 4))}
         placeholder="••••"
-        placeholderTextColor={Monochrome.textMuted}
+        placeholderTextColor={colors.textMuted}
         keyboardType="number-pad"
         secureTextEntry
         maxLength={4}
@@ -253,8 +267,9 @@ function PinField({
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Monochrome.background },
+function createStyles(colors: ReturnType<typeof useTheme>['tokens']) {
+return StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   centered: { justifyContent: 'center', alignItems: 'center', padding: Spacing.xl },
   header: {
     minHeight: 56,
@@ -263,10 +278,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: Monochrome.border,
+    borderBottomColor: colors.border,
   },
   backButton: { width: 40, height: 40, justifyContent: 'center' },
-  headerTitle: { color: Monochrome.textPrimary, fontSize: 17, fontWeight: '700' },
+  headerTitle: { color: colors.textPrimary, fontSize: 17, fontWeight: '700' },
   headerSpacer: { width: 40 },
   content: { padding: Spacing.lg },
   hero: { alignItems: 'center', paddingVertical: Spacing.xl },
@@ -274,50 +289,51 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 18,
-    backgroundColor: Monochrome.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.md,
   },
-  title: { color: Monochrome.textPrimary, fontSize: 22, fontWeight: '800', textAlign: 'center' },
-  description: { color: Monochrome.textSecondary, fontSize: 14, lineHeight: 21, textAlign: 'center', marginTop: Spacing.sm },
+  title: { color: colors.textPrimary, fontSize: 22, fontWeight: '800', textAlign: 'center' },
+  description: { color: colors.textSecondary, fontSize: 14, lineHeight: 21, textAlign: 'center', marginTop: Spacing.sm },
   loader: { marginTop: Spacing.xl },
   formCard: {
     padding: Spacing.lg,
     borderRadius: 20,
-    backgroundColor: Monochrome.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,
-    borderColor: Monochrome.border,
+    borderColor: colors.border,
     gap: Spacing.md,
   },
   field: { gap: 7 },
-  label: { color: Monochrome.textPrimary, fontSize: 13, fontWeight: '600' },
+  label: { color: colors.textPrimary, fontSize: 13, fontWeight: '600' },
   input: {
     minHeight: 50,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Monochrome.border,
-    backgroundColor: Monochrome.surfacePrimary,
+    borderColor: colors.border,
+    backgroundColor: colors.surfacePrimary,
     paddingHorizontal: 14,
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
     fontSize: 18,
     letterSpacing: 5,
   },
-  helper: { color: Monochrome.textMuted, fontSize: 12, lineHeight: 17 },
-  error: { color: '#B42318', fontSize: 13, lineHeight: 18 },
-  success: { color: '#137A54', fontSize: 13, lineHeight: 18 },
+  helper: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
+  error: { color: Palette.crimsonRed, fontSize: 13, lineHeight: 18 },
+  success: { color: '#1B8A5A', fontSize: 13, lineHeight: 18 },
   primaryButton: {
     minHeight: 48,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Monochrome.actionPrimary,
+    backgroundColor: colors.actionPrimary,
     marginTop: Spacing.sm,
   },
-  primaryText: { color: Monochrome.actionPrimaryText, fontSize: 15, fontWeight: '700' },
+  primaryText: { color: colors.actionPrimaryText, fontSize: 15, fontWeight: '700' },
   disabled: { opacity: 0.55 },
   secondaryButton: { alignItems: 'center', padding: Spacing.md },
-  secondaryText: { color: Monochrome.textPrimary, fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  secondaryText: { color: colors.textPrimary, fontSize: 13, fontWeight: '600', textAlign: 'center' },
   notice: { flexDirection: 'row', gap: 9, padding: Spacing.md, marginTop: Spacing.sm },
-  noticeText: { flex: 1, color: Monochrome.textMuted, fontSize: 12, lineHeight: 17 },
+  noticeText: { flex: 1, color: colors.textMuted, fontSize: 12, lineHeight: 17 },
 });
+}

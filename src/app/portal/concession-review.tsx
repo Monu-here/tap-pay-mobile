@@ -1,9 +1,11 @@
 import {AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
+import { TransactionSkeleton } from '@/components/skeletons/ScreenSkeletons';
 import { useCallback, useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { router } from 'expo-router';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -16,6 +18,7 @@ import { Brand, Spacing } from '@/constants/theme';
 import { getSession } from '@/features/auth/session';
 import {
   getPlatformConcessionApplications,
+  requestPlatformConcessionDocuments,
   reviewPlatformConcessionApplication,
   type PlatformConcessionApplication,
 } from '@/features/admin/services/adminApi';
@@ -26,6 +29,7 @@ type Status = PlatformConcessionApplication['status'];
 export default function ConcessionReviewScreen() {
   const insets = useSafeAreaInsets();
   const [status, setStatus] = useState<Status>('pending');
+  const [category, setCategory] = useState<PlatformConcessionApplication['category'] | null>(null);
   const [applications, setApplications] = useState<PlatformConcessionApplication[]>([]);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
@@ -36,7 +40,7 @@ export default function ConcessionReviewScreen() {
     setLoading(true);
     setError(null);
     try {
-      const result = await getPlatformConcessionApplications(status);
+      const result = await getPlatformConcessionApplications(status, category ?? undefined);
       if (!result.ok || !result.data) {
         setError(result.message || 'Unable to load concession applications.');
       } else {
@@ -47,7 +51,7 @@ export default function ConcessionReviewScreen() {
     } finally {
       setLoading(false);
     }
-  }, [status]);
+  }, [category, status]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => void load());
@@ -85,13 +89,49 @@ export default function ConcessionReviewScreen() {
 
   const token = getSession().token;
 
+  const confirmDecision = (
+    application: PlatformConcessionApplication,
+    decision: 'approved' | 'rejected',
+  ) => {
+    Alert.alert(
+      decision === 'approved' ? 'Approve concession?' : 'Reject application?',
+      decision === 'approved'
+        ? 'Confirm that the submitted eligibility documents have been verified.'
+        : 'The passenger will receive the rejection reason.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: decision === 'approved' ? 'Approve' : 'Reject', style: decision === 'rejected' ? 'destructive' : 'default', onPress: () => void decide(application, decision) },
+      ],
+    );
+  };
+
+  const requestDocuments = async (application: PlatformConcessionApplication) => {
+    const message = notes[application.id]?.trim() ?? '';
+    if (message.length < 5) {
+      setError('Enter a clear message explaining which additional documents are required.');
+      return;
+    }
+    setBusyId(application.id);
+    setError(null);
+    try {
+      const result = await requestPlatformConcessionDocuments(application.id, message);
+      if (!result.ok) {
+        setError(result.message || 'Unable to request additional documents.');
+        return;
+      }
+      setApplications((current) => current.filter((item) => item.id !== application.id));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to request documents.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.back}>
-          <AppText style={styles.backText}>‹  Back</AppText>
-        </Pressable>
+        <AppBackButton fallbackHref="/portal/admin" />
         <AppText style={styles.title}>Concession review</AppText>
         <View style={styles.headerSpacer} />
       </View>
@@ -110,9 +150,30 @@ export default function ConcessionReviewScreen() {
           </Pressable>
         ))}
       </View>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+      <View style={styles.filters}>
+        {([
+          [null, 'All'],
+          ['student', 'Students'],
+          ['senior_citizen', 'Senior citizens'],
+        ] as const).map(([item, label]) => (
+          <Pressable
+            key={item ?? 'all'}
+            accessibilityRole="button"
+            accessibilityState={{ selected: category === item }}
+            onPress={() => setCategory(item)}
+            style={[styles.filter, category === item && styles.filterActive]}
+          >
+            <AppText style={[styles.filterText, category === item && styles.filterTextActive]}>{label}</AppText>
+          </Pressable>
+        ))}
+      </View>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+      >
         {error ? <AppText accessibilityRole="alert" style={styles.error}>{error}</AppText> : null}
-        {loading ? <ActivityIndicator color={Brand.teal.primary} /> : applications.length === 0 ? (
+        {loading ? <TransactionSkeleton count={3} /> : applications.length === 0 ? (
           <AppText style={styles.empty}>No {status} applications.</AppText>
         ) : applications.map((application) => (
           <View key={application.id} style={styles.card}>
@@ -151,7 +212,7 @@ export default function ConcessionReviewScreen() {
                   accessibilityLabel={`Review note for application ${application.id}`}
                   value={notes[application.id] ?? ''}
                   onChangeText={(value) => setNotes((current) => ({ ...current, [application.id]: value }))}
-                  placeholder="Rejection reason (required to reject)"
+                  placeholder="Rejection reason or additional document request message"
                   multiline
                   style={styles.note}
                 />
@@ -161,17 +222,24 @@ export default function ConcessionReviewScreen() {
                   <View style={styles.actions}>
                     <Pressable
                       accessibilityRole="button"
-                      onPress={() => void decide(application, 'approved')}
+                      onPress={() => confirmDecision(application, 'approved')}
                       style={[styles.action, styles.approve]}
                     >
                       <AppText style={styles.actionText}>Approve</AppText>
                     </Pressable>
                     <Pressable
                       accessibilityRole="button"
-                      onPress={() => void decide(application, 'rejected')}
+                      onPress={() => confirmDecision(application, 'rejected')}
                       style={[styles.action, styles.reject]}
                     >
                       <AppText style={styles.actionText}>Reject</AppText>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => void requestDocuments(application)}
+                      style={[styles.action, styles.request]}
+                    >
+                      <AppText style={styles.actionText}>Request documents</AppText>
                     </Pressable>
                   </View>
                 )}
@@ -211,6 +279,7 @@ const styles = StyleSheet.create({
   action: { flex: 1, borderRadius: 10, padding: Spacing.two, alignItems: 'center' },
   approve: { backgroundColor: Brand.teal.primary },
   reject: { backgroundColor: Brand.error },
+  request: { backgroundColor: '#9A6700' },
   actionText: { color: '#fff', fontWeight: '700' },
   empty: { color: Brand.textSecondary, textAlign: 'center', padding: Spacing.four },
   error: { color: Brand.error, lineHeight: 20 },

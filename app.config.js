@@ -3,19 +3,29 @@ module.exports = ({ config }) => {
 
   return {
     ...config,
+    plugins: [
+      ...(config.plugins ?? []),
+      [
+        'react-native-maps',
+        {
+          ...(googleMapsApiKey
+            ? {
+                androidGoogleMapsApiKey: googleMapsApiKey,
+                iosGoogleMapsApiKey: googleMapsApiKey,
+              }
+            : {}),
+        },
+      ],
+    ],
+    ios: {
+      ...config.ios,
+      googleServicesFile:
+        process.env.GOOGLE_SERVICES_PLIST ?? config.ios?.googleServicesFile,
+    },
     android: {
       ...config.android,
-      ...(googleMapsApiKey
-        ? {
-            config: {
-              ...config.android?.config,
-              googleMaps: {
-                ...config.android?.config?.googleMaps,
-                apiKey: googleMapsApiKey,
-              },
-            },
-          }
-        : {}),
+      googleServicesFile:
+        process.env.GOOGLE_SERVICES_JSON ?? config.android?.googleServicesFile,
     },
   };
 };

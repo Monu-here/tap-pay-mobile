@@ -1,32 +1,40 @@
 import { AppText } from '@/components/typography/app-text';
-import { router } from 'expo-router';
+import { AppHeaderIconButton, AppScreenHeader } from '@/components/ui/app-screen-header';
+import { DriverQrSkeleton } from '@/components/skeletons/ScreenSkeletons';
 import { StatusBar } from 'expo-status-bar';
 import QRCode from 'react-native-qrcode-svg';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SymbolView } from 'expo-symbols';
 
-import { Monochrome, Spacing } from '@/constants/theme';
+import { Brand as Monochrome, Spacing } from '@/constants/theme';
 import { getActiveTripQr, type DriverTripQr } from '@/features/driver/services/driverApi';
+import { useKeyboardDismissOnBlur } from '@/hooks/use-keyboard-dismiss-on-blur';
 
 export default function DriverTripQrScreen() {
   const insets = useSafeAreaInsets();
+  useKeyboardDismissOnBlur();
   const [qr, setQr] = useState<DriverTripQr | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const result = await getActiveTripQr();
-    if (result.ok && result.data) {
-      setQr(result.data);
-      setError(null);
-    } else {
+    try {
+      const result = await getActiveTripQr();
+      if (result.ok && result.data) {
+        setQr(result.data);
+        setError(null);
+      } else {
+        setQr(null);
+        setError(result.message || 'Unable to generate a trip payment QR.');
+      }
+    } catch (requestError) {
       setQr(null);
-      setError(result.message || 'Unable to generate a trip payment QR.');
+      setError(requestError instanceof Error ? requestError.message : 'Unable to generate a trip payment QR.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -45,31 +53,33 @@ export default function DriverTripQrScreen() {
   }, [refresh]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <StatusBar style="dark" />
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-          <SymbolView
-            name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-            size={18}
-            tintColor={Monochrome.textPrimary}
+      <AppScreenHeader
+        title="Passenger Fare QR"
+        subtitle="Active trip payment pass"
+        backButton={{ fallbackHref: '/portal/driver' }}
+        rightAction={
+          <AppHeaderIconButton
+            accessibilityLabel="Refresh trip QR"
+            icon={{ ios: 'arrow.clockwise', android: 'refresh', web: 'refresh' }}
+            onPress={() => void refresh()}
           />
-        </Pressable>
-        <View style={styles.headerTitleContainer}>
-          <AppText style={styles.title}>Passenger Fare QR</AppText>
-          <AppText style={styles.subtitle}>Active Trip Payment Pass</AppText>
-        </View>
-      </View>
+        }
+      />
 
-      <View style={styles.content}>
-        {loading && !qr ? <ActivityIndicator size="large" color={Monochrome.textPrimary} /> : null}
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.four }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {loading && !qr ? <DriverQrSkeleton /> : null}
         {qr ? (
           <>
             <View style={styles.qrContainer}>
               <View style={styles.qrCard}>
                 <QRCode
                   value={qr.qr_payload}
-                  size={240}
+                  size={220}
                   backgroundColor="#FFFFFF"
                   color="#000000"
                 />
@@ -113,7 +123,7 @@ export default function DriverTripQrScreen() {
             </Pressable>
           </View>
         ) : null}
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -122,49 +132,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Monochrome.background,
-    paddingHorizontal: Spacing.lg,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingVertical: Spacing.md,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleContainer: {
-    flex: 1,
-  },
-  title: {
-    color: Monochrome.textPrimary,
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  subtitle: {
-    color: Monochrome.textSecondary,
-    fontSize: 13,
-    marginTop: 2,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 24,
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.four,
+    gap: Spacing.three,
   },
   qrContainer: {
-    backgroundColor: Monochrome.surfaceSecondary,
+    width: '100%',
+    backgroundColor: Monochrome.surfacePrimary,
     borderWidth: 1,
     borderColor: Monochrome.border,
-    borderRadius: 24,
+    borderRadius: 16,
     padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
@@ -181,8 +163,8 @@ const styles = StyleSheet.create({
     borderColor: Monochrome.border,
     borderRadius: 16,
     padding: Spacing.md,
-    marginTop: 20,
-    gap: 10,
+    marginTop: Spacing.two,
+    gap: Spacing.three,
   },
   detailRow: {
     flexDirection: 'row',
@@ -204,7 +186,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: Monochrome.textSecondary,
-    fontFamily: 'monospace',
+    letterSpacing: 0.3,
   },
   expiry: {
     color: Monochrome.textMuted,

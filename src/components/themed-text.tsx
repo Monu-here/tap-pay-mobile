@@ -1,7 +1,7 @@
 import { AppText } from '@/components/typography/app-text';
-import { Platform, StyleSheet, type TextProps } from 'react-native';
+import { StyleSheet, type TextProps } from 'react-native';
 
-import { Fonts, Monochrome, ThemeColor } from '@/constants/theme';
+import { Monochrome, ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export type ThemedTextProps = TextProps & {
@@ -32,43 +32,48 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
 }
 
 const styles = StyleSheet.create({
+  // Small labels: 500 (Medium)
   small: {
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: 500,
+    fontWeight: '500',
   },
   smallBold: {
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: 700,
+    fontWeight: '700',
   },
+  // Body text: 400 (Regular)
   default: {
     fontSize: 16,
     lineHeight: 24,
-    fontWeight: 500,
+    fontWeight: '400',
   },
+  // Main headings: 800 (ExtraBold)
   title: {
-    fontSize: 48,
-    fontWeight: 600,
-    lineHeight: 52,
-  },
-  subtitle: {
     fontSize: 32,
-    lineHeight: 44,
-    fontWeight: 600,
+    fontWeight: '800',
+    lineHeight: 40,
+  },
+  // Subheadings: 600 (SemiBold)
+  subtitle: {
+    fontSize: 20,
+    lineHeight: 28,
+    fontWeight: '600',
   },
   link: {
-    lineHeight: 30,
+    lineHeight: 24,
     fontSize: 14,
+    fontWeight: '600',
   },
   linkPrimary: {
-    lineHeight: 30,
+    lineHeight: 24,
     fontSize: 14,
-    color: Monochrome.textSecondary,
+    fontWeight: '600',
+    color: Monochrome.actionPrimary,
   },
   code: {
-    fontFamily: Fonts.mono,
-    fontWeight: Platform.select({ android: 700 }) ?? 500,
+    fontWeight: '500',
     fontSize: 12,
   },
 });

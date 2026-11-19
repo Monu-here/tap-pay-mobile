@@ -1,4 +1,5 @@
 import { AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -6,19 +7,22 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Image,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
-  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
+import { LinearGradient } from 'expo-linear-gradient';
 
-import { Monochrome, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import {
   getMpinStatus,
   payTransitFare,
@@ -31,6 +35,7 @@ import { createIdempotencyKey } from '@/features/auth/services/apiClient';
 
 export default function PassengerPayScreen() {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
   const [torchOn, setTorchOn] = useState(false);
   const [qrPayload, setQrPayload] = useState<string | null>(null);
@@ -190,29 +195,23 @@ export default function PassengerPayScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <StatusBar style="dark" />
+    <View style={[styles.container, { backgroundColor: theme.background, paddingBottom: insets.bottom }]}>
+      <StatusBar style="light" />
 
-      {/* Navigation Header */}
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.backButton}
-          hitSlop={8}
-        >
-          <SymbolView
-            name={{ ios: 'chevron.left', android: 'chevron_left', web: 'chevron_left' }}
-            size={20}
-            tintColor={Monochrome.textPrimary}
-          />
-        </Pressable>
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={['#003049', '#001824']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: insets.top + 12 }]}
+      >
+        <AppBackButton />
         <View style={styles.headerTitleWrap}>
-          <AppText style={styles.title}>Scan Driver QR to Pay</AppText>
-          <AppText style={styles.subtitle}>Hold camera up to the driver&apos;s QR code</AppText>
+          <AppText style={styles.title}>Scan & Pay</AppText>
+          <AppText style={styles.subtitle}>Hold camera to the driver&apos;s QR code</AppText>
         </View>
 
-        {/* Torch Toggle Button */}
+        {/* Torch Toggle */}
         {!ticket && !quote && permission?.granted ? (
           <Pressable
             accessibilityRole="button"
@@ -227,40 +226,42 @@ export default function PassengerPayScreen() {
                 web: torchOn ? 'flash_on' : 'flash_off',
               }}
               size={18}
-              tintColor={Monochrome.textPrimary}
+              tintColor={torchOn ? '#FDB94D' : '#FDF0D5'}
             />
           </Pressable>
         ) : (
           <View style={styles.headerSpacer} />
         )}
-      </View>
+      </LinearGradient>
 
       <ScrollView
         contentContainerStyle={styles.scrollBody}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       >
         {/* Scanner View */}
         {!ticket && !quote && (
           <View style={styles.scannerWrapper}>
             {!permission?.granted ? (
-              <View style={styles.centerCard}>
-                <View style={styles.permIconBox}>
+              <View style={[styles.centerCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border }]}>
+                <View style={[styles.permIconBox, { backgroundColor: '#003049' }]}>
                   <SymbolView
                     name={{ ios: 'camera.fill', android: 'photo_camera', web: 'photo_camera' }}
                     size={32}
-                    tintColor={Monochrome.textPrimary}
+                    tintColor="#FDF0D5"
                   />
                 </View>
-                <AppText style={styles.cardTitle}>Camera Permission Required</AppText>
-                <AppText style={styles.bodyText}>
-                  Tap &amp; Pay needs camera access to scan driver payment QR codes on public buses.
+                <AppText style={[styles.cardTitle, { color: theme.text }]}>Camera Permission Required</AppText>
+                <AppText style={[styles.bodyText, { color: theme.textSecondary }]}>
+                  Scan &amp; Pay needs camera access to scan driver payment QR codes on public buses.
                 </AppText>
                 <Pressable onPress={requestPermission} style={styles.primaryButton}>
                   <AppText style={styles.primaryText}>Grant Camera Access</AppText>
                 </Pressable>
-                <Pressable onPress={handleOpenSettings} style={styles.secondaryButton}>
-                  <AppText style={styles.secondaryText}>Open App Settings</AppText>
+                <Pressable onPress={handleOpenSettings} style={[styles.secondaryButton, { borderColor: theme.border }]}>
+                  <AppText style={[styles.secondaryText, { color: theme.textSecondary }]}>Open App Settings</AppText>
                 </Pressable>
               </View>
             ) : (
@@ -278,7 +279,7 @@ export default function PassengerPayScreen() {
                   <View style={styles.maskMiddleRow}>
                     <View style={styles.maskSide} />
                     <View style={styles.reticleFrame}>
-                      {/* 4 Corner Markers */}
+                      {/* 4 Corner Markers — Crimson Red */}
                       <View style={[styles.corner, styles.cornerTL]} />
                       <View style={[styles.corner, styles.cornerTR]} />
                       <View style={[styles.corner, styles.cornerBL]} />
@@ -286,8 +287,8 @@ export default function PassengerPayScreen() {
 
                       {loading ? (
                         <View style={styles.loadingContainer}>
-                          <ActivityIndicator size="small" color={Monochrome.textPrimary} />
-                          <AppText style={styles.loadingReticleText}>Verifying Fare Quote...</AppText>
+                          <ActivityIndicator size="small" color="#FDF0D5" />
+                          <AppText style={styles.loadingReticleText}>Verifying fare…</AppText>
                         </View>
                       ) : null}
                     </View>
@@ -295,10 +296,10 @@ export default function PassengerPayScreen() {
                   </View>
                   <View style={styles.maskBottom}>
                     <AppText style={styles.cameraInstruction}>
-                      Scan the driver&apos;s Tap &amp; Pay QR code
+                      Scan the driver&apos;s QR code
                     </AppText>
                     <AppText style={styles.cameraSubInstruction}>
-                      Position the code inside the square frame
+                      Position the code inside the frame
                     </AppText>
                   </View>
                 </View>
@@ -312,63 +313,73 @@ export default function PassengerPayScreen() {
             accessibilityRole="button"
             accessibilityLabel="Show my transit QR pass"
             onPress={() => router.push('/passenger/qr' as never)}
-            style={styles.myQrButton}
+            style={[styles.myQrButton, { backgroundColor: theme.surfacePrimary, borderColor: theme.border }]}
           >
-            <View style={styles.myQrIconBox}>
+            <View style={[styles.myQrIconBox, { backgroundColor: '#003049' }]}>
               <SymbolView
                 name={{ ios: 'qrcode', android: 'qr_code', web: 'qr_code' }}
                 size={22}
-                tintColor={Monochrome.textPrimary}
+                tintColor="#FDF0D5"
               />
             </View>
             <View style={styles.myQrCopy}>
-              <AppText style={styles.myQrTitle}>Show My QR Pass</AppText>
-              <AppText style={styles.myQrSubtitle}>Present your transit pass to the driver</AppText>
+              <AppText style={[styles.myQrTitle, { color: theme.text }]}>Show My QR Pass</AppText>
+              <AppText style={[styles.myQrSubtitle, { color: theme.textSecondary }]}>Present your transit pass to the driver</AppText>
             </View>
             <SymbolView
               name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
               size={18}
-              tintColor={Monochrome.textSecondary}
+              tintColor={theme.textMuted}
             />
           </Pressable>
         )}
 
+        {!ticket && !quote ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/passenger/journey' as never)}
+            style={styles.secondaryButton}
+          >
+            <AppText style={styles.secondaryText}>Start a journey and pay at your exit</AppText>
+          </Pressable>
+        ) : null}
+
         {/* Fare Quote & Confirmation Card */}
         {quote && !ticket && (
-          <View style={styles.quoteCard}>
+          <View style={[styles.quoteCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border }]}>
             <View style={styles.quoteBadgeRow}>
-              <View style={styles.verifiedBadge}>
+              <View style={[styles.verifiedBadge, { backgroundColor: 'rgba(27,138,90,0.12)' }]}>
                 <SymbolView
                   name={{ ios: 'checkmark.shield.fill', android: 'verified', web: 'verified' }}
                   size={12}
-                  tintColor={Monochrome.textPrimary}
+                  tintColor="#1B8A5A"
                 />
-                <AppText style={styles.verifiedBadgeText}>VERIFIED TRIP QUOTE</AppText>
+                <AppText style={[styles.verifiedBadgeText, { color: '#1B8A5A' }]}>VERIFIED TRIP QUOTE</AppText>
               </View>
-              <AppText style={styles.refText}>Trip: {quote.trip_reference}</AppText>
+              <AppText style={[styles.refText, { color: theme.textMuted }]}>Ref: {quote.trip_reference}</AppText>
             </View>
 
-            <AppText style={styles.quoteRouteName}>{quote.route.name}</AppText>
-            <AppText style={styles.quoteCompanyBus}>
+            <AppText style={[styles.quoteRouteName, { color: theme.text }]}>{quote.route.name}</AppText>
+            <AppText style={[styles.quoteCompanyBus, { color: theme.textSecondary }]}>
               {quote.company.name ? `${quote.company.name} • ` : ''}Bus {quote.bus.bus_number}
             </AppText>
-            <View style={styles.recipientCard}>
+            <View style={[styles.recipientCard, { backgroundColor: theme.surfaceSecondary, borderColor: theme.border }]}>
               {quote.driver.photo_url ? (
                 <Image source={{ uri: quote.driver.photo_url }} style={styles.driverPhoto} />
               ) : (
-                <View style={styles.driverPhotoFallback}>
-                  <SymbolView name={{ ios: 'person.fill', android: 'person', web: 'person' }} size={20} tintColor={Monochrome.textPrimary} />
+                <View style={[styles.driverPhotoFallback, { backgroundColor: '#003049' }]}>
+                  <SymbolView name={{ ios: 'person.fill', android: 'person', web: 'person' }} size={20} tintColor="#FDF0D5" />
                 </View>
               )}
               <View style={styles.recipientCopy}>
                 <AppText style={styles.recipientLabel}>VERIFIED DRIVER</AppText>
-                <AppText style={styles.recipientName}>{quote.driver.name || 'Driver identity unavailable'}</AppText>
-                <AppText style={styles.recipientDetail}>
-                  Fare for this trip is paid through Tap &amp; Pay; this is not a personal money transfer.
+                <AppText style={[styles.recipientName, { color: theme.text }]}>{quote.driver.name || 'Driver identity unavailable'}</AppText>
+                <AppText style={[styles.recipientDetail, { color: theme.textSecondary }]}>
+                  Fare paid via Tap &amp; Pay — not a personal transfer.
                 </AppText>
               </View>
               {quote.driver.verified ? (
-                <SymbolView name={{ ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' }} size={18} tintColor={Monochrome.actionPrimary} />
+                <SymbolView name={{ ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' }} size={20} tintColor="#1B8A5A" />
               ) : null}
             </View>
 
@@ -377,44 +388,43 @@ export default function PassengerPayScreen() {
                 <SymbolView
                   name={{ ios: 'mappin.circle.fill', android: 'place', web: 'place' }}
                   size={14}
-                  tintColor={Monochrome.textSecondary}
+                  tintColor={theme.actionPrimary}
                 />
-                <AppText style={styles.stopText}>Boarding: {quote.fare.boarding_stop_name}</AppText>
+                <AppText style={[styles.stopText, { color: theme.textSecondary }]}>Boarding: {quote.fare.boarding_stop_name}</AppText>
               </View>
             ) : null}
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
             <View style={styles.amountBreakdown}>
               <View style={styles.amountRow}>
-                <AppText style={styles.amountLabel}>Trip Fare</AppText>
-                <AppText style={styles.fareAmount}>
+                <AppText style={[styles.amountLabel, { color: theme.textSecondary }]}>Trip Fare</AppText>
+                <AppText style={[styles.fareAmount, { color: theme.text }]}>
                   NPR {quote.fare.amount_formatted || `Rs. ${(quote.fare.amount_minor / 100).toFixed(2)}`}
                 </AppText>
               </View>
-
               <View style={styles.amountRow}>
-                <AppText style={styles.amountLabel}>Wallet Balance</AppText>
-                <AppText style={styles.balanceAmount}>
+                <AppText style={[styles.amountLabel, { color: theme.textSecondary }]}>Wallet Balance</AppText>
+                <AppText style={[styles.balanceAmount, { color: theme.textSecondary }]}>
                   NPR {quote.wallet.balance_formatted || `Rs. ${(quote.wallet.balance_minor / 100).toFixed(2)}`}
                 </AppText>
               </View>
             </View>
 
             {insufficientBalance ? (
-              <View style={styles.warningBox}>
+              <View style={[styles.warningBox, { backgroundColor: 'rgba(193,18,31,0.08)', borderColor: 'rgba(193,18,31,0.2)' }]}>
                 <SymbolView
                   name={{ ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' }}
                   size={16}
-                  tintColor={Monochrome.textPrimary}
+                  tintColor="#C1121F"
                 />
-                <AppText style={styles.warningText}>
-                  Insufficient funds in your Tap &amp; Pay wallet to cover this bus fare. Please add money before proceeding.
+                <AppText style={[styles.warningText, { color: '#C1121F' }]}>
+                  Insufficient funds. Please top up your wallet before paying.
                 </AppText>
               </View>
             ) : (
-              <AppText style={styles.securityNotice}>
-                Fare is set by the server’s active fare rules. Review the verified driver and trip, then authorize with your MPIN. No extra fee is currently added.
+              <AppText style={[styles.securityNotice, { color: theme.textMuted }]}>
+                Fare set by active fare rules. Review driver details and authorize with your MPIN.
               </AppText>
             )}
 
@@ -439,10 +449,10 @@ export default function PassengerPayScreen() {
               </AppText>
             </Pressable>
             {mpinStatusError ? (
-              <View style={styles.errorCard}>
-                <AppText style={styles.errorText}>{mpinStatusError}</AppText>
-                <Pressable onPress={() => void confirmPayment()} style={styles.errorRetryButton}>
-                  <AppText style={styles.errorRetryText}>Retry security check</AppText>
+              <View style={[styles.errorCard, { backgroundColor: theme.surfaceSecondary, borderColor: theme.border }]}>
+                <AppText style={[styles.errorText, { color: theme.textSecondary }]}>{mpinStatusError}</AppText>
+                <Pressable onPress={() => void confirmPayment()} style={[styles.errorRetryButton, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
+                  <AppText style={[styles.errorRetryText, { color: theme.text }]}>Retry security check</AppText>
                 </Pressable>
               </View>
             ) : null}
@@ -450,82 +460,82 @@ export default function PassengerPayScreen() {
             {insufficientBalance ? (
               <Pressable
                 onPress={() => router.push('/(tabs)/wallet' as never)}
-                style={styles.addMoneyButton}
+                style={[styles.addMoneyButton, { backgroundColor: theme.surfaceSecondary, borderColor: theme.border }]}
               >
-                <AppText style={styles.addMoneyText}>Add Money to Wallet</AppText>
+                <AppText style={[styles.addMoneyText, { color: theme.text }]}>Add Money to Wallet</AppText>
               </Pressable>
             ) : null}
 
             <Pressable disabled={paying} onPress={reset} style={styles.secondaryButton}>
-              <AppText style={styles.secondaryText}>Cancel</AppText>
+              <AppText style={[styles.secondaryText, { color: theme.textSecondary }]}>Cancel</AppText>
             </Pressable>
           </View>
         )}
 
         {/* Digital Ticket / Receipt */}
         {ticket && (
-          <View style={styles.ticketCard}>
+          <View style={[styles.ticketCard, { backgroundColor: theme.surfacePrimary, borderColor: theme.border }]}>
             <View style={styles.successHeader}>
               <View style={styles.successIconCircle}>
                 <SymbolView
                   name={{ ios: 'checkmark', android: 'check', web: 'check' }}
-                  size={20}
-                  tintColor={Monochrome.actionPrimaryText}
+                  size={22}
+                  tintColor="#FFFFFF"
                 />
               </View>
-              <AppText style={styles.successTitle}>Fare Payment Confirmed</AppText>
-              <AppText style={styles.successSubtitle}>Digital transit ticket issued</AppText>
+              <AppText style={[styles.successTitle, { color: theme.text }]}>Payment Confirmed</AppText>
+              <AppText style={[styles.successSubtitle, { color: theme.textSecondary }]}>Digital transit ticket issued</AppText>
             </View>
 
-            <View style={styles.ticketBody}>
+            <View style={[styles.ticketBody, { backgroundColor: theme.surfaceSecondary, borderColor: theme.border }]}>
               <View style={styles.ticketRow}>
-                <AppText style={styles.ticketLabel}>Ticket Number</AppText>
-                <AppText style={styles.ticketValEmphasized}>{ticket.ticket_number}</AppText>
+                <AppText style={[styles.ticketLabel, { color: theme.textMuted }]}>Ticket No.</AppText>
+                <AppText style={[styles.ticketValEmphasized, { color: theme.text }]}>{ticket.ticket_number}</AppText>
               </View>
-
+              <View style={[styles.ticketDivider, { backgroundColor: theme.border }]} />
               <View style={styles.ticketRow}>
-                <AppText style={styles.ticketLabel}>Route &amp; Bus</AppText>
-                <AppText style={styles.ticketVal}>{ticket.route_name} • Bus {ticket.bus_number}</AppText>
+                <AppText style={[styles.ticketLabel, { color: theme.textMuted }]}>Route &amp; Bus</AppText>
+                <AppText style={[styles.ticketVal, { color: theme.text }]}>{ticket.route_name} • Bus {ticket.bus_number}</AppText>
               </View>
               {ticket.driver_name ? (
-                <View style={styles.ticketRow}>
-                  <AppText style={styles.ticketLabel}>Verified driver</AppText>
-                  <AppText style={styles.ticketVal}>{ticket.driver_name}</AppText>
-                </View>
+                <>
+                  <View style={[styles.ticketDivider, { backgroundColor: theme.border }]} />
+                  <View style={styles.ticketRow}>
+                    <AppText style={[styles.ticketLabel, { color: theme.textMuted }]}>Driver</AppText>
+                    <AppText style={[styles.ticketVal, { color: theme.text }]}>{ticket.driver_name}</AppText>
+                  </View>
+                </>
               ) : null}
-
+              <View style={[styles.ticketDivider, { backgroundColor: theme.border }]} />
               <View style={styles.ticketRow}>
-                <AppText style={styles.ticketLabel}>Amount Paid</AppText>
-                <AppText style={styles.ticketValFare}>
+                <AppText style={[styles.ticketLabel, { color: theme.textMuted }]}>Amount Paid</AppText>
+                <AppText style={[styles.ticketValFare, { color: '#C1121F' }]}>
                   NPR {ticket.fare_formatted || `Rs. ${(ticket.fare_minor / 100).toFixed(2)}`}
                 </AppText>
               </View>
-
+              <View style={[styles.ticketDivider, { backgroundColor: theme.border }]} />
               <View style={styles.ticketRow}>
-                <AppText style={styles.ticketLabel}>Remaining Balance</AppText>
-                <AppText style={styles.ticketValBalance}>
+                <AppText style={[styles.ticketLabel, { color: theme.textMuted }]}>Wallet Balance</AppText>
+                <AppText style={[styles.ticketValBalance, { color: theme.textSecondary }]}>
                   NPR {ticket.balance_remaining_formatted || `Rs. ${(ticket.balance_remaining_minor / 100).toFixed(2)}`}
                 </AppText>
               </View>
-
+              <View style={[styles.ticketDivider, { backgroundColor: theme.border }]} />
               <View style={styles.ticketRow}>
-                <AppText style={styles.ticketLabel}>Reference</AppText>
-                <AppText style={styles.ticketValSmall}>{ticket.transaction_reference}</AppText>
+                <AppText style={[styles.ticketLabel, { color: theme.textMuted }]}>Reference</AppText>
+                <AppText style={[styles.ticketValSmall, { color: theme.textMuted }]}>{ticket.transaction_reference}</AppText>
               </View>
-
+              <View style={[styles.ticketDivider, { backgroundColor: theme.border }]} />
               <View style={styles.ticketRow}>
-                <AppText style={styles.ticketLabel}>Issued At</AppText>
-                <AppText style={styles.ticketValSmall}>
+                <AppText style={[styles.ticketLabel, { color: theme.textMuted }]}>Issued At</AppText>
+                <AppText style={[styles.ticketValSmall, { color: theme.textMuted }]}>
                   {ticket.issued_at ? new Date(ticket.issued_at).toLocaleString() : 'Just now'}
                 </AppText>
               </View>
             </View>
 
-            <Pressable
-              onPress={openFeedback}
-              style={styles.primaryButton}
-            >
-              <AppText style={styles.primaryText}>Rate Your Ride</AppText>
+            <Pressable onPress={openFeedback} style={styles.primaryButton}>
+              <AppText style={styles.primaryText}>Rate Your Ride ⭐</AppText>
             </Pressable>
 
             <Pressable
@@ -533,29 +543,29 @@ export default function PassengerPayScreen() {
                 feedbackNavigationHandledRef.current = true;
                 router.replace('/travel' as never);
               }}
-              style={styles.secondaryButton}
+              style={[styles.secondaryButton, { borderColor: theme.border }]}
             >
-              <AppText style={styles.secondaryText}>View Travel History</AppText>
+              <AppText style={[styles.secondaryText, { color: theme.textSecondary }]}>View Travel History</AppText>
             </Pressable>
 
-            <Pressable onPress={reset} style={styles.secondaryButton}>
-              <AppText style={styles.secondaryText}>Scan Another QR</AppText>
+            <Pressable onPress={reset} style={[styles.secondaryButton, { borderColor: theme.border }]}>
+              <AppText style={[styles.secondaryText, { color: theme.textSecondary }]}>Scan Another QR</AppText>
             </Pressable>
           </View>
         )}
 
         {/* Error Notification Card */}
         {error ? (
-          <View style={styles.errorCard}>
+          <View style={[styles.errorCard, { backgroundColor: theme.surfacePrimary, borderColor: 'rgba(193,18,31,0.2)' }]}>
             <View style={styles.errorHeader}>
               <SymbolView
                 name={{ ios: 'exclamationmark.circle.fill', android: 'error', web: 'error' }}
                 size={18}
-                tintColor={Monochrome.textPrimary}
+                tintColor="#C1121F"
               />
-              <AppText style={styles.errorTitle}>Scan / Payment Error</AppText>
+              <AppText style={[styles.errorTitle, { color: theme.text }]}>Scan / Payment Error</AppText>
             </View>
-            <AppText style={styles.errorText}>{error}</AppText>
+            <AppText style={[styles.errorText, { color: theme.textSecondary }]}>{error}</AppText>
             <Pressable
               onPress={quote ? () => void confirmPayment() : reset}
               style={styles.errorRetryButton}
@@ -579,22 +589,40 @@ export default function PassengerPayScreen() {
           }
         }}
       >
-        <View style={styles.mpinOverlay}>
-          <View style={[styles.mpinSheet, { paddingBottom: insets.bottom + Spacing.lg }]}>
-            <View style={styles.mpinHandle} />
+        <KeyboardAvoidingView
+          style={styles.mpinOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <ScrollView
+            style={[
+              styles.mpinSheet,
+              {
+                backgroundColor: theme.surfacePrimary,
+                maxHeight: '90%',
+              },
+            ]}
+            contentContainerStyle={[
+              styles.mpinSheetContent,
+              { paddingBottom: insets.bottom + Spacing.lg },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={[styles.mpinHandle, { backgroundColor: theme.border }]} />
             <View style={styles.mpinHeader}>
-              <View style={styles.mpinLockIcon}>
-                <SymbolView name={{ ios: 'lock.fill', android: 'lock', web: 'lock' }} size={20} tintColor={Monochrome.textPrimary} />
+              <View style={[styles.mpinLockIcon, { backgroundColor: '#C1121F' }]}>
+                <SymbolView name={{ ios: 'lock.fill', android: 'lock', web: 'lock' }} size={20} tintColor="#FFFFFF" />
               </View>
-              <AppText style={styles.mpinTitle}>Authorize fare payment</AppText>
-              <AppText style={styles.mpinDescription}>
-                Pay NPR {((quote?.fare.amount_minor ?? 0) / 100).toFixed(2)} from your Tap &amp; Pay wallet
+              <AppText style={[styles.mpinTitle, { color: theme.text }]}>Authorize Payment</AppText>
+              <AppText style={[styles.mpinDescription, { color: theme.textSecondary }]}>
+                Pay NPR {((quote?.fare.amount_minor ?? 0) / 100).toFixed(2)} from your transit wallet
               </AppText>
             </View>
-            <AppText style={styles.mpinLabel}>Enter four-digit MPIN</AppText>
+            <AppText style={[styles.mpinLabel, { color: theme.textSecondary }]}>Enter your 4-digit MPIN</AppText>
             <AppTextInput
               accessibilityLabel="Four-digit MPIN"
-              style={styles.mpinInput}
+              style={[styles.mpinInput, { borderColor: theme.border, backgroundColor: theme.surfaceSecondary, color: theme.text }]}
               value={mpinInput}
               onChangeText={(value) => {
                 setMpinInput(value.replace(/\D/g, '').slice(0, 4));
@@ -616,7 +644,7 @@ export default function PassengerPayScreen() {
               style={[styles.primaryButton, (paying || mpinInput.length !== 4) && styles.disabledButton]}
             >
               {paying
-                ? <ActivityIndicator color={Monochrome.actionPrimaryText} />
+                ? <ActivityIndicator color="#FFFFFF" />
                 : <AppText style={styles.primaryText}>Authorize NPR {((quote?.fare.amount_minor ?? 0) / 100).toFixed(2)}</AppText>}
             </Pressable>
             <Pressable
@@ -629,97 +657,87 @@ export default function PassengerPayScreen() {
               }}
               style={styles.secondaryButton}
             >
-              <AppText style={styles.secondaryText}>Cancel — no payment will be made</AppText>
+              <AppText style={[styles.secondaryText, { color: theme.textSecondary }]}>Cancel — no payment will be made</AppText>
             </Pressable>
             <Pressable onPress={() => {
               setMpinModalVisible(false);
               setMpinInput('');
               router.push('/security/mpin' as never);
             }}>
-              <AppText style={styles.forgotMpin}>Forgot MPIN?</AppText>
+              <AppText style={[styles.forgotMpin, { color: theme.actionPrimary }]}>Forgot MPIN?</AppText>
             </Pressable>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Monochrome.background,
-  },
+  container: { flex: 1 },
+
+  /* ── Gradient Header ── */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
-    backgroundColor: Monochrome.surfacePrimary,
-    borderBottomWidth: 1,
-    borderBottomColor: Monochrome.border,
+    paddingBottom: 16,
+    gap: 12,
   },
   backButton: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
+    backgroundColor: 'rgba(253,240,213,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitleWrap: {
-    flex: 1,
-    marginLeft: 12,
-  },
+  headerTitleWrap: { flex: 1 },
   title: {
-    color: Monochrome.textPrimary,
-    fontSize: 17,
+    color: '#FDF0D5',
+    fontSize: 18,
     fontWeight: '800',
+    letterSpacing: -0.3,
   },
   subtitle: {
-    color: Monochrome.textSecondary,
+    color: 'rgba(253,240,213,0.6)',
     fontSize: 12,
+    fontWeight: '400',
     marginTop: 2,
   },
   torchButton: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
+    backgroundColor: 'rgba(253,240,213,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   torchButtonActive: {
-    backgroundColor: Monochrome.surfaceElevated,
-    borderColor: Monochrome.textPrimary,
+    backgroundColor: 'rgba(253,179,77,0.2)',
   },
-  headerSpacer: {
-    width: 38,
-  },
+  headerSpacer: { width: 38 },
+
+  /* ── Scroll Body ── */
   scrollBody: {
     paddingHorizontal: Spacing.four,
     paddingBottom: Spacing.six,
+    paddingTop: Spacing.two,
   },
-  scannerWrapper: {
-    marginVertical: Spacing.two,
-  },
+  scannerWrapper: { marginVertical: Spacing.two },
+
+  /* ── My QR Button ── */
   myQrButton: {
-    minHeight: 72,
+    minHeight: 68,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     marginTop: Spacing.two,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Monochrome.border,
-    backgroundColor: Monochrome.surfacePrimary,
   },
   myQrIconBox: {
     width: 42,
@@ -727,46 +745,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 12,
-    backgroundColor: Monochrome.surfaceSecondary,
   },
-  myQrCopy: {
-    flex: 1,
-  },
-  myQrTitle: {
-    color: Monochrome.textPrimary,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  myQrSubtitle: {
-    marginTop: 2,
-    color: Monochrome.textSecondary,
-    fontSize: 12,
-  },
+  myQrCopy: { flex: 1 },
+  myQrTitle: { fontSize: 15, fontWeight: '700' },
+  myQrSubtitle: { marginTop: 2, fontSize: 12 },
+
+  /* ── Camera ── */
   cameraBox: {
     height: 420,
     borderRadius: 24,
     overflow: 'hidden',
-    backgroundColor: Monochrome.surfacePrimary,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
+    backgroundColor: '#000000',
     position: 'relative',
   },
   viewfinderOverlay: {
     ...StyleSheet.absoluteFill,
     flexDirection: 'column',
   },
-  maskTop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-  },
-  maskMiddleRow: {
-    flexDirection: 'row',
-    height: 240,
-  },
-  maskSide: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-  },
+  maskTop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)' },
+  maskMiddleRow: { flexDirection: 'row', height: 240 },
+  maskSide: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)' },
   reticleFrame: {
     width: 240,
     height: 240,
@@ -776,113 +774,58 @@ const styles = StyleSheet.create({
   },
   corner: {
     position: 'absolute',
-    width: 24,
-    height: 24,
-    borderColor: Monochrome.textPrimary,
+    width: 28,
+    height: 28,
+    borderColor: '#C1121F',
   },
-  cornerTL: {
-    top: 0,
-    left: 0,
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-    borderTopLeftRadius: 8,
-  },
-  cornerTR: {
-    top: 0,
-    right: 0,
-    borderTopWidth: 3,
-    borderRightWidth: 3,
-    borderTopRightRadius: 8,
-  },
-  cornerBL: {
-    bottom: 0,
-    left: 0,
-    borderBottomWidth: 3,
-    borderLeftWidth: 3,
-    borderBottomLeftRadius: 8,
-  },
-  cornerBR: {
-    bottom: 0,
-    right: 0,
-    borderBottomWidth: 3,
-    borderRightWidth: 3,
-    borderBottomRightRadius: 8,
-  },
+  cornerTL: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 8 },
+  cornerTR: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 8 },
+  cornerBL: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 8 },
+  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 8 },
   loadingContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    backgroundColor: 'rgba(0,0,0,0.85)',
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
     gap: 8,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
   },
-  loadingReticleText: {
-    color: Monochrome.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
+  loadingReticleText: { color: '#FDF0D5', fontSize: 13, fontWeight: '700' },
   maskBottom: {
     flex: 1.2,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
     alignItems: 'center',
     paddingTop: 16,
     paddingHorizontal: 20,
   },
-  cameraInstruction: {
-    color: Monochrome.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  cameraSubInstruction: {
-    color: Monochrome.textSecondary,
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 4,
-  },
+  cameraInstruction: { color: '#FDF0D5', fontSize: 15, fontWeight: '700', textAlign: 'center' },
+  cameraSubInstruction: { color: 'rgba(253,240,213,0.65)', fontSize: 12, textAlign: 'center', marginTop: 4 },
+
+  /* ── Permission card ── */
   centerCard: {
-    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
     marginTop: 20,
     borderWidth: 1,
-    borderColor: Monochrome.border,
   },
   permIconBox: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: Monochrome.surfaceElevated,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
+    width: 64,
+    height: 64,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
   },
-  cardTitle: {
-    color: Monochrome.textPrimary,
-    fontSize: 19,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  bodyText: {
-    color: Monochrome.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 20,
-  },
+  cardTitle: { fontSize: 19, fontWeight: '800', textAlign: 'center' },
+  bodyText: { fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 8, marginBottom: 20 },
+
+  /* ── Quote Card ── */
   quoteCard: {
-    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 22,
     padding: 20,
     marginTop: Spacing.two,
     borderWidth: 1,
-    borderColor: Monochrome.border,
   },
   quoteBadgeRow: {
     flexDirection: 'row',
@@ -894,44 +837,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Monochrome.surfaceElevated,
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  verifiedBadgeText: {
-    color: Monochrome.textPrimary,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  refText: {
-    color: Monochrome.textMuted,
-    fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  quoteRouteName: {
-    color: Monochrome.textPrimary,
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  quoteCompanyBus: {
-    color: Monochrome.textSecondary,
-    fontSize: 13,
-    marginTop: 4,
-  },
+  verifiedBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  refText: { fontSize: 11 },
+  quoteRouteName: { fontSize: 20, fontWeight: '800' },
+  quoteCompanyBus: { fontSize: 13, marginTop: 4 },
   recipientCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     marginTop: 14,
     padding: 12,
-    borderRadius: 16,
-    backgroundColor: Monochrome.surfacePrimary,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: Monochrome.border,
   },
   driverPhoto: { width: 48, height: 48, borderRadius: 24 },
   driverPhotoFallback: {
@@ -940,277 +861,189 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Monochrome.surfaceElevated,
   },
   recipientCopy: { flex: 1, gap: 2 },
-  recipientLabel: { color: Monochrome.actionPrimary, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  recipientName: { color: Monochrome.textPrimary, fontSize: 15, fontWeight: '700' },
-  recipientDetail: { color: Monochrome.textSecondary, fontSize: 11, lineHeight: 15 },
-  stopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-  },
-  stopText: {
-    color: Monochrome.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: Monochrome.surfaceElevated,
-    marginVertical: 14,
-  },
-  amountBreakdown: {
-    gap: 10,
-  },
-  amountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  amountLabel: {
-    color: Monochrome.textSecondary,
-    fontSize: 13,
-  },
-  fareAmount: {
-    color: Monochrome.textPrimary,
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  balanceAmount: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Monochrome.textSecondary,
-  },
+  recipientLabel: { color: '#1B8A5A', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  recipientName: { fontSize: 15, fontWeight: '700' },
+  recipientDetail: { fontSize: 11, lineHeight: 15 },
+  stopRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+  stopText: { fontSize: 13, fontWeight: '600' },
+  divider: { height: 1, marginVertical: 14 },
+  amountBreakdown: { gap: 10 },
+  amountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  amountLabel: { fontSize: 13 },
+  fareAmount: { fontSize: 22, fontWeight: '800' },
+  balanceAmount: { fontSize: 15, fontWeight: '600' },
   warningBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: Monochrome.surfaceElevated,
     padding: 12,
     borderRadius: 12,
     marginTop: 14,
     borderWidth: 1,
-    borderColor: Monochrome.border,
   },
-  warningText: {
-    flex: 1,
-    color: Monochrome.textPrimary,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  securityNotice: {
-    color: Monochrome.textMuted,
-    fontSize: 12,
-    lineHeight: 16,
-    marginTop: 12,
-  },
+  warningText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  securityNotice: { fontSize: 12, lineHeight: 16, marginTop: 12 },
+
+  /* ── Buttons ── */
   primaryButton: {
-    height: 48,
-    backgroundColor: Monochrome.actionPrimary,
+    height: 50,
+    backgroundColor: '#C1121F',
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 18,
     paddingHorizontal: 16,
+    shadowColor: '#C1121F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  primaryText: {
-    color: Monochrome.actionPrimaryText,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  disabledButton: {
-    opacity: 0.5,
-  },
+  primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  disabledButton: { opacity: 0.5, shadowOpacity: 0 },
   addMoneyButton: {
     height: 44,
-    backgroundColor: Monochrome.surfaceElevated,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Monochrome.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 10,
   },
-  addMoneyText: {
-    color: Monochrome.textPrimary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  addMoneyText: { fontSize: 14, fontWeight: '600' },
   secondaryButton: {
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  secondaryText: {
-    color: Monochrome.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  secondaryText: { fontSize: 14, fontWeight: '600' },
+
+  /* ── Ticket Card ── */
   ticketCard: {
-    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 22,
     padding: 22,
     marginTop: Spacing.two,
     borderWidth: 1,
-    borderColor: Monochrome.border,
   },
-  successHeader: {
-    alignItems: 'center',
-    marginBottom: 18,
-  },
+  successHeader: { alignItems: 'center', marginBottom: 18 },
   successIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Monochrome.actionPrimary,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#1B8A5A',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
+    shadowColor: '#1B8A5A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  successTitle: {
-    color: Monochrome.textPrimary,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  successSubtitle: {
-    color: Monochrome.textSecondary,
-    fontSize: 13,
-    marginTop: 2,
-  },
+  successTitle: { fontSize: 18, fontWeight: '800' },
+  successSubtitle: { fontSize: 13, marginTop: 2 },
   ticketBody: {
-    backgroundColor: Monochrome.surfacePrimary,
     borderRadius: 16,
-    padding: 16,
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: Monochrome.border,
   },
+  ticketDivider: { height: 1 },
   ticketRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 11,
   },
-  ticketLabel: {
-    color: Monochrome.textMuted,
-    fontSize: 12,
-  },
-  ticketVal: {
-    color: Monochrome.textPrimary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  ticketLabel: { fontSize: 12 },
+  ticketVal: { fontSize: 13, fontWeight: '600', maxWidth: '60%', textAlign: 'right' },
   ticketValEmphasized: {
-    color: Monochrome.textPrimary,
     fontSize: 14,
     fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  ticketValFare: {
-    color: Monochrome.textPrimary,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  ticketValBalance: {
-    color: Monochrome.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  ticketValFare: { fontSize: 16, fontWeight: '800' },
+  ticketValBalance: { fontSize: 13, fontWeight: '600' },
   ticketValSmall: {
-    color: Monochrome.textMuted,
-    fontSize: 12,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontSize: 11,
+    maxWidth: '60%',
+    textAlign: 'right',
   },
+
+  /* ── Error ── */
   errorCard: {
-    backgroundColor: Monochrome.surfaceSecondary,
     borderRadius: 16,
     padding: 16,
     marginTop: 16,
     borderWidth: 1,
-    borderColor: Monochrome.border,
   },
-  errorHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
-  errorTitle: {
-    color: Monochrome.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  errorText: {
-    color: Monochrome.textSecondary,
-    fontSize: 13,
-    lineHeight: 18,
-  },
+  errorHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  errorTitle: { fontSize: 14, fontWeight: '700' },
+  errorText: { fontSize: 13, lineHeight: 18 },
   errorRetryButton: {
-    backgroundColor: Monochrome.surfaceElevated,
     borderRadius: 10,
     height: 38,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 12,
     borderWidth: 1,
-    borderColor: Monochrome.border,
   },
-  errorRetryText: {
-    color: Monochrome.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
+  errorRetryText: { fontSize: 13, fontWeight: '700' },
+
+  /* ── MPIN Sheet ── */
   mpinOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(15, 30, 35, 0.48)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   mpinSheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+  },
+  mpinSheetContent: {
     paddingHorizontal: 24,
     paddingTop: 12,
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-    backgroundColor: Monochrome.background,
   },
   mpinHandle: {
-    width: 42,
+    width: 40,
     height: 4,
     borderRadius: 2,
     alignSelf: 'center',
-    backgroundColor: Monochrome.border,
     marginBottom: 20,
   },
   mpinHeader: { alignItems: 'center', marginBottom: 22 },
   mpinLockIcon: {
-    width: 48,
-    height: 48,
+    width: 52,
+    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 16,
-    backgroundColor: Monochrome.surfaceElevated,
     marginBottom: 12,
+    shadowColor: '#C1121F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  mpinTitle: { color: Monochrome.textPrimary, fontSize: 19, fontWeight: '800' },
-  mpinDescription: { color: Monochrome.textSecondary, fontSize: 13, marginTop: 5 },
-  mpinLabel: { color: Monochrome.textPrimary, fontSize: 13, fontWeight: '600', marginBottom: 8 },
+  mpinTitle: { fontSize: 19, fontWeight: '800' },
+  mpinDescription: { fontSize: 13, marginTop: 5, textAlign: 'center' },
+  mpinLabel: { fontSize: 13, fontWeight: '600', marginBottom: 8 },
   mpinInput: {
     height: 54,
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Monochrome.border,
-    backgroundColor: Monochrome.surfacePrimary,
-    color: Monochrome.textPrimary,
+    borderWidth: 1.5,
     textAlign: 'center',
-    fontSize: 22,
-    letterSpacing: 12,
+    fontSize: 24,
+    letterSpacing: 14,
+    fontWeight: '700',
   },
-  mpinError: { color: '#B42318', fontSize: 13, marginTop: 8 },
+  mpinError: { color: '#C1121F', fontSize: 13, marginTop: 8, textAlign: 'center' },
   forgotMpin: {
-    color: Monochrome.actionPrimary,
     fontSize: 13,
     fontWeight: '600',
     textAlign: 'center',

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Dimensions, StyleSheet, View } from 'react-native';
 import Animated, { Easing, Keyframe } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
+import { Palette } from '@/constants/theme';
 
 const INITIAL_SCALE_FACTOR = Dimensions.get('screen').height / 90;
 const DURATION = 600;
@@ -28,12 +29,20 @@ export function AnimatedSplashOverlay() {
     },
     100: {
       opacity: 0,
-      transform: [{ scale: 1 }],
+      transform: [{ scale: 1.05 }],
       easing: Easing.elastic(0.7),
     },
   });
 
-  const image = <Image style={styles.image} source={require('@/assets/images/expo-logo.png')} />;
+  const image = (
+    <View style={styles.logoWrapper}>
+      <Image
+        style={styles.image}
+        source={require('@/assets/images/eyatra-logo.png')}
+        contentFit="contain"
+      />
+    </View>
+  );
 
   return animate ? (
     <Animated.View
@@ -104,7 +113,11 @@ export function AnimatedIcon() {
 
       <Animated.View entering={keyframe.duration(DURATION)} style={styles.background} />
       <Animated.View style={styles.imageContainer} entering={logoKeyframe.duration(DURATION)}>
-        <Image style={styles.image} source={require('@/assets/images/expo-logo.png')} />
+        <Image
+          style={styles.image}
+          source={require('@/assets/images/eyatra-logo.png')}
+          contentFit="contain"
+        />
       </Animated.View>
     </View>
   );
@@ -114,6 +127,20 @@ const styles = StyleSheet.create({
   imageContainer: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  logoWrapper: {
+    width: 96,
+    height: 96,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: Palette.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Palette.black,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
   },
   glow: {
     width: 201,
@@ -128,19 +155,19 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   image: {
-    width: 76,
-    height: 71,
+    width: 80,
+    height: 80,
   },
   background: {
     borderRadius: 40,
-    backgroundColor: '#000000',
+    backgroundColor: Palette.prussianNavy,
     width: 128,
     height: 128,
     position: 'absolute',
   },
   splashOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#111111',
+    backgroundColor: Palette.prussianNavy,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,

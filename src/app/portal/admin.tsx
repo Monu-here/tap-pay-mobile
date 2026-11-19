@@ -1,11 +1,14 @@
-import {AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppText, AppTextInput } from '@/components/typography/app-text';
+import { AppBackButton } from '@/components/ui/app-back-button';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
   Pressable,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -1046,6 +1049,9 @@ export default function AdminPortalScreen() {
 
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => loadAdminData(true)} tintColor={Brand.primary} />
@@ -1235,6 +1241,13 @@ export default function AdminPortalScreen() {
               style={styles.loadMoreButton}
             >
               <AppText style={styles.loadMoreText}>Review fare concession applications</AppText>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/portal/concession-policies' as any)}
+              style={styles.loadMoreButton}
+            >
+              <AppText style={styles.loadMoreText}>Configure concession policies</AppText>
             </Pressable>
             <AppTextInput
               style={styles.searchInput}
@@ -1703,8 +1716,8 @@ export default function AdminPortalScreen() {
               </>
             ) : (
               <>
-                <Pressable
-                  accessibilityRole="button"
+                <AppBackButton
+                  accessibilityLabel="Back to all settings"
                   onPress={() => {
                     if (hasUnsavedSettings) {
                       Alert.alert('Unsaved settings', 'Save or discard your changes before leaving this section.');
@@ -1713,9 +1726,7 @@ export default function AdminPortalScreen() {
                     setSettingsCategory(null);
                   }}
                   style={styles.backBtn}
-                >
-                  <AppText style={styles.settingVal}>‹ All settings</AppText>
-                </Pressable>
+                />
                 <AppText style={styles.sectionTitle}>{SETTINGS_CATEGORIES.find((item) => item.id === settingsCategory)?.title}</AppText>
                 <AppText style={styles.compSub}>{SETTINGS_CATEGORIES.find((item) => item.id === settingsCategory)?.description}</AppText>
                 {!settingsDraft ? <ActivityIndicator color={Brand.primary} /> : null}
@@ -2025,8 +2036,11 @@ export default function AdminPortalScreen() {
 
       {/* Register Company Modal */}
       <Modal visible={companyModalVisible} animationType="slide" transparent onRequestClose={closeCompanyModal}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { paddingBottom: insets.bottom + 20 }]}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={[styles.modalBox, { paddingBottom: insets.bottom + 20, maxHeight: '90%' }]}>
             <View style={styles.modalHeader}>
               <AppText style={styles.modalTitle}>Register Transport Company</AppText>
               <Pressable onPress={closeCompanyModal} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close company registration">
@@ -2038,7 +2052,13 @@ export default function AdminPortalScreen() {
               </Pressable>
             </View>
 
-            <View style={styles.modalForm}>
+            <ScrollView
+              style={{ flexShrink: 1 }}
+              contentContainerStyle={styles.modalForm}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              showsVerticalScrollIndicator={false}
+            >
               <AppTextInput
                 style={styles.modalInput}
                 value={compName}
@@ -2127,13 +2147,16 @@ export default function AdminPortalScreen() {
                 disabled={creatingComp}
                 style={styles.modalBtn}
               />
-            </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={companyDetailVisible} animationType="slide" transparent onRequestClose={closeCompanyDetails}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           <View style={[styles.modalBox, { maxHeight: '88%', paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.modalHeader}>
               <AppText style={styles.modalTitle}>Company administration</AppText>
@@ -2141,7 +2164,12 @@ export default function AdminPortalScreen() {
                 <SymbolView name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }} size={24} tintColor={Brand.textSecondary} />
               </Pressable>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            >
               {companyDetailLoading ? (
                 <View style={styles.loadingBox}><ActivityIndicator color={Brand.primary} /><AppText style={styles.loadingText}>Loading company and staff...</AppText></View>
               ) : companyDetail ? (
@@ -2177,7 +2205,7 @@ export default function AdminPortalScreen() {
               ) : <View style={styles.emptyBox}><AppText style={styles.emptyText}>Company detail is unavailable. Close and retry.</AppText></View>}
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Super Admin Account Modal */}

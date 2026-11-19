@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 
 import { PrimaryButton } from '@/components/ui/primary-button';
+import { TransactionSkeleton } from '@/components/skeletons/ScreenSkeletons';
 import { Monochrome, Spacing } from '@/constants/theme';
 import {
   activateCard,
@@ -147,6 +148,8 @@ function BottomSheet({
             style={styles.sheetScroll}
             contentContainerStyle={styles.sheetScrollContent}
             keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
             showsVerticalScrollIndicator={false}
           >
             {children}
@@ -503,10 +506,7 @@ export default function CardsScreen() {
         }
       >
         {loading && !refreshing ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="small" color={Monochrome.textPrimary} />
-            <AppText style={styles.loadingText}>Loading registered transit cards...</AppText>
-          </View>
+          <TransactionSkeleton count={2} />
         ) : cards.length > 0 ? (
           <View style={styles.cardsContainer}>
             {cards.slice(0, 1).map((card) => {
@@ -1015,7 +1015,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     letterSpacing: 2,
     color: CARD.textPrimary,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontWeight: '700',
   },
   dimText: {
@@ -1258,7 +1257,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Monochrome.textMuted,
     marginTop: 2,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   sheetScroll: {
     flexShrink: 1,

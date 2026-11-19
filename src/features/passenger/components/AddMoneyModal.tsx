@@ -1,6 +1,6 @@
 import { AppText, AppTextInput } from '@/components/typography/app-text';
 import { PrimaryButton } from '@/components/ui/primary-button';
-import { Monochrome, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { createIdempotencyKey } from '@/features/auth/services/apiClient';
 import {
   getPayment,
@@ -14,11 +14,13 @@ import {
   isFailedPaymentStatus,
   isSuccessfulPaymentStatus,
 } from '@/features/passenger/services/paymentStatus';
+import { useTheme } from '@/hooks/use-theme';
 import { SymbolView } from 'expo-symbols';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -59,6 +61,9 @@ export function AddMoneyModal({
 }: AddMoneyModalProps) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
+  const theme = useTheme();
+  const colors = theme.tokens;
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [amountInput, setAmountInput] = useState('500');
   const [gateways, setGateways] = useState<PaymentGateway[]>([]);
   const [selectedGateway, setSelectedGateway] = useState('');
@@ -114,6 +119,7 @@ export function AddMoneyModal({
   }, [visible]);
 
   const handleClose = () => {
+    Keyboard.dismiss();
     setErrorMessage(null);
     setTopUpSuccess(null);
     onClose();
@@ -176,7 +182,7 @@ export function AddMoneyModal({
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       const returnedToApp =
-        /inactive|background/.test(previousAppState.current) && nextState === 'active';
+        /inactive|background/.test(previousAppState.current ?? '') && nextState === 'active';
       previousAppState.current = nextState;
       if (returnedToApp && pendingPayment) {
         void checkPaymentStatus(pendingPayment);
@@ -186,6 +192,7 @@ export function AddMoneyModal({
   }, [checkPaymentStatus, pendingPayment]);
 
   const handleTopUpSubmit = async () => {
+    Keyboard.dismiss();
     if (topUpInProgress.current || isProcessing) return;
     topUpInProgress.current = true;
 
@@ -262,7 +269,7 @@ export function AddMoneyModal({
     >
       <KeyboardAvoidingView
         style={styles.modalOverlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <Pressable
           style={StyleSheet.absoluteFill}
@@ -277,6 +284,8 @@ export function AddMoneyModal({
           style={[
             styles.modalContent,
             {
+              backgroundColor: colors.surfacePrimary,
+              borderColor: colors.border,
               maxHeight: windowHeight * 0.9,
               paddingBottom: insets.bottom + 20,
             },
@@ -288,7 +297,7 @@ export function AddMoneyModal({
               <SymbolView
                 name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
                 size={22}
-                tintColor={Monochrome.textMuted}
+                tintColor={colors.textMuted}
               />
             </Pressable>
           </View>
@@ -297,11 +306,13 @@ export function AddMoneyModal({
             style={styles.modalScroll}
             contentContainerStyle={styles.modalScrollContent}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            automaticallyAdjustKeyboardInsets
             showsVerticalScrollIndicator={false}
           >
             {pendingPayment ? (
               <View style={styles.paymentPendingBox}>
-                <ActivityIndicator size="large" color={Monochrome.textPrimary} />
+                <ActivityIndicator size="large" color={colors.actionPrimary} />
                 <AppText style={styles.paymentPendingText}>
                   {paymentStatusMessage || 'Awaiting payment confirmation...'}
                 </AppText>
@@ -327,7 +338,7 @@ export function AddMoneyModal({
                 <SymbolView
                   name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
                   size={52}
-                  tintColor={Monochrome.textPrimary}
+                  tintColor={colors.actionPrimary}
                 />
                 <AppText style={styles.modalSuccessText}>{topUpSuccess}</AppText>
                 <PrimaryButton
@@ -351,7 +362,7 @@ export function AddMoneyModal({
                     value={amountInput}
                     onChangeText={setAmountInput}
                     placeholder="0"
-                    placeholderTextColor={Monochrome.textMuted}
+                    placeholderTextColor={colors.textMuted}
                   />
                 </View>
 
@@ -382,7 +393,7 @@ export function AddMoneyModal({
                 </AppText>
                 <View style={styles.gatewaysList}>
                   {gatewayLoading ? (
-                    <ActivityIndicator size="small" color={Monochrome.textPrimary} />
+                    <ActivityIndicator size="small" color={colors.actionPrimary} />
                   ) : gateways.length > 0 ? (
                     gateways.map((gateway) => (
                       <Pressable
@@ -406,7 +417,7 @@ export function AddMoneyModal({
                             web: selectedGateway === gateway.slug ? 'check_circle' : 'radio_button_unchecked',
                           }}
                           size={18}
-                          tintColor={Monochrome.textPrimary}
+                          tintColor={colors.actionPrimary}
                         />
                       </Pressable>
                     ))
@@ -455,7 +466,8 @@ export function AddMoneyModal({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof useTheme>['tokens']) {
+return StyleSheet.create({
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -466,11 +478,11 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     flexShrink: 1,
-    backgroundColor: Monochrome.surfacePrimary,
+    backgroundColor: colors.surfacePrimary,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderWidth: 1,
-    borderColor: Monochrome.border,
+    borderColor: colors.border,
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.four,
   },
@@ -489,7 +501,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
   },
   modalForm: {
     gap: Spacing.two,
@@ -497,29 +509,29 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: Monochrome.textSecondary,
+    color: colors.textSecondary,
   },
   amountInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Monochrome.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: 14,
     paddingHorizontal: Spacing.four,
     height: 56,
     gap: Spacing.two,
     borderWidth: 1,
-    borderColor: Monochrome.border,
+    borderColor: colors.border,
   },
   currencyPrefix: {
     fontSize: 18,
     fontWeight: '700',
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
   },
   amountInput: {
     flex: 1,
     fontSize: 22,
     fontWeight: '700',
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
   },
   presetsRow: {
     flexDirection: 'row',
@@ -531,52 +543,52 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: Monochrome.surfaceSecondary,
+    backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,
-    borderColor: Monochrome.border,
+    borderColor: colors.border,
   },
   presetChipActive: {
-    backgroundColor: Monochrome.surfaceElevated,
-    borderColor: Monochrome.textPrimary,
+    backgroundColor: colors.surfaceElevated,
+    borderColor: colors.actionPrimary,
   },
   presetChipText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Monochrome.textMuted,
+    color: colors.textMuted,
   },
   presetChipTextActive: {
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
   },
   gatewaysList: {
     gap: Spacing.two,
     marginTop: Spacing.one,
   },
   paymentSummary: {
-    backgroundColor: Monochrome.surfaceSecondary,
-    borderColor: Monochrome.border,
+    backgroundColor: colors.surfaceSecondary,
+    borderColor: colors.border,
     borderWidth: 1,
     borderRadius: 12,
     padding: Spacing.three,
     gap: Spacing.two,
   },
   summaryTitle: {
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
     fontSize: 14,
     fontWeight: '700',
   },
   summaryRow: {
-    color: Monochrome.textSecondary,
+    color: colors.textSecondary,
     fontSize: 13,
   },
   summaryNote: {
-    color: Monochrome.textMuted,
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 18,
   },
   gatewayNotice: {
     fontSize: 12,
     lineHeight: 17,
-    color: Monochrome.textMuted,
+    color: colors.textMuted,
     marginTop: Spacing.one,
   },
   gatewayItem: {
@@ -586,12 +598,12 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Monochrome.border,
-    backgroundColor: Monochrome.surfaceSecondary,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceSecondary,
   },
   gatewayItemActive: {
-    borderColor: Monochrome.textPrimary,
-    backgroundColor: Monochrome.surfaceElevated,
+    borderColor: colors.actionPrimary,
+    backgroundColor: colors.surfaceElevated,
   },
   gatewayInfo: {
     flexDirection: 'row',
@@ -601,19 +613,19 @@ const styles = StyleSheet.create({
   gatewayName: {
     fontSize: 14,
     fontWeight: '600',
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
   },
   gatewayBadge: {
     fontSize: 11,
-    color: Monochrome.textSecondary,
-    backgroundColor: Monochrome.surfaceElevated,
+    color: colors.textSecondary,
+    backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
     fontWeight: '600',
   },
   errorBanner: {
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
     fontSize: 13,
     fontWeight: '500',
     marginTop: 4,
@@ -629,7 +641,7 @@ const styles = StyleSheet.create({
   modalSuccessText: {
     fontSize: 16,
     fontWeight: '600',
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -645,18 +657,19 @@ const styles = StyleSheet.create({
   paymentPendingText: {
     fontSize: 15,
     fontWeight: '600',
-    color: Monochrome.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
     lineHeight: 22,
   },
   paymentReference: {
     fontSize: 12,
-    color: Monochrome.textMuted,
+    color: colors.textMuted,
   },
   closePendingText: {
     paddingVertical: Spacing.two,
-    color: Monochrome.textMuted,
+    color: colors.textMuted,
     fontSize: 14,
     fontWeight: '600',
   },
 });
+}

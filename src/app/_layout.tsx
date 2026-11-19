@@ -1,28 +1,26 @@
 import { AppText } from '@/components/typography/app-text';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
-import { Caveat_400Regular } from '@expo-google-fonts/caveat';
 import {
-  NunitoSans_400Regular,
-  NunitoSans_400Regular_Italic,
-  NunitoSans_500Medium,
-  NunitoSans_500Medium_Italic,
-  NunitoSans_600SemiBold,
-  NunitoSans_600SemiBold_Italic,
-  NunitoSans_700Bold,
-  NunitoSans_700Bold_Italic,
-} from '@expo-google-fonts/nunito-sans';
-import {
-  NotoSansDevanagari_400Regular,
-  NotoSansDevanagari_500Medium,
-  NotoSansDevanagari_600SemiBold,
-  NotoSansDevanagari_700Bold,
-} from '@expo-google-fonts/noto-sans-devanagari';
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_400Regular_Italic,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_500Medium_Italic,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_600SemiBold_Italic,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_700Bold_Italic,
+  PlusJakartaSans_800ExtraBold,
+  PlusJakartaSans_800ExtraBold_Italic,
+} from '@expo-google-fonts/plus-jakarta-sans';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { StyleSheet, View, useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { KeyboardManagementProvider } from '@/components/keyboard/KeyboardManagementProvider';
+import { SkeletonAnimationProvider } from '@/components/skeletons/Skeleton';
+import { Colors } from '@/constants/theme';
 import { FcmRuntime } from '@/features/notifications/FcmRuntime';
 
 SplashScreen.preventAutoHideAsync();
@@ -30,19 +28,16 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [fontsLoaded, fontError] = useFonts({
-    Caveat_400Regular,
-    NunitoSans_400Regular,
-    NunitoSans_400Regular_Italic,
-    NunitoSans_500Medium,
-    NunitoSans_500Medium_Italic,
-    NunitoSans_600SemiBold,
-    NunitoSans_600SemiBold_Italic,
-    NunitoSans_700Bold,
-    NunitoSans_700Bold_Italic,
-    NotoSansDevanagari_400Regular,
-    NotoSansDevanagari_500Medium,
-    NotoSansDevanagari_600SemiBold,
-    NotoSansDevanagari_700Bold,
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_400Regular_Italic,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_500Medium_Italic,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_600SemiBold_Italic,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_700Bold_Italic,
+    PlusJakartaSans_800ExtraBold,
+    PlusJakartaSans_800ExtraBold_Italic,
   });
 
   useEffect(() => {
@@ -52,12 +47,31 @@ export default function RootLayout() {
     }
   }, [fontError]);
 
+  const navigationTheme = useMemo(() => {
+    const isDark = colorScheme === 'dark';
+    const baseTheme = isDark ? DarkTheme : DefaultTheme;
+    const activeColors = isDark ? Colors.dark : Colors.light;
+
+    return {
+      ...baseTheme,
+      colors: {
+        ...baseTheme.colors,
+        primary: activeColors.actionPrimary,
+        background: activeColors.background,
+        card: activeColors.surfacePrimary,
+        text: activeColors.text,
+        border: activeColors.border,
+        notification: activeColors.primary,
+      },
+    };
+  }, [colorScheme]);
+
   if (!fontsLoaded) {
     if (fontError) {
       return (
         <View style={styles.fontError}>
           <AppText style={styles.fontErrorText}>
-            Tap &amp; Pay could not load its fonts. Please restart the app.
+            eYatra could not load its fonts. Please restart the app.
           </AppText>
         </View>
       );
@@ -66,13 +80,17 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={navigationTheme}>
       <AnimatedSplashOverlay />
       <FcmRuntime />
-      <Stack
-        initialRouteName="index"
-        screenOptions={{ headerShown: false }}
-      />
+      <KeyboardManagementProvider>
+        <SkeletonAnimationProvider>
+          <Stack
+            initialRouteName="index"
+            screenOptions={{ headerShown: false }}
+          />
+        </SkeletonAnimationProvider>
+      </KeyboardManagementProvider>
     </ThemeProvider>
   );
 }
@@ -86,7 +104,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   fontErrorText: {
-    color: '#172B3A',
+    color: '#003049',
     fontSize: 16,
     textAlign: 'center',
   },

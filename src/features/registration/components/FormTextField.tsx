@@ -9,8 +9,14 @@ import {AppText, AppTextInput } from '@/components/typography/app-text';
  */
 
 import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
-import { type ReactNode } from 'react';
-import { Pressable, StyleSheet, View, type TextInputProps } from 'react-native';
+import { type ReactNode, type Ref } from 'react';
+import {
+  Pressable,
+  StyleSheet,
+  View,
+  type TextInput,
+  type TextInputProps,
+} from 'react-native';
 
 import { Brand, Spacing } from '@/constants/theme';
 
@@ -24,6 +30,7 @@ export type FormTextFieldProps = TextInputProps & {
   required?: boolean;
   /** Static prefix rendered before the input, e.g. `+977`. */
   prefix?: string;
+  inputRef?: Ref<TextInput>;
 };
 
 export function FormTextField({
@@ -33,6 +40,7 @@ export function FormTextField({
   trailing,
   required,
   prefix,
+  inputRef,
   style,
   ...rest
 }: FormTextFieldProps) {
@@ -59,6 +67,7 @@ export function FormTextField({
         )}
         {prefix && <AppText style={styles.prefix}>{prefix}</AppText>}
         <AppTextInput
+          ref={inputRef}
           placeholderTextColor={Brand.textSecondary}
           style={[styles.fieldInput, style]}
           {...rest}

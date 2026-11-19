@@ -2,24 +2,29 @@
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
-## Tap & Pay API and Live Tracking
+## Gantabya Pay API and Live Tracking
 
 Set `EXPO_PUBLIC_API_BASE_URL` to the full versioned API URL, including `/api/v1`.
-Use `https://tap-pay-production.up.railway.app/api/v1` for production. For a
+Use `https://gantabyapayapi.devnextechnology.com/api/v1` for production. For a
 physical phone on a local network, use the development computer's LAN
 address or `.local` hostname; `localhost` and `127.0.0.1` refer to the phone
 itself. The Laravel development server must be reachable from the device and
 the phone and computer must be on a network that permits peer connections.
 
-Live bus tracking uses reported API coordinates and `react-native-maps`; it
-does not simulate bus movement. The map can be exercised in Expo Go. For
-Android store/development builds that include the Google map provider, supply
-`GOOGLE_MAPS_API_KEY` when resolving the Expo config. `app.config.js` injects
-that environment value into Android native config without committing the key.
-Restrict the key in Google Cloud to the required Android package and Maps SDK,
-and enable billing as required by Google. Do not put provider keys in source
-control. GPS sharing is foreground-only and pauses when the driver app leaves
-the foreground.
+Live bus tracking uses reported API coordinates and `react-native-maps` with
+the Google Maps provider; it does not simulate bus movement. For native
+development/store builds, supply `GOOGLE_MAPS_API_KEY` when resolving the Expo
+config. `app.config.js` configures the key for Android and iOS without
+committing it. Rebuild the native app after changing the provider or key.
+Restrict the key in Google Cloud to the app's Android package/iOS bundle ID and
+the required Maps SDKs, and enable billing as required by Google. Do not put
+provider keys in source control. GPS sharing is foreground-only and pauses
+when the driver app leaves the foreground.
+
+Firebase messaging builds use local `google-services.json` and
+`GoogleService-Info.plist` files when available. For EAS builds, add the files
+as file-type secret environment variables named `GOOGLE_SERVICES_JSON` and
+`GOOGLE_SERVICES_PLIST` in the matching EAS environment.
 
 ## Get started
 
